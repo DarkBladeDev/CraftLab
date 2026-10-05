@@ -18,6 +18,7 @@ export interface Item {
   custom_model_data?: number | null
   item_flags: string[]
   amount?: number
+  components?: Record<string, any>
   export_format?: 'native' | 'oraxen' | 'nexo'
   plugin_properties?: Record<string, any>
   raw_extensions?: string

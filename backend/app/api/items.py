@@ -23,6 +23,7 @@ async def list_items(db: AsyncSession = Depends(get_db)):
             "custom_model_data": i.custom_model_data,
             "item_flags": i.item_flags,
             "amount": i.amount,
+            "components": i.components or {},
             "export_format": i.export_format or "native",
             "plugin_properties": i.plugin_properties or {},
             "raw_extensions": i.raw_extensions,
@@ -43,6 +44,7 @@ async def create_or_update_item(item_in: ItemDefinition, db: AsyncSession = Depe
         existing.custom_model_data = item_in.custom_model_data
         existing.item_flags = item_in.item_flags
         existing.amount = item_in.amount
+        existing.components = item_in.components
         existing.export_format = item_in.export_format
         existing.plugin_properties = item_in.plugin_properties
         existing.raw_extensions = item_in.raw_extensions
@@ -55,6 +57,7 @@ async def create_or_update_item(item_in: ItemDefinition, db: AsyncSession = Depe
             custom_model_data=item_in.custom_model_data,
             item_flags=item_in.item_flags,
             amount=item_in.amount,
+            components=item_in.components,
             export_format=item_in.export_format,
             plugin_properties=item_in.plugin_properties,
             raw_extensions=item_in.raw_extensions
@@ -111,6 +114,7 @@ async def create_revision_from_current(db: AsyncSession = Depends(get_db)):
             custom_model_data=i.custom_model_data,
             item_flags=i.item_flags or [],
             amount=i.amount,
+            components=i.components or {},
             export_format=i.export_format or "native",
             plugin_properties=i.plugin_properties or {},
             raw_extensions=i.raw_extensions

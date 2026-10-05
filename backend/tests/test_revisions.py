@@ -57,3 +57,20 @@ def test_create_revision_snapshot():
     assert snapshot["id"].startswith("rev-")
     assert snapshot["revision_hash"] == compute_revision_hash([item])
     assert len(snapshot["items_snapshot"]) == 1
+
+
+def test_revision_hash_changes_on_component_change():
+    item_v1 = ItemDefinition(
+        id="ruby_sword",
+        material="DIAMOND_SWORD",
+        display_name="Ruby Sword",
+        components={}
+    )
+    item_v2 = ItemDefinition(
+        id="ruby_sword",
+        material="DIAMOND_SWORD",
+        display_name="Ruby Sword",
+        components={"minecraft:enchantments": {"sharpness": 5}}
+    )
+    assert compute_revision_hash([item_v1]) != compute_revision_hash([item_v2])
+

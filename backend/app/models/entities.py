@@ -30,6 +30,7 @@ class ItemModel(Base):
     custom_model_data = Column(Integer, nullable=True)
     item_flags = Column(JSON, default=list)
     amount = Column(Integer, default=1)
+    components = Column(JSON, default=dict)
     export_format = Column(String, default="native", nullable=False)  # native, oraxen, nexo
     plugin_properties = Column(JSON, default=dict)
     raw_extensions = Column(String, nullable=True)

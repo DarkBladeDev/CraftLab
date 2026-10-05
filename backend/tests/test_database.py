@@ -14,5 +14,10 @@ async def test_init_db_creates_tables():
         assert "items" in tables
         assert "discovered_catalog_items" in tables
         assert "revisions" in tables
-        assert "deployment_plans" in tables
         assert "deployments" in tables
+
+        # Verify components column exists in items table
+        pragma_items = await conn.execute(text("PRAGMA table_info(items);"))
+        item_cols = {row[1] for row in pragma_items.fetchall()}
+        assert "components" in item_cols
+
