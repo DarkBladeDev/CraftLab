@@ -1,0 +1,6 @@
+gateway:
+  url: "ws://127.0.0.1:8000/ws/agent"
+  targetId: "local-paper-server"
+  secret: "dev-secret"
+  reconnectIntervalSeconds: 5
+  heartbeatIntervalSeconds: 15

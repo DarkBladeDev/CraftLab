@@ -1,0 +1,18 @@
+minecraft-content-platform-spec-v1/
+
+# Python
+backend/.venv/
+**/__pycache__/
+*.pyc
+backend/*.db
+
+# Frontend
+frontend/node_modules/
+frontend/dist/
+
+# Gradle / Java
+paper-agent/.gradle/
+paper-agent/build/
+
+# Local Dev Mock Storage
+backend/mock_server_storage/

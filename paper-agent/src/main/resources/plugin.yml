@@ -1,0 +1,15 @@
+name: McpAgent
+version: 1.0.0
+main: com.mcp.agent.core.McpAgentPlugin
+api-version: '1.21'
+author: MinecraftContentPlatform
+description: Remote Agent for Minecraft Content Platform
+commands:
+  mcp:
+    description: Main command for Minecraft Content Platform Agent
+    permission: mcp.admin
+    usage: /mcp [give|status|reload]
+permissions:
+  mcp.admin:
+    description: Allows administering the MCP agent and giving deployed items
+    default: op
