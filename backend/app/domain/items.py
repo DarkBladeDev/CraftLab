@@ -11,6 +11,9 @@ class ItemDefinition(BaseModel):
     custom_model_data: Optional[int] = Field(default=None, description="Custom model data integer for resource packs", ge=0)
     item_flags: List[str] = Field(default_factory=list, description="Item flags such as HIDE_ATTRIBUTES")
     amount: int = Field(default=1, ge=1, le=64, description="Stack size count (1-64)")
+    export_format: str = Field(default="native", description="Export target adapter: native, oraxen, nexo")
+    plugin_properties: dict = Field(default_factory=dict, description="Structured plugin-specific properties")
+    raw_extensions: Optional[str] = Field(default=None, description="Raw YAML/JSON extensions snippet")
 
     @field_validator("id")
     @classmethod
@@ -33,8 +36,11 @@ class ItemDefinition(BaseModel):
             "amount": self.amount,
             "custom_model_data": self.custom_model_data,
             "display_name": self.display_name,
+            "export_format": self.export_format,
             "id": self.id,
             "item_flags": sorted(self.item_flags),
             "lore": list(self.lore),
             "material": self.material,
+            "plugin_properties": self.plugin_properties,
+            "raw_extensions": self.raw_extensions,
         }

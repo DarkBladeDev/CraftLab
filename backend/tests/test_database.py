@@ -12,6 +12,7 @@ async def test_init_db_creates_tables():
         tables = {row[0] for row in result.fetchall()}
         assert "targets" in tables
         assert "items" in tables
+        assert "discovered_catalog_items" in tables
         assert "revisions" in tables
         assert "deployment_plans" in tables
         assert "deployments" in tables

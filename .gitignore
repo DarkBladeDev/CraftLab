@@ -4,6 +4,7 @@ minecraft-content-platform-spec-v1/
 backend/.venv/
 **/__pycache__/
 *.pyc
+*.db
 backend/*.db
 
 # Frontend

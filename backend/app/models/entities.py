@@ -30,7 +30,28 @@ class ItemModel(Base):
     custom_model_data = Column(Integer, nullable=True)
     item_flags = Column(JSON, default=list)
     amount = Column(Integer, default=1)
+    export_format = Column(String, default="native", nullable=False)  # native, oraxen, nexo
+    plugin_properties = Column(JSON, default=dict)
+    raw_extensions = Column(String, nullable=True)
     updated_at = Column(DateTime, default=utcnow, onupdate=utcnow)
+
+
+class DiscoveredCatalogItemModel(Base):
+    __tablename__ = "discovered_catalog_items"
+
+    id = Column(String, primary_key=True, index=True)  # e.g. "{target_id}:{source}:{item_id}"
+    target_id = Column(String, ForeignKey("targets.id"), nullable=False, index=True)
+    source = Column(String, nullable=False, index=True)  # "oraxen", "nexo", etc.
+    item_id = Column(String, nullable=False, index=True)
+    material = Column(String, nullable=False)
+    display_name = Column(String, nullable=True)
+    lore = Column(JSON, default=list)
+    custom_model_data = Column(Integer, nullable=True)
+    item_flags = Column(JSON, default=list)
+    raw_properties = Column(JSON, default=dict)
+    synced_at = Column(DateTime, default=utcnow)
+
+    target = relationship("TargetModel")
 
 
 class RevisionModel(Base):

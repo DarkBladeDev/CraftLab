@@ -75,3 +75,101 @@ async def test_gateway_hello_and_heartbeat():
         res = await db.execute(select(TargetModel).where(TargetModel.id == "paper-target-1"))
         target = res.scalar_one_or_none()
         assert target.status == "offline"
+
+
+from app.models.entities import DiscoveredCatalogItemModel
+
+
+@pytest.mark.asyncio
+async def test_gateway_hello_with_detected_plugins_and_manifest():
+    await init_db()
+    manager = AgentSessionManager()
+    mock_ws = AsyncMock()
+
+    hello_msg = json.dumps({
+        "protocolVersion": "1.0",
+        "messageType": "hello",
+        "messageId": "msg-hello-plugins",
+        "targetId": "paper-target-plugins",
+        "payload": {
+            "agentVersion": "1.1.0",
+            "minecraftVersion": "1.21.1",
+            "paperVersion": "1.21.1-R0.1-SNAPSHOT",
+            "adapters": ["paper-1.21", "oraxen-adapter"],
+            "detectedPlugins": [
+                {"name": "Oraxen", "version": "1.18.0", "enabled": True}
+            ],
+            "catalogManifest": {
+                "source": "oraxen",
+                "items": [
+                    {
+                        "id": "crystal_blade",
+                        "material": "DIAMOND_SWORD",
+                        "display_name": "<cyan>Crystal Blade</cyan>",
+                        "custom_model_data": 20001
+                    }
+                ]
+            }
+        }
+    })
+
+    resp = await manager.handle_message(mock_ws, hello_msg, AsyncSessionLocal)
+    assert resp is not None
+    assert resp.payload["status"] == "accepted"
+
+    # Verify target has detected plugins in environment_metadata
+    async with AsyncSessionLocal() as db:
+        res = await db.execute(select(TargetModel).where(TargetModel.id == "paper-target-plugins"))
+        target = res.scalar_one_or_none()
+        assert target is not None
+        assert target.environment_metadata["detectedPlugins"][0]["name"] == "Oraxen"
+
+        # Verify catalog item was stored
+        item_res = await db.execute(
+            select(DiscoveredCatalogItemModel).where(DiscoveredCatalogItemModel.target_id == "paper-target-plugins")
+        )
+        items = list(item_res.scalars().all())
+        assert len(items) == 1
+        assert items[0].item_id == "crystal_blade"
+        assert items[0].custom_model_data == 20001
+
+
+@pytest.mark.asyncio
+async def test_gateway_catalog_manifest_event():
+    await init_db()
+    manager = AgentSessionManager()
+    mock_ws = AsyncMock()
+
+    # Stream catalog manifest event
+    event_msg = json.dumps({
+        "protocolVersion": "1.0",
+        "messageType": "event",
+        "messageId": "msg-event-manifest",
+        "targetId": "paper-target-plugins",
+        "payload": {
+            "type": "catalog:manifest",
+            "source": "oraxen",
+            "items": [
+                {
+                    "id": "shadow_bow",
+                    "material": "BOW",
+                    "display_name": "<dark_purple>Shadow Bow</dark_purple>",
+                    "custom_model_data": 20002
+                }
+            ]
+        }
+    })
+
+    resp = await manager.handle_message(mock_ws, event_msg, AsyncSessionLocal)
+    assert resp is not None
+
+    async with AsyncSessionLocal() as db:
+        res = await db.execute(
+            select(DiscoveredCatalogItemModel).where(
+                DiscoveredCatalogItemModel.id == "paper-target-plugins:oraxen:shadow_bow"
+            )
+        )
+        item = res.scalar_one_or_none()
+        assert item is not None
+        assert item.material == "BOW"
+        assert item.custom_model_data == 20002

@@ -25,12 +25,16 @@ public class McpAgentPlugin extends JavaPlugin {
         // 2. Adapter
         this.itemAdapter = new Paper121ItemAdapter();
 
-        // 3. WebSocket Client
+        // 3. Oraxen Integration & WebSocket Client
         String gatewayUrl = getConfig().getString("gateway.url", "ws://127.0.0.1:8000/ws/agent");
         String targetId = getConfig().getString("gateway.targetId", "local-paper-server");
         String secret = getConfig().getString("gateway.secret", "dev-secret");
 
-        this.wsClient = new AgentWebSocketClient(gatewayUrl, targetId, secret, itemStorage, getLogger());
+        java.io.File oraxenFolder = new java.io.File(getDataFolder().getParentFile(), "Oraxen/items");
+        com.mcp.agent.adapters.oraxen.OraxenCatalogHook oraxenHook = new com.mcp.agent.adapters.oraxen.OraxenCatalogHook(getLogger());
+        com.mcp.agent.adapters.oraxen.OraxenItemExporter oraxenExporter = new com.mcp.agent.adapters.oraxen.OraxenItemExporter(oraxenFolder, getLogger());
+
+        this.wsClient = new AgentWebSocketClient(gatewayUrl, targetId, secret, itemStorage, oraxenHook, oraxenExporter, getLogger());
         this.wsClient.start();
 
         // 4. Command

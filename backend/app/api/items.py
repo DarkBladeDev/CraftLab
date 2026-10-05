@@ -23,6 +23,9 @@ async def list_items(db: AsyncSession = Depends(get_db)):
             "custom_model_data": i.custom_model_data,
             "item_flags": i.item_flags,
             "amount": i.amount,
+            "export_format": i.export_format or "native",
+            "plugin_properties": i.plugin_properties or {},
+            "raw_extensions": i.raw_extensions,
         }
         for i in items
     ]
@@ -40,6 +43,9 @@ async def create_or_update_item(item_in: ItemDefinition, db: AsyncSession = Depe
         existing.custom_model_data = item_in.custom_model_data
         existing.item_flags = item_in.item_flags
         existing.amount = item_in.amount
+        existing.export_format = item_in.export_format
+        existing.plugin_properties = item_in.plugin_properties
+        existing.raw_extensions = item_in.raw_extensions
     else:
         new_item = ItemModel(
             id=item_in.id,
@@ -48,7 +54,10 @@ async def create_or_update_item(item_in: ItemDefinition, db: AsyncSession = Depe
             lore=item_in.lore,
             custom_model_data=item_in.custom_model_data,
             item_flags=item_in.item_flags,
-            amount=item_in.amount
+            amount=item_in.amount,
+            export_format=item_in.export_format,
+            plugin_properties=item_in.plugin_properties,
+            raw_extensions=item_in.raw_extensions
         )
         db.add(new_item)
 
@@ -101,7 +110,10 @@ async def create_revision_from_current(db: AsyncSession = Depends(get_db)):
             lore=i.lore or [],
             custom_model_data=i.custom_model_data,
             item_flags=i.item_flags or [],
-            amount=i.amount
+            amount=i.amount,
+            export_format=i.export_format or "native",
+            plugin_properties=i.plugin_properties or {},
+            raw_extensions=i.raw_extensions
         )
         for i in items
     ]

@@ -76,11 +76,20 @@ class AgentSessionManager:
             minecraft_version = env.payload.get("minecraftVersion", "unknown")
             paper_version = env.payload.get("paperVersion", "unknown")
             adapters = env.payload.get("adapters", [])
+            detected_plugins = env.payload.get("detectedPlugins", [])
+            initial_manifest = env.payload.get("catalogManifest")
 
             async with db_session_maker() as db:
                 stmt = select(TargetModel).where(TargetModel.id == target_id)
                 res = await db.execute(stmt)
                 target = res.scalar_one_or_none()
+                env_meta = {
+                    "agentVersion": agent_version,
+                    "minecraftVersion": minecraft_version,
+                    "paperVersion": paper_version,
+                    "adapters": adapters,
+                    "detectedPlugins": detected_plugins
+                }
                 if not target:
                     # Auto-register target if not existing in dev mode
                     target = TargetModel(
@@ -88,25 +97,23 @@ class AgentSessionManager:
                         name=f"Server {target_id}",
                         secret="dev-secret",
                         status="online",
-                        environment_metadata={
-                            "agentVersion": agent_version,
-                            "minecraftVersion": minecraft_version,
-                            "paperVersion": paper_version,
-                            "adapters": adapters
-                        },
+                        environment_metadata=env_meta,
                         last_seen_at=datetime.now(timezone.utc)
                     )
                     db.add(target)
                 else:
                     target.status = "online"
-                    target.environment_metadata = {
-                        "agentVersion": agent_version,
-                        "minecraftVersion": minecraft_version,
-                        "paperVersion": paper_version,
-                        "adapters": adapters
-                    }
+                    target.environment_metadata = env_meta
                     target.last_seen_at = datetime.now(timezone.utc)
                 await db.commit()
+
+                # Process initial manifest if provided during handshake
+                if initial_manifest:
+                    from app.domain.catalogs import upsert_discovered_items
+                    source = initial_manifest.get("source", "oraxen")
+                    items = initial_manifest.get("items", [])
+                    if items:
+                        await upsert_discovered_items(db, target_id, source, items)
 
             await self.register_session(target_id, websocket)
 
@@ -143,6 +150,16 @@ class AgentSessionManager:
             await websocket.send_text(ack_env.model_dump_json())
             return ack_env
 
+        # 2b. Catalog Manifest Event
+        elif env.messageType == "event" and env.payload.get("type") == "catalog:manifest":
+            from app.domain.catalogs import upsert_discovered_items
+            source = env.payload.get("source", "oraxen")
+            items = env.payload.get("items", [])
+            async with db_session_maker() as db:
+                await upsert_discovered_items(db, target_id, source, items)
+            logger.info(f"Target '{target_id}' streamed catalog:manifest with {len(items)} {source} items.")
+            return env
+
         # 3. Response to correlated request
         elif env.messageType == "response":
             correlation_id = env.correlationId
@@ -153,6 +170,25 @@ class AgentSessionManager:
             return env
 
         return None
+
+    async def refresh_catalog(self, target_id: str, db_session_maker, timeout: float = 10.0) -> Dict[str, Any]:
+        """Sends a catalog refresh request to the target agent and stores received manifest items."""
+        req_env = MessageEnvelope(
+            messageType="request",
+            targetId=target_id,
+            payload={"action": "catalog:refresh"}
+        )
+        res_payload = await self.send_request(target_id, req_env, timeout=timeout)
+        
+        # If the agent responded with manifest items, upsert them
+        source = res_payload.get("source", "oraxen")
+        items = res_payload.get("items", [])
+        if items:
+            from app.domain.catalogs import upsert_discovered_items
+            async with db_session_maker() as db:
+                await upsert_discovered_items(db, target_id, source, items)
+
+        return res_payload
 
 
 gateway_manager = AgentSessionManager()

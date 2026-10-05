@@ -4,6 +4,7 @@ main: com.mcp.agent.core.McpAgentPlugin
 api-version: '1.21'
 author: MinecraftContentPlatform
 description: Remote Agent for Minecraft Content Platform
+softdepend: [Oraxen]
 commands:
   mcp:
     description: Main command for Minecraft Content Platform Agent

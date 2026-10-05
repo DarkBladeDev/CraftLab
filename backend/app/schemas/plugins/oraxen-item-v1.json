@@ -1,0 +1,70 @@
+{
+  "id": "oraxen-item-v1",
+  "plugin": "oraxen",
+  "name": "Oraxen Item Definition",
+  "version": "1.18+",
+  "description": "Configuration schema for Oraxen custom items and pack mechanics",
+  "sections": [
+    {
+      "id": "pack",
+      "title": "Resource Pack & Models",
+      "description": "Defines custom texture paths and JSON model linking for Oraxen pack compilation",
+      "fields": [
+        {
+          "key": "Pack.generate_model",
+          "label": "Auto-generate Model",
+          "type": "boolean",
+          "default": true,
+          "description": "Whether Oraxen should auto-generate the item JSON model"
+        },
+        {
+          "key": "Pack.model",
+          "label": "Model Path",
+          "type": "string",
+          "placeholder": "custom/weapons/ruby_sword",
+          "default": "",
+          "description": "Relative path to the resource pack model (without .json)"
+        },
+        {
+          "key": "Pack.parent_model",
+          "label": "Parent Model",
+          "type": "select",
+          "options": ["item/handheld", "item/generated", "minecraft:item/handheld", "minecraft:item/generated"],
+          "default": "item/handheld",
+          "description": "Parent Minecraft model template"
+        }
+      ]
+    },
+    {
+      "id": "mechanics",
+      "title": "Item Mechanics",
+      "description": "Special behaviors handled by Oraxen engine",
+      "fields": [
+        {
+          "key": "Mechanics.custom_durability",
+          "label": "Custom Durability",
+          "type": "number",
+          "placeholder": "1500",
+          "min": 1,
+          "default": null,
+          "description": "Custom hit/use points before item breaks"
+        },
+        {
+          "key": "Mechanics.furniture",
+          "label": "Furniture Item",
+          "type": "boolean",
+          "default": false,
+          "description": "Whether right-clicking places a 3D furniture entity display"
+        },
+        {
+          "key": "Mechanics.disable_stacking",
+          "label": "Disable Stacking",
+          "type": "boolean",
+          "default": false,
+          "description": "Forces item to remain unstackable"
+        }
+      ]
+    }
+  ],
+  "default_yaml_template": "Pack:\n  generate_model: true\n  model: custom/weapons/example\n  parent_model: item/handheld\nMechanics:\n  custom_durability: 1000\n  furniture: false\n"
+}

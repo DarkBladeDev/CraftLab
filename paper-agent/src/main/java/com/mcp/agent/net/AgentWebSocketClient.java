@@ -19,6 +19,8 @@ public class AgentWebSocketClient implements WebSocket.Listener {
     private final String targetId;
     private final String secret;
     private final ItemStorage storage;
+    private final com.mcp.agent.adapters.oraxen.OraxenCatalogHook oraxenHook;
+    private final com.mcp.agent.adapters.oraxen.OraxenItemExporter oraxenExporter;
     private final Logger logger;
     private final Gson gson = new Gson();
 
@@ -30,10 +32,19 @@ public class AgentWebSocketClient implements WebSocket.Listener {
     private final StringBuilder messageBuffer = new StringBuilder();
 
     public AgentWebSocketClient(String gatewayUrl, String targetId, String secret, ItemStorage storage, Logger logger) {
+        this(gatewayUrl, targetId, secret, storage, null, null, logger);
+    }
+
+    public AgentWebSocketClient(String gatewayUrl, String targetId, String secret, ItemStorage storage,
+                                com.mcp.agent.adapters.oraxen.OraxenCatalogHook oraxenHook,
+                                com.mcp.agent.adapters.oraxen.OraxenItemExporter oraxenExporter,
+                                Logger logger) {
         this.gatewayUri = URI.create(gatewayUrl);
         this.targetId = targetId;
         this.secret = secret;
         this.storage = storage;
+        this.oraxenHook = oraxenHook;
+        this.oraxenExporter = oraxenExporter;
         this.logger = logger;
     }
 
@@ -92,10 +103,32 @@ public class AgentWebSocketClient implements WebSocket.Listener {
 
     private void sendHello() {
         JsonObject payload = new JsonObject();
-        payload.addProperty("agentVersion", "1.0.0");
+        payload.addProperty("agentVersion", "1.1.0");
         payload.addProperty("minecraftVersion", Bukkit.getMinecraftVersion());
         payload.addProperty("paperVersion", Bukkit.getVersion());
         payload.addProperty("secret", secret);
+
+        com.google.gson.JsonArray detectedPlugins = new com.google.gson.JsonArray();
+        if (oraxenHook != null && oraxenHook.isOraxenEnabled()) {
+            JsonObject oraxenObj = new JsonObject();
+            oraxenObj.addProperty("name", "Oraxen");
+            oraxenObj.addProperty("version", oraxenHook.getOraxenVersion());
+            oraxenObj.addProperty("enabled", true);
+            detectedPlugins.add(oraxenObj);
+
+            java.util.List<JsonObject> items = oraxenHook.getDiscoveredItems();
+            if (!items.isEmpty()) {
+                JsonObject manifest = new JsonObject();
+                manifest.addProperty("source", "oraxen");
+                com.google.gson.JsonArray itemsArr = new com.google.gson.JsonArray();
+                for (JsonObject it : items) {
+                    itemsArr.add(it);
+                }
+                manifest.add("items", itemsArr);
+                payload.add("catalogManifest", manifest);
+            }
+        }
+        payload.add("detectedPlugins", detectedPlugins);
 
         JsonObject envelope = new JsonObject();
         envelope.addProperty("protocolVersion", "1.0");
@@ -152,9 +185,40 @@ public class AgentWebSocketClient implements WebSocket.Listener {
                 String action = payload.get("action").getAsString();
                 String correlationId = env.has("correlationId") ? env.get("correlationId").getAsString() : env.get("messageId").getAsString();
 
+                if ("catalog:refresh".equals(action)) {
+                    JsonObject respPayload = new JsonObject();
+                    respPayload.addProperty("status", "success");
+                    respPayload.addProperty("source", "oraxen");
+                    com.google.gson.JsonArray itemsArr = new com.google.gson.JsonArray();
+                    if (oraxenHook != null) {
+                        for (JsonObject it : oraxenHook.getDiscoveredItems()) {
+                            itemsArr.add(it);
+                        }
+                    }
+                    respPayload.add("items", itemsArr);
+
+                    JsonObject respEnv = new JsonObject();
+                    respEnv.addProperty("protocolVersion", "1.0");
+                    respEnv.addProperty("messageType", "response");
+                    respEnv.addProperty("messageId", "msg-resp-" + UUID.randomUUID());
+                    respEnv.addProperty("correlationId", correlationId);
+                    respEnv.addProperty("targetId", targetId);
+                    respEnv.addProperty("sentAt", Instant.now().toString());
+                    respEnv.add("payload", respPayload);
+
+                    webSocket.sendText(gson.toJson(respEnv), true);
+                    return;
+                }
+
                 if ("create_or_update_item".equals(action)) {
                     JsonObject itemData = payload.getAsJsonObject("item");
                     String itemId = itemData.get("id").getAsString();
+
+                    // If export_format is oraxen, delegate to oraxenExporter
+                    if (oraxenExporter != null && itemData.has("export_format")
+                            && "oraxen".equalsIgnoreCase(itemData.get("export_format").getAsString())) {
+                        oraxenExporter.exportItem(itemData);
+                    }
 
                     storage.saveItem(itemId, itemData);
                     logger.info("Successfully applied item '" + itemId + "' via MCP deployment.");

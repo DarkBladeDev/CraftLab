@@ -38,17 +38,57 @@ async def run_agent():
             async with websockets.connect(GATEWAY_URI) as ws:
                 logger.info("Connected to Gateway! Sending agent.hello handshake...")
 
-                # 1. Hello Handshake
+                # 1. Hello Handshake with Oraxen Discovery
+                sample_oraxen_items = [
+                    {
+                        "id": "shadow_blade",
+                        "material": "NETHERITE_SWORD",
+                        "display_name": "<dark_purple><bold>Shadow Blade</bold></dark_purple>",
+                        "lore": ["<gray>Infused with void energy</gray>", "<dark_purple>Damage: +16</dark_purple>"],
+                        "custom_model_data": 15001,
+                        "raw_properties": {
+                            "Pack": {"generate_model": True, "model": "custom/weapons/shadow_blade"},
+                            "Mechanics": {"custom_durability": 2000, "furniture": False}
+                        }
+                    },
+                    {
+                        "id": "phoenix_bow",
+                        "material": "BOW",
+                        "display_name": "<gold><bold>Phoenix Bow</bold></gold>",
+                        "lore": ["<yellow>Arrows ignite with holy fire</yellow>"],
+                        "custom_model_data": 15002,
+                        "raw_properties": {
+                            "Pack": {"generate_model": True, "model": "custom/weapons/phoenix_bow"}
+                        }
+                    },
+                    {
+                        "id": "amethyst_shield",
+                        "material": "SHIELD",
+                        "display_name": "<light_purple>Amethyst Bulwark</light_purple>",
+                        "custom_model_data": 15003,
+                        "raw_properties": {
+                            "Pack": {"model": "custom/armor/amethyst_shield"}
+                        }
+                    }
+                ]
+
                 hello_env = {
                     "protocolVersion": "1.0",
                     "messageType": "hello",
                     "messageId": "msg-hello-001",
                     "targetId": TARGET_ID,
                     "payload": {
-                        "agentVersion": "1.0.0",
+                        "agentVersion": "1.1.0",
                         "minecraftVersion": "1.21.1",
                         "paperVersion": "Paper-1.21.1-R0.1-SNAPSHOT (MockRuntime)",
-                        "adapters": ["paper-1.21"]
+                        "adapters": ["paper-1.21", "oraxen-adapter"],
+                        "detectedPlugins": [
+                            {"name": "Oraxen", "version": "1.18.2", "enabled": True}
+                        ],
+                        "catalogManifest": {
+                            "source": "oraxen",
+                            "items": sample_oraxen_items
+                        }
                     }
                 }
                 await ws.send(json.dumps(hello_env))
@@ -77,7 +117,7 @@ async def run_agent():
                         payload = msg.get("payload", {})
 
                         if msg_type == "response" and payload.get("status") == "accepted":
-                            logger.info(f"\033[92mSession Accepted by Gateway!\033[0m Target '{TARGET_ID}' is now ONLINE.")
+                            logger.info(f"\033[92mSession Accepted by Gateway!\033[0m Target '{TARGET_ID}' is now ONLINE with Oraxen integration.")
 
                         elif msg_type == "response" and payload.get("status") == "pong":
                             pass  # Heartbeat ack
@@ -87,12 +127,33 @@ async def run_agent():
                             op_id = payload.get("operationId")
                             correlation_id = msg.get("correlationId") or msg.get("messageId")
 
-                            logger.info(f"\033[93mReceived operation request:\033[0m action='{action}', op_id='{op_id}'")
+                            logger.info(f"\033[93mReceived operation request:\033[0m action='{action}'")
 
-                            if action == "create_or_update_item":
+                            if action == "catalog:refresh":
+                                resp_env = {
+                                    "protocolVersion": "1.0",
+                                    "messageType": "response",
+                                    "messageId": f"msg-resp-cat-{asyncio.get_event_loop().time()}",
+                                    "correlationId": correlation_id,
+                                    "targetId": TARGET_ID,
+                                    "payload": {
+                                        "status": "success",
+                                        "source": "oraxen",
+                                        "items": sample_oraxen_items
+                                    }
+                                }
+                                await ws.send(json.dumps(resp_env))
+                                logger.info("\033[92m[Oraxen Hook]\033[0m Scanned Oraxen registry and returned catalog manifest to Gateway.")
+
+                            elif action == "create_or_update_item":
                                 item_data = payload.get("item", {})
                                 save_local_item(item_data)
-                                logger.info(f"\033[92m[Paper 1.21 Adapter]\033[0m Compiled ItemStack: {item_data.get('material')} - '{item_data.get('display_name')}'")
+                                export_fmt = item_data.get("export_format", "native")
+
+                                if export_fmt == "oraxen":
+                                    logger.info(f"\033[95m[Oraxen Exporter]\033[0m Generated plugins/Oraxen/items/platform_items.yml for '{item_data.get('id')}' and executed 'oraxen reload'.")
+                                else:
+                                    logger.info(f"\033[92m[Paper 1.21 Adapter]\033[0m Compiled ItemStack: {item_data.get('material')} - '{item_data.get('display_name')}'")
 
                                 # Send success response
                                 resp_env = {
@@ -105,7 +166,8 @@ async def run_agent():
                                         "status": "applied",
                                         "success": True,
                                         "itemId": item_data.get("id"),
-                                        "material": item_data.get("material")
+                                        "material": item_data.get("material"),
+                                        "export_format": export_fmt
                                     }
                                 }
                                 await ws.send(json.dumps(resp_env))
