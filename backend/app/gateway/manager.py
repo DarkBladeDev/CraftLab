@@ -62,6 +62,14 @@ class AgentSessionManager:
         finally:
             self._pending_requests.pop(correlation_id, None)
 
+    async def send_to_target(self, target_id: str, envelope: MessageEnvelope) -> bool:
+        """Sends an event or message to the target WebSocket if online."""
+        websocket = self._active_sessions.get(target_id)
+        if websocket:
+            await websocket.send_text(envelope.model_dump_json())
+            return True
+        return False
+
     async def handle_message(self, websocket: WebSocket, raw_text: str, db_session_maker) -> Optional[MessageEnvelope]:
         """
         Processes an incoming envelope from an agent WebSocket.
@@ -158,6 +166,46 @@ class AgentSessionManager:
             async with db_session_maker() as db:
                 await upsert_discovered_items(db, target_id, source, items)
             logger.info(f"Target '{target_id}' streamed catalog:manifest with {len(items)} {source} items.")
+            return env
+
+        # 2c. Resource Pack Source Sync Event
+        elif env.messageType == "event" and env.payload.get("type") == "resource_pack:source_sync":
+            import base64
+            from pathlib import Path
+            from app.domain.pack_sources import PackRepository
+            plugin = env.payload.get("plugin", "oraxen")
+            sha1 = env.payload.get("sha1")
+            zip_b64 = env.payload.get("zipBase64")
+            source_id = f"src-agent-{target_id}-{plugin}"
+            storage_path = f"data/packs/sources/{source_id}/contents"
+
+            if zip_b64:
+                try:
+                    data = base64.b64decode(zip_b64)
+                    dest_dir = Path(storage_path)
+                    dest_dir.mkdir(parents=True, exist_ok=True)
+                    zip_path = dest_dir.parent / "agent_synced.zip"
+                    zip_path.write_bytes(data)
+                    import zipfile
+                    with zipfile.ZipFile(zip_path, "r") as zf:
+                        zf.extractall(dest_dir)
+                except Exception as e:
+                    logger.error(f"Error extracting synced pack from target {target_id}: {e}")
+
+            async with db_session_maker() as db:
+                await PackRepository.create_or_update_source(
+                    db=db,
+                    source_id=source_id,
+                    target_id=target_id,
+                    name=f"Agent {plugin.capitalize()} Pack ({target_id})",
+                    source_type="agent",
+                    plugin=plugin,
+                    layer_priority=20,
+                    storage_path=storage_path,
+                    sha1_hash=sha1,
+                    meta_info={"synced_via": "ws", "plugin": plugin}
+                )
+            logger.info(f"Target '{target_id}' synced resource pack source for plugin '{plugin}'.")
             return env
 
         # 3. Response to correlated request

@@ -21,6 +21,8 @@ public class AgentWebSocketClient implements WebSocket.Listener {
     private final ItemStorage storage;
     private final com.mcp.agent.adapters.oraxen.OraxenCatalogHook oraxenHook;
     private final com.mcp.agent.adapters.oraxen.OraxenItemExporter oraxenExporter;
+    private final com.mcp.agent.pack.ResourcePackManager resourcePackManager;
+    private final com.mcp.agent.adapters.oraxen.OraxenPackScanner oraxenPackScanner;
     private final Logger logger;
     private final Gson gson = new Gson();
 
@@ -32,12 +34,21 @@ public class AgentWebSocketClient implements WebSocket.Listener {
     private final StringBuilder messageBuffer = new StringBuilder();
 
     public AgentWebSocketClient(String gatewayUrl, String targetId, String secret, ItemStorage storage, Logger logger) {
-        this(gatewayUrl, targetId, secret, storage, null, null, logger);
+        this(gatewayUrl, targetId, secret, storage, null, null, null, null, logger);
     }
 
     public AgentWebSocketClient(String gatewayUrl, String targetId, String secret, ItemStorage storage,
                                 com.mcp.agent.adapters.oraxen.OraxenCatalogHook oraxenHook,
                                 com.mcp.agent.adapters.oraxen.OraxenItemExporter oraxenExporter,
+                                Logger logger) {
+        this(gatewayUrl, targetId, secret, storage, oraxenHook, oraxenExporter, null, null, logger);
+    }
+
+    public AgentWebSocketClient(String gatewayUrl, String targetId, String secret, ItemStorage storage,
+                                com.mcp.agent.adapters.oraxen.OraxenCatalogHook oraxenHook,
+                                com.mcp.agent.adapters.oraxen.OraxenItemExporter oraxenExporter,
+                                com.mcp.agent.pack.ResourcePackManager resourcePackManager,
+                                com.mcp.agent.adapters.oraxen.OraxenPackScanner oraxenPackScanner,
                                 Logger logger) {
         this.gatewayUri = URI.create(gatewayUrl);
         this.targetId = targetId;
@@ -45,6 +56,8 @@ public class AgentWebSocketClient implements WebSocket.Listener {
         this.storage = storage;
         this.oraxenHook = oraxenHook;
         this.oraxenExporter = oraxenExporter;
+        this.resourcePackManager = resourcePackManager;
+        this.oraxenPackScanner = oraxenPackScanner;
         this.logger = logger;
     }
 
@@ -99,6 +112,26 @@ public class AgentWebSocketClient implements WebSocket.Listener {
 
         sendHello();
         startHeartbeats();
+        if (oraxenPackScanner != null) {
+            oraxenPackScanner.scanAndSync(this);
+        }
+    }
+
+    public void sendEvent(String eventType, JsonObject payload) {
+        if (!isConnected()) return;
+        JsonObject envelope = new JsonObject();
+        envelope.addProperty("protocolVersion", "1.0");
+        envelope.addProperty("messageType", "event");
+        envelope.addProperty("messageId", "msg-event-" + UUID.randomUUID());
+        envelope.addProperty("targetId", targetId);
+        envelope.addProperty("sentAt", Instant.now().toString());
+        envelope.add("payload", payload);
+
+        webSocket.sendText(gson.toJson(envelope), true);
+    }
+
+    public com.mcp.agent.pack.ResourcePackManager getResourcePackManager() {
+        return resourcePackManager;
     }
 
     private void sendHello() {
@@ -179,6 +212,21 @@ public class AgentWebSocketClient implements WebSocket.Listener {
         try {
             JsonObject env = gson.fromJson(text, JsonObject.class);
             String messageType = env.get("messageType").getAsString();
+
+            if ("event".equals(messageType)) {
+                JsonObject payload = env.getAsJsonObject("payload");
+                String type = payload.has("type") ? payload.get("type").getAsString() : "";
+                if ("resource_pack:ready".equals(type) || "resource_pack.ready".equals(type)) {
+                    String url = payload.get("url").getAsString();
+                    String sha1 = payload.get("sha1").getAsString();
+                    boolean req = payload.has("required") && payload.get("required").getAsBoolean();
+                    String prompt = payload.has("prompt") ? payload.get("prompt").getAsString() : "Server Resource Pack";
+                    if (resourcePackManager != null) {
+                        resourcePackManager.updateActivePack(url, sha1, req, prompt);
+                    }
+                    return;
+                }
+            }
 
             if ("request".equals(messageType)) {
                 JsonObject payload = env.getAsJsonObject("payload");

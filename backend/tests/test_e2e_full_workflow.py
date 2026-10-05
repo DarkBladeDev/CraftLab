@@ -296,3 +296,151 @@ async def test_end_to_end_oraxen_discovery_and_export_pipeline():
         assert exec_res.json()["status"] == "applied"
 
         await gateway_manager.unregister_session(target_id, AsyncSessionLocal)
+
+
+@pytest.mark.asyncio
+async def test_end_to_end_resource_pack_pipeline():
+    import base64
+    import io
+    import zipfile
+
+    await init_db()
+    target_id = "paper-rp-e2e"
+
+    class MockWebSocket:
+        def __init__(self):
+            self.messages = []
+
+        async def send_text(self, text):
+            self.messages.append(text)
+
+    agent_ws = MockWebSocket()
+
+    # 1. Connect agent
+    hello_msg = json.dumps({
+        "protocolVersion": "1.0",
+        "messageType": "hello",
+        "messageId": "msg-rp-hello",
+        "targetId": target_id,
+        "payload": {
+            "agentVersion": "1.1.0",
+            "minecraftVersion": "1.21.1",
+            "paperVersion": "1.21.1-R0.1-SNAPSHOT"
+        }
+    })
+    await gateway_manager.handle_message(agent_ws, hello_msg, AsyncSessionLocal)
+
+    # 2. Simulate agent sending local plugin pack via WebSocket
+    plugin_zip_buf = io.BytesIO()
+    with zipfile.ZipFile(plugin_zip_buf, "w", zipfile.ZIP_DEFLATED) as zf:
+        zf.writestr("pack.mcmeta", json.dumps({"pack": {"pack_format": 34, "description": "Oraxen Live Pack"}}))
+        zf.writestr(
+            "assets/minecraft/sounds.json",
+            json.dumps({"custom.warhorn.blow": {"sounds": ["oraxen:horns/warhorn"]}})
+        )
+        zf.writestr(
+            "assets/minecraft/models/item/diamond_sword.json",
+            json.dumps({
+                "parent": "item/handheld",
+                "overrides": [{"predicate": {"custom_model_data": 5050}, "model": "oraxen:item/warhorn"}]
+            })
+        )
+    plugin_zip_b64 = base64.b64encode(plugin_zip_buf.getvalue()).decode("utf-8")
+
+    sync_msg = json.dumps({
+        "protocolVersion": "1.0",
+        "messageType": "event",
+        "messageId": "msg-rp-sync",
+        "targetId": target_id,
+        "payload": {
+            "type": "resource_pack:source_sync",
+            "plugin": "oraxen",
+            "sha1": "5a4b3c2d1e0f9a8b7c6d5e4f3a2b1c0d9e8f7a6b",
+            "zipBase64": plugin_zip_b64
+        }
+    })
+    await gateway_manager.handle_message(agent_ws, sync_msg, AsyncSessionLocal)
+
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        # 3. Create Studio item
+        studio_item = {
+            "id": "obsidian_halberd",
+            "material": "DIAMOND_AXE",
+            "display_name": "<dark_purple>Obsidian Halberd</dark_purple>",
+            "custom_model_data": 12001
+        }
+        await client.post("/api/items", json=studio_item)
+
+        # 4. Preflight Check
+        pre_res = await client.post(f"/api/v1/packs/preflight?target_id={target_id}")
+        assert pre_res.status_code == 200
+        report = pre_res.json()
+        assert report["is_valid"] is True
+        assert len(report["conflicts"]) == 0
+
+        # 5. Build Pack
+        build_payload = {
+            "target_id": target_id,
+            "pack_format": 34,
+            "description": "Production Unified Pack"
+        }
+        build_res = await client.post("/api/v1/packs/build", json=build_payload)
+        assert build_res.status_code == 200
+        build_data = build_res.json()
+        assert len(build_data["sha1_hash"]) == 40
+        assert build_data["file_size"] > 0
+        sha1 = build_data["sha1_hash"]
+
+        # 6. Verify agent received resource_pack:ready envelope
+        ready_msgs = [
+            json.loads(m) for m in agent_ws.messages
+            if "resource_pack.ready" in m or "resource_pack:ready" in m
+        ]
+        assert len(ready_msgs) > 0
+        latest_ready = ready_msgs[-1]
+        assert latest_ready["payload"]["sha1"] == sha1
+        assert "download" in latest_ready["payload"]["url"]
+
+        # 7. Download pack via HTTP
+        dl_res = await client.get(f"/api/v1/packs/{target_id}/download")
+        assert dl_res.status_code == 200
+        assert dl_res.headers["etag"] == f'"{sha1}"'
+
+        # Inspect downloaded zip archive
+        with zipfile.ZipFile(io.BytesIO(dl_res.content), "r") as zf:
+            namelist = zf.namelist()
+            assert "pack.mcmeta" in namelist
+            assert "assets/minecraft/sounds.json" in namelist
+            assert "assets/minecraft/models/item/diamond_axe.json" in namelist
+
+            # Verify sounds.json contains both sound entries
+            sounds = json.loads(zf.read("assets/minecraft/sounds.json").decode("utf-8"))
+            assert "custom.warhorn.blow" in sounds
+
+        # 8. Conditional HTTP GET with matching ETag
+        cond_res = await client.get(
+            f"/api/v1/packs/{target_id}/download",
+            headers={"if-none-match": sha1}
+        )
+        assert cond_res.status_code == 304
+
+        # 9. Verify preflight collision blocks build when CMD collides
+        colliding_item = {
+            "id": "corrupted_halberd",
+            "material": "DIAMOND_AXE",
+            "display_name": "Corrupted Halberd",
+            "custom_model_data": 12001  # Colliding CMD!
+        }
+        await client.post("/api/items", json=colliding_item)
+
+        conflict_build_res = await client.post("/api/v1/packs/build", json=build_payload)
+        assert conflict_build_res.status_code == 409
+        conflict_report = conflict_build_res.json()
+        assert conflict_report["is_valid"] is False
+        assert len(conflict_report["conflicts"]) == 1
+        assert conflict_report["conflicts"][0]["material"] == "DIAMOND_AXE"
+        assert conflict_report["conflicts"][0]["custom_model_data"] == 12001
+
+    await gateway_manager.unregister_session(target_id, AsyncSessionLocal)
+

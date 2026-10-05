@@ -17,3 +17,5 @@ paper-agent/build/
 
 # Local Dev Mock Storage
 backend/mock_server_storage/
+backend/data/
+data/

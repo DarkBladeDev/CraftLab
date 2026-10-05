@@ -23,17 +23,23 @@ public class McpCommand implements CommandExecutor, TabCompleter {
     private final ItemStorage storage;
     private final ItemAdapter adapter;
     private final AgentWebSocketClient wsClient;
+    private final com.mcp.agent.pack.ResourcePackManager packManager;
 
     public McpCommand(ItemStorage storage, ItemAdapter adapter, AgentWebSocketClient wsClient) {
+        this(storage, adapter, wsClient, null);
+    }
+
+    public McpCommand(ItemStorage storage, ItemAdapter adapter, AgentWebSocketClient wsClient, com.mcp.agent.pack.ResourcePackManager packManager) {
         this.storage = storage;
         this.adapter = adapter;
         this.wsClient = wsClient;
+        this.packManager = packManager;
     }
 
     @Override
     public boolean onCommand(CommandSender sender, Command command, String label, String[] args) {
         if (args.length == 0) {
-            sender.sendMessage(Component.text("Usage: /mcp [give|status|reload]", NamedTextColor.YELLOW));
+            sender.sendMessage(Component.text("Usage: /mcp [give|status|reload|reloadpack]", NamedTextColor.YELLOW));
             return true;
         }
 
@@ -87,14 +93,42 @@ public class McpCommand implements CommandExecutor, TabCompleter {
             return true;
         }
 
-        sender.sendMessage(Component.text("Unknown subcommand. Use /mcp [give|status|reload]", NamedTextColor.RED));
+        if ("reloadpack".equals(sub)) {
+            if (packManager == null || !packManager.hasActivePack()) {
+                sender.sendMessage(Component.text("[MCP] No active resource pack is currently configured.", NamedTextColor.RED));
+                return true;
+            }
+
+            if (args.length >= 2 && "all".equalsIgnoreCase(args[1])) {
+                if (!sender.hasPermission("mcp.admin.reloadpack") && !sender.isOp()) {
+                    sender.sendMessage(Component.text("You do not have permission to prompt all players.", NamedTextColor.RED));
+                    return true;
+                }
+                int count = packManager.promptAllOnlinePlayers();
+                sender.sendMessage(Component.text("[MCP] Re-prompted resource pack to " + count + " player(s).", NamedTextColor.GREEN));
+                return true;
+            }
+
+            if (sender instanceof Player player) {
+                packManager.applyToPlayer(player);
+                sender.sendMessage(Component.text("[MCP] Re-applying resource pack...", NamedTextColor.GREEN));
+            } else {
+                sender.sendMessage(Component.text("Console can only use: /mcp reloadpack all", NamedTextColor.YELLOW));
+            }
+            return true;
+        }
+
+        sender.sendMessage(Component.text("Unknown subcommand. Use /mcp [give|status|reload|reloadpack]", NamedTextColor.RED));
         return true;
     }
 
     @Override
     public List<String> onTabComplete(CommandSender sender, Command command, String label, String[] args) {
         if (args.length == 1) {
-            return Arrays.asList("give", "status", "reload");
+            return Arrays.asList("give", "status", "reload", "reloadpack");
+        }
+        if (args.length == 2 && "reloadpack".equalsIgnoreCase(args[0])) {
+            return Collections.singletonList("all");
         }
         if (args.length == 2 && "give".equalsIgnoreCase(args[0])) {
             List<String> list = new ArrayList<>();

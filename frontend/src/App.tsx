@@ -1,14 +1,16 @@
 import { useState, useEffect } from 'react'
-import { Box, Rocket, ShieldCheck, Terminal } from 'lucide-react'
+import { Box, Rocket, ShieldCheck, Terminal, Package, Wrench } from 'lucide-react'
 import { TargetMonitor } from './features/targets/TargetMonitor'
 import { ItemEditor } from './features/items/ItemEditor'
 import { DeployModal } from './features/deployments/DeployModal'
+import { ResourcePackManagerView } from './features/packs/ResourcePackManagerView'
 import { fetchRevisions, fetchTargets } from './api/client'
 
 export default function App() {
   const [selectedTargetId, setSelectedTargetId] = useState<string>('local-paper-server')
   const [latestRevisionId, setLatestRevisionId] = useState<string | undefined>(undefined)
   const [isDeployModalOpen, setIsDeployModalOpen] = useState(false)
+  const [activeTab, setActiveTab] = useState<'studio' | 'packs'>('studio')
 
   const refreshLatestRevision = async () => {
     try {
@@ -80,21 +82,67 @@ export default function App() {
           />
         </section>
 
-        {/* Content Definition Workspace */}
-        <section>
-          <ItemEditor onRevisionCreated={refreshLatestRevision} />
-        </section>
+        {/* Tab Selector */}
+        <div className="flex items-center space-x-2 border-b border-[#23232b] pb-2">
+          <button
+            onClick={() => setActiveTab('studio')}
+            className={`flex items-center space-x-2 px-4 py-2 rounded-xl text-xs font-semibold transition ${
+              activeTab === 'studio'
+                ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/30'
+                : 'text-gray-400 hover:text-gray-200 hover:bg-white/5'
+            }`}
+          >
+            <Wrench className="w-3.5 h-3.5" />
+            <span>Items Studio</span>
+          </button>
+          <button
+            onClick={() => setActiveTab('packs')}
+            className={`flex items-center space-x-2 px-4 py-2 rounded-xl text-xs font-semibold transition ${
+              activeTab === 'packs'
+                ? 'bg-purple-500/10 text-purple-400 border border-purple-500/30'
+                : 'text-gray-400 hover:text-gray-200 hover:bg-white/5'
+            }`}
+          >
+            <Package className="w-3.5 h-3.5" />
+            <span>Resource Packs</span>
+          </button>
+        </div>
+
+        {/* Workspace Views */}
+        {activeTab === 'studio' ? (
+          <section>
+            <ItemEditor onRevisionCreated={refreshLatestRevision} />
+          </section>
+        ) : (
+          <section>
+            <ResourcePackManagerView
+              selectedTargetId={selectedTargetId}
+              onSelectStudioItem={() => {
+                setActiveTab('studio')
+              }}
+            />
+          </section>
+        )}
 
         {/* Quick In-Game Help Footer Card */}
-        <div className="p-4 rounded-xl bg-[#141418] border border-[#23232b] flex items-center justify-between text-xs text-gray-400">
-          <div className="flex items-center space-x-2">
-            <Terminal className="w-4 h-4 text-gray-500" />
-            <span>Server Command:</span>
-            <code className="text-emerald-400 bg-[#0e0e11] px-2 py-0.5 rounded border border-[#22222a]">
-              /mcp give &lt;player&gt; &lt;item_id&gt;
-            </code>
+        <div className="p-4 rounded-xl bg-[#141418] border border-[#23232b] flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 text-xs text-gray-400">
+          <div className="flex flex-wrap items-center gap-4">
+            <div className="flex items-center space-x-2">
+              <Terminal className="w-4 h-4 text-gray-500" />
+              <span>Give Item:</span>
+              <code className="text-emerald-400 bg-[#0e0e11] px-2 py-0.5 rounded border border-[#22222a]">
+                /mcp give &lt;player&gt; &lt;item_id&gt;
+              </code>
+            </div>
+            <div className="flex items-center space-x-2">
+              <Terminal className="w-4 h-4 text-purple-400" />
+              <span>Reload Pack:</span>
+              <code className="text-purple-300 bg-[#0e0e11] px-2 py-0.5 rounded border border-[#22222a]">
+                /mcp reloadpack [all]
+              </code>
+            </div>
           </div>
-          <span className="text-gray-500 text-[11px]">Paper 1.21 Data Components Engine Active</span>
+          <span className="text-gray-500 text-[11px]">Paper 1.21 Resource Pipeline Active</span>
         </div>
       </main>
 

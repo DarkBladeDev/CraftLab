@@ -25,20 +25,26 @@ public class McpAgentPlugin extends JavaPlugin {
         // 2. Adapter
         this.itemAdapter = new Paper121ItemAdapter();
 
-        // 3. Oraxen Integration & WebSocket Client
+        // 3. Resource Pack Manager & Listener
+        com.mcp.agent.pack.ResourcePackManager resourcePackManager = new com.mcp.agent.pack.ResourcePackManager(getLogger());
+        getServer().getPluginManager().registerEvents(new com.mcp.agent.pack.ResourcePackJoinListener(resourcePackManager), this);
+
+        // 4. Oraxen Integration & WebSocket Client
         String gatewayUrl = getConfig().getString("gateway.url", "ws://127.0.0.1:8000/ws/agent");
         String targetId = getConfig().getString("gateway.targetId", "local-paper-server");
         String secret = getConfig().getString("gateway.secret", "dev-secret");
 
-        java.io.File oraxenFolder = new java.io.File(getDataFolder().getParentFile(), "Oraxen/items");
+        java.io.File oraxenRoot = new java.io.File(getDataFolder().getParentFile(), "Oraxen");
+        java.io.File oraxenItemsFolder = new java.io.File(oraxenRoot, "items");
         com.mcp.agent.adapters.oraxen.OraxenCatalogHook oraxenHook = new com.mcp.agent.adapters.oraxen.OraxenCatalogHook(getLogger());
-        com.mcp.agent.adapters.oraxen.OraxenItemExporter oraxenExporter = new com.mcp.agent.adapters.oraxen.OraxenItemExporter(oraxenFolder, getLogger());
+        com.mcp.agent.adapters.oraxen.OraxenItemExporter oraxenExporter = new com.mcp.agent.adapters.oraxen.OraxenItemExporter(oraxenItemsFolder, getLogger());
+        com.mcp.agent.adapters.oraxen.OraxenPackScanner oraxenPackScanner = new com.mcp.agent.adapters.oraxen.OraxenPackScanner(oraxenRoot, getLogger());
 
-        this.wsClient = new AgentWebSocketClient(gatewayUrl, targetId, secret, itemStorage, oraxenHook, oraxenExporter, getLogger());
+        this.wsClient = new AgentWebSocketClient(gatewayUrl, targetId, secret, itemStorage, oraxenHook, oraxenExporter, resourcePackManager, oraxenPackScanner, getLogger());
         this.wsClient.start();
 
-        // 4. Command
-        McpCommand commandHandler = new McpCommand(itemStorage, itemAdapter, wsClient);
+        // 5. Command
+        McpCommand commandHandler = new McpCommand(itemStorage, itemAdapter, wsClient, resourcePackManager);
         PluginCommand cmd = getCommand("mcp");
         if (cmd != null) {
             cmd.setExecutor(commandHandler);

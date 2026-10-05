@@ -7,6 +7,7 @@ from app.api.items import router as items_router, revisions_router
 from app.api.targets import router as targets_router
 from app.api.deployments import router as deployments_router
 from app.api.catalogs import router as catalogs_router
+from app.api.packs import router as packs_router
 from app.gateway.manager import gateway_manager
 
 logging.basicConfig(level=logging.INFO)
@@ -36,6 +37,7 @@ app.include_router(revisions_router)
 app.include_router(targets_router)
 app.include_router(deployments_router)
 app.include_router(catalogs_router)
+app.include_router(packs_router)
 
 
 @app.websocket("/ws/agent")

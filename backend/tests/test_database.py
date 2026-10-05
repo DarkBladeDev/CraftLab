@@ -15,6 +15,8 @@ async def test_init_db_creates_tables():
         assert "discovered_catalog_items" in tables
         assert "revisions" in tables
         assert "deployments" in tables
+        assert "pack_sources" in tables
+        assert "compiled_packs" in tables
 
         # Verify components column exists in items table
         pragma_items = await conn.execute(text("PRAGMA table_info(items);"))

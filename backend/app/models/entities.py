@@ -1,5 +1,5 @@
 from datetime import datetime, timezone
-from sqlalchemy import Column, String, Integer, DateTime, JSON, ForeignKey
+from sqlalchemy import Column, String, Integer, DateTime, JSON, ForeignKey, Boolean
 from sqlalchemy.orm import relationship
 from app.core.database import Base
 
@@ -90,3 +90,40 @@ class DeploymentModel(Base):
     executed_at = Column(DateTime, default=utcnow)
 
     plan = relationship("DeploymentPlanModel")
+
+
+class PackSourceModel(Base):
+    __tablename__ = "pack_sources"
+
+    id = Column(String, primary_key=True, index=True)
+    target_id = Column(String, ForeignKey("targets.id"), nullable=True, index=True)
+    name = Column(String, nullable=False)
+    source_type = Column(String, nullable=False)  # "studio", "upload", "agent"
+    plugin = Column(String, nullable=True)  # e.g. "oraxen"
+    layer_priority = Column(Integer, default=10, nullable=False)
+    storage_path = Column(String, nullable=False)
+    sha1_hash = Column(String, nullable=True)
+    meta_info = Column(JSON, default=dict)
+    is_active = Column(Boolean, default=True, nullable=False)
+    created_at = Column(DateTime, default=utcnow)
+    updated_at = Column(DateTime, default=utcnow, onupdate=utcnow)
+
+    target = relationship("TargetModel")
+
+
+class CompiledPackModel(Base):
+    __tablename__ = "compiled_packs"
+
+    id = Column(String, primary_key=True, index=True)
+    target_id = Column(String, ForeignKey("targets.id"), nullable=True, index=True)
+    pack_name = Column(String, nullable=False)
+    storage_path = Column(String, nullable=False)
+    file_size = Column(Integer, default=0, nullable=False)
+    sha1_hash = Column(String, nullable=False, index=True)
+    pack_format = Column(Integer, default=34, nullable=False)
+    build_summary = Column(JSON, default=dict)
+    is_active = Column(Boolean, default=True, nullable=False)
+    created_at = Column(DateTime, default=utcnow)
+
+    target = relationship("TargetModel")
+

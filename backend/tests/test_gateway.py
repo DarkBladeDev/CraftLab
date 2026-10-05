@@ -173,3 +173,64 @@ async def test_gateway_catalog_manifest_event():
         assert item is not None
         assert item.material == "BOW"
         assert item.custom_model_data == 20002
+
+
+@pytest.mark.asyncio
+async def test_gateway_resource_pack_source_sync():
+    await init_db()
+    manager = AgentSessionManager()
+    mock_ws = AsyncMock()
+
+    # 1. Connect target
+    hello_msg = json.dumps({
+        "protocolVersion": "1.0",
+        "messageType": "hello",
+        "messageId": "msg-sync-01",
+        "targetId": "paper-target-pack",
+        "payload": {
+            "agentVersion": "1.0.0",
+            "minecraftVersion": "1.21.1",
+            "paperVersion": "1.21.1-R0.1-SNAPSHOT"
+        }
+    })
+    await manager.handle_message(mock_ws, hello_msg, AsyncSessionLocal)
+
+    # 2. Resource pack source sync event
+    sync_msg = json.dumps({
+        "protocolVersion": "1.0",
+        "messageType": "event",
+        "messageId": "msg-sync-02",
+        "targetId": "paper-target-pack",
+        "payload": {
+            "type": "resource_pack:source_sync",
+            "plugin": "oraxen",
+            "sha1": "3a7b9c1d5e7f2a4b6c8d0e1f3a5b7c9d1e3f5a7b"
+        }
+    })
+    resp = await manager.handle_message(mock_ws, sync_msg, AsyncSessionLocal)
+    assert resp is not None
+
+    # Verify source was created in DB
+    from app.domain.pack_sources import PackRepository
+    async with AsyncSessionLocal() as db:
+        src = await PackRepository.get_source(db, "src-agent-paper-target-pack-oraxen")
+        assert src is not None
+        assert src.plugin == "oraxen"
+        assert src.sha1_hash == "3a7b9c1d5e7f2a4b6c8d0e1f3a5b7c9d1e3f5a7b"
+
+    # 3. Test send_to_target with resource_pack:ready envelope
+    ready_env = MessageEnvelope(
+        messageType="event",
+        targetId="paper-target-pack",
+        payload={
+            "type": "resource_pack:ready",
+            "url": "http://localhost:8000/api/v1/packs/paper-target-pack/download",
+            "sha1": "3a7b9c1d5e7f2a4b6c8d0e1f3a5b7c9d1e3f5a7b",
+            "required": False,
+            "prompt": "Server Custom Pack"
+        }
+    )
+    sent = await manager.send_to_target("paper-target-pack", ready_env)
+    assert sent is True
+    mock_ws.send_text.assert_called()
+

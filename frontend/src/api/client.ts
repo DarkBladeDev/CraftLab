@@ -215,3 +215,114 @@ export async function fetchPluginSchema(schemaId: string): Promise<PluginSchema>
   }
   return res.json()
 }
+
+export interface PackSource {
+  id: string
+  target_id?: string
+  name: string
+  source_type: 'studio' | 'upload' | 'agent'
+  plugin?: string
+  layer_priority: number
+  storage_path: string
+  sha1_hash?: string
+  meta_info?: Record<string, any>
+  is_active: boolean
+  updated_at?: string
+}
+
+export interface ConflictItem {
+  source: string
+  item_id: string
+  display_name: string
+  material: string
+  custom_model_data: number
+  link?: string
+}
+
+export interface PreflightConflict {
+  type: string
+  severity: string
+  material: string
+  custom_model_data?: number
+  items: ConflictItem[]
+  message: string
+}
+
+export interface PreflightReport {
+  is_valid: boolean
+  has_warnings: boolean
+  conflicts: PreflightConflict[]
+  warnings: PreflightConflict[]
+  summary: Record<string, any>
+}
+
+export interface CompiledPackInfo {
+  pack_id: string
+  target_id?: string
+  pack_name: string
+  sha1_hash: string
+  file_size: number
+  download_url: string
+  build_summary?: Record<string, any>
+}
+
+export async function fetchPackSources(targetId?: string): Promise<PackSource[]> {
+  const params = new URLSearchParams()
+  if (targetId) params.append('target_id', targetId)
+  const res = await fetch(`/api/v1/packs/sources?${params.toString()}`)
+  return res.json()
+}
+
+export async function uploadPackSource(formData: FormData): Promise<any> {
+  const res = await fetch('/api/v1/packs/sources/upload', {
+    method: 'POST',
+    body: formData,
+  })
+  if (!res.ok) {
+    const err = await res.json()
+    throw new Error(err.detail || 'Failed to upload source')
+  }
+  return res.json()
+}
+
+export async function deletePackSource(sourceId: string): Promise<any> {
+  const res = await fetch(`/api/v1/packs/sources/${sourceId}`, {
+    method: 'DELETE',
+  })
+  return res.json()
+}
+
+export async function runPackPreflight(targetId?: string): Promise<PreflightReport> {
+  const params = new URLSearchParams()
+  if (targetId) params.append('target_id', targetId)
+  const res = await fetch(`/api/v1/packs/preflight?${params.toString()}`, {
+    method: 'POST',
+  })
+  return res.json()
+}
+
+export async function buildResourcePack(targetId?: string, force = false): Promise<CompiledPackInfo> {
+  const res = await fetch('/api/v1/packs/build', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ target_id: targetId, force }),
+  })
+  if (res.status === 409) {
+    const report: PreflightReport = await res.json()
+    const err: any = new Error('Pre-flight validation failed with conflicts')
+    err.report = report
+    throw err
+  }
+  if (!res.ok) {
+    const err = await res.json()
+    throw new Error(err.detail || 'Failed to build resource pack')
+  }
+  return res.json()
+}
+
+export async function fetchLatestPack(targetId: string): Promise<any> {
+  const res = await fetch(`/api/v1/packs/${targetId}/latest`)
+  if (!res.ok) return null
+  return res.json()
+}
+
