@@ -77,8 +77,8 @@ public class Paper121ItemAdapter implements ItemAdapter {
         return stack;
     }
 
-    void applyItemModel(ItemMeta meta, String itemModelStr) {
-        if (itemModelStr == null || itemModelStr.trim().isEmpty()) {
+    public static void applyItemModel(ItemMeta meta, String itemModelStr) {
+        if (itemModelStr == null || itemModelStr.trim().isEmpty() || meta == null) {
             return;
         }
         try {

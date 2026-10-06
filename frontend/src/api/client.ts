@@ -399,4 +399,123 @@ export async function deleteBlock(id: string): Promise<any> {
   return res.json()
 }
 
+// ----------------------------------------------------------------------
+// Workspace Pack Explorer API
+// ----------------------------------------------------------------------
+
+export interface WorkspaceFileNode {
+  name: string
+  path: string
+  type: 'directory' | 'file'
+  size?: number
+  extension?: string
+  category?: 'texture' | 'model' | 'item_definition' | 'sound' | 'manifest' | 'font' | 'lang' | 'other'
+  resource_location?: string | null
+  children?: WorkspaceFileNode[]
+}
+
+export interface WorkspaceMetadataDiagnostics {
+  dimensions?: { width: number; height: number } | null
+  is_square?: boolean | null
+  is_power_of_two?: boolean | null
+  missing_textures: Array<{ slot: string; texture_ref: string; expected_path: string }>
+  referenced_by_models: string[]
+}
+
+export interface WorkspaceFileMetadata {
+  file_name: string
+  relative_path: string
+  size_bytes: number
+  modified_at: number
+  category: string
+  namespace?: string | null
+  resource_location?: string | null
+  overlay?: string | null
+  item_model_component?: string | null
+  json_layer_reference?: string | null
+  give_command?: string | null
+  diagnostics: WorkspaceMetadataDiagnostics
+}
+
+export async function fetchWorkspaceTree(): Promise<WorkspaceFileNode> {
+  const res = await fetch(`${API_BASE}/v1/packs/workspace/tree`)
+  if (!res.ok) throw new Error(`Failed to fetch workspace tree (${res.status})`)
+  return res.json()
+}
+
+export async function fetchWorkspaceFileContent(path: string): Promise<{ path: string; content: string }> {
+  const res = await fetch(`${API_BASE}/v1/packs/workspace/file?path=${encodeURIComponent(path)}`)
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}))
+    throw new Error(err.detail || `Failed to fetch file (${res.status})`)
+  }
+  return res.json()
+}
+
+export async function saveWorkspaceFileContent(path: string, content: string): Promise<{ success: boolean; path: string; size: number }> {
+  const res = await fetch(`${API_BASE}/v1/packs/workspace/file`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ path, content }),
+  })
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}))
+    throw new Error(err.detail || `Failed to save file (${res.status})`)
+  }
+  return res.json()
+}
+
+export async function createWorkspaceDirectory(path: string): Promise<{ success: boolean; path: string }> {
+  const res = await fetch(`${API_BASE}/v1/packs/workspace/directory`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ path }),
+  })
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}))
+    throw new Error(err.detail || `Failed to create directory (${res.status})`)
+  }
+  return res.json()
+}
+
+export async function uploadWorkspaceFile(file: File, directory: string): Promise<{ success: boolean; path: string; filename: string }> {
+  const formData = new FormData()
+  formData.append('file', file)
+  formData.append('directory', directory)
+
+  const res = await fetch(`${API_BASE}/v1/packs/workspace/upload`, {
+    method: 'POST',
+    body: formData,
+  })
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}))
+    throw new Error(err.detail || `Failed to upload file (${res.status})`)
+  }
+  return res.json()
+}
+
+export async function deleteWorkspaceFile(path: string): Promise<{ success: boolean; path: string }> {
+  const res = await fetch(`${API_BASE}/v1/packs/workspace/file?path=${encodeURIComponent(path)}`, {
+    method: 'DELETE',
+  })
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}))
+    throw new Error(err.detail || `Failed to delete file (${res.status})`)
+  }
+  return res.json()
+}
+
+export async function fetchWorkspaceMetadata(path: string): Promise<WorkspaceFileMetadata> {
+  const res = await fetch(`${API_BASE}/v1/packs/workspace/metadata?path=${encodeURIComponent(path)}`)
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}))
+    throw new Error(err.detail || `Failed to fetch metadata (${res.status})`)
+  }
+  return res.json()
+}
+
+export function getWorkspaceRawFileUrl(path: string): string {
+  return `${API_BASE}/v1/packs/workspace/file?path=${encodeURIComponent(path)}&raw=true`
+}
+
 

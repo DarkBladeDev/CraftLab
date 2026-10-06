@@ -82,7 +82,9 @@ class DeterministicPackCompiler:
                 "supported_formats": {
                     "min_inclusive": min_inclusive,
                     "max_inclusive": max_inclusive
-                }
+                },
+                "min_format": min_inclusive,
+                "max_format": max_inclusive
             },
             "overlays": {
                 "entries": [
@@ -91,6 +93,8 @@ class DeterministicPackCompiler:
                             "min_inclusive": overlay_min,
                             "max_inclusive": overlay_max
                         },
+                        "min_format": overlay_min,
+                        "max_format": overlay_max,
                         "directory": overlay_dir
                     }
                 ]

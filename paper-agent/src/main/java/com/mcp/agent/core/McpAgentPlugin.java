@@ -33,8 +33,8 @@ public class McpAgentPlugin extends JavaPlugin {
         // 3b. Props Engine (Virtual Displays via PacketEvents)
         java.io.File propsDataDir = new java.io.File(getDataFolder(), "data");
         com.mcp.agent.props.PropStorage propStorage = new com.mcp.agent.props.PropStorage(propsDataDir, getLogger());
-        this.propManager = new com.mcp.agent.props.PropManager(propStorage, getLogger());
-        getServer().getPluginManager().registerEvents(new com.mcp.agent.props.PropPlaceBreakListener(this, this.propManager, getLogger()), this);
+        this.propManager = new com.mcp.agent.props.PropManager(propStorage, this.itemStorage, getLogger());
+        getServer().getPluginManager().registerEvents(new com.mcp.agent.props.PropPlaceBreakListener(this, this.propManager, this.itemStorage, this.itemAdapter, getLogger()), this);
         getServer().getPluginManager().registerEvents(new com.mcp.agent.props.PropInteractionListener(this, this.propManager, getLogger()), this);
 
         // 4. Oraxen Integration & WebSocket Client

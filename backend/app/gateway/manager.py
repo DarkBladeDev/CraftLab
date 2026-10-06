@@ -62,12 +62,16 @@ class AgentSessionManager:
         finally:
             self._pending_requests.pop(correlation_id, None)
 
-    async def send_to_target(self, target_id: str, envelope: MessageEnvelope) -> bool:
+    async def send_to_target(self, target_id: str, envelope: MessageEnvelope, timeout: float = 3.0) -> bool:
         """Sends an event or message to the target WebSocket if online."""
         websocket = self._active_sessions.get(target_id)
         if websocket:
-            await websocket.send_text(envelope.model_dump_json())
-            return True
+            try:
+                await asyncio.wait_for(websocket.send_text(envelope.model_dump_json()), timeout=timeout)
+                return True
+            except Exception as e:
+                logger.warning(f"Failed to send envelope to target '{target_id}': {e}")
+                return False
         return False
 
     async def handle_message(self, websocket: WebSocket, raw_text: str, db_session_maker) -> Optional[MessageEnvelope]:

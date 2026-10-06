@@ -8,6 +8,7 @@ import {
   Flame,
   Plus,
   RotateCcw,
+  Box,
 } from 'lucide-react'
 import {
   fetchItems,
@@ -27,6 +28,7 @@ import { ConfigSchemaEngine } from './ConfigSchemaEngine'
 import { MiniMessageToolbar } from './minimessage/MiniMessageToolbar'
 import { ComponentBuilder } from './ComponentBuilder'
 import { LiveInspector } from './inspector/LiveInspector'
+import { AssetPickerModal } from '../assets/AssetPickerModal'
 
 const POPULAR_MATERIALS = [
   'DIAMOND_SWORD',
@@ -72,6 +74,7 @@ export function ItemEditor({ onRevisionCreated }: { onRevisionCreated?: () => vo
   )
   const [customModelData, setCustomModelData] = useState<string>('10001')
   const [itemModel, setItemModel] = useState<string>('')
+  const [isAssetPickerOpen, setIsAssetPickerOpen] = useState(false)
   const [selectedFlags, setSelectedFlags] = useState<string[]>(['HIDE_ATTRIBUTES'])
   const [exportFormat, setExportFormat] = useState<'native' | 'oraxen'>('native')
   const [components, setComponents] = useState<Record<string, any>>({
@@ -572,15 +575,25 @@ export function ItemEditor({ onRevisionCreated }: { onRevisionCreated?: () => vo
                     <label className="block text-xs font-medium text-gray-300">
                       Item Model Key <span className="text-[10px] text-cyan-400">(1.21.2+)</span>
                     </label>
-                    <span
-                      className={`text-[9px] px-1.5 py-0.2 rounded font-mono ${
-                        itemModel.trim()
-                          ? 'bg-amber-500/10 text-amber-300 border border-amber-500/20'
-                          : 'bg-cyan-500/10 text-cyan-300 border border-cyan-500/20'
-                      }`}
-                    >
-                      {itemModel.trim() ? 'Custom' : 'Auto-Derived'}
-                    </span>
+                    <div className="flex items-center space-x-1.5">
+                      <button
+                        type="button"
+                        onClick={() => setIsAssetPickerOpen(true)}
+                        className="flex items-center space-x-1 px-2 py-0.5 rounded bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 border border-emerald-500/20 text-[10px] font-semibold transition"
+                      >
+                        <Box className="w-3 h-3" />
+                        <span>Pick from Pack</span>
+                      </button>
+                      <span
+                        className={`text-[9px] px-1.5 py-0.2 rounded font-mono ${
+                          itemModel.trim()
+                            ? 'bg-amber-500/10 text-amber-300 border border-amber-500/20'
+                            : 'bg-cyan-500/10 text-cyan-300 border border-cyan-500/20'
+                        }`}
+                      >
+                        {itemModel.trim() ? 'Custom' : 'Auto-Derived'}
+                      </span>
+                    </div>
                   </div>
                   <input
                     type="text"
@@ -691,6 +704,17 @@ export function ItemEditor({ onRevisionCreated }: { onRevisionCreated?: () => vo
           />
         </div>
       </div>
+
+      {/* Asset Picker Modal */}
+      <AssetPickerModal
+        isOpen={isAssetPickerOpen}
+        onClose={() => setIsAssetPickerOpen(false)}
+        filterCategory="models"
+        title="Select Item Model from Workspace Pack"
+        onSelectAsset={(rl) => {
+          setItemModel(rl)
+        }}
+      />
     </div>
   )
 }

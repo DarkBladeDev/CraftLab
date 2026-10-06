@@ -1,17 +1,18 @@
 import { useState, useEffect } from 'react'
-import { Box, Rocket, ShieldCheck, Terminal, Package, Wrench, Armchair } from 'lucide-react'
+import { Box, Rocket, ShieldCheck, Terminal, Package, Wrench, Armchair, FolderGit2 } from 'lucide-react'
 import { TargetMonitor } from './features/targets/TargetMonitor'
 import { ItemEditor } from './features/items/ItemEditor'
 import { BlockStudio } from './features/blocks/BlockStudio'
 import { DeployModal } from './features/deployments/DeployModal'
 import { ResourcePackManagerView } from './features/packs/ResourcePackManagerView'
+import { AssetWorkspaceView } from './features/assets/AssetWorkspaceView'
 import { fetchRevisions, fetchTargets } from './api/client'
 
 export default function App() {
   const [selectedTargetId, setSelectedTargetId] = useState<string>('local-paper-server')
   const [latestRevisionId, setLatestRevisionId] = useState<string | undefined>(undefined)
   const [isDeployModalOpen, setIsDeployModalOpen] = useState(false)
-  const [activeTab, setActiveTab] = useState<'studio' | 'blocks' | 'packs'>('studio')
+  const [activeTab, setActiveTab] = useState<'studio' | 'blocks' | 'packs' | 'assets'>('studio')
 
   const refreshLatestRevision = async () => {
     try {
@@ -118,6 +119,17 @@ export default function App() {
             <Package className="w-3.5 h-3.5" />
             <span>Resource Packs</span>
           </button>
+          <button
+            onClick={() => setActiveTab('assets')}
+            className={`flex items-center space-x-2 px-4 py-2 rounded-xl text-xs font-semibold transition ${
+              activeTab === 'assets'
+                ? 'bg-amber-500/10 text-amber-400 border border-amber-500/30'
+                : 'text-gray-400 hover:text-gray-200 hover:bg-white/5'
+            }`}
+          >
+            <FolderGit2 className="w-3.5 h-3.5" />
+            <span>Asset Explorer</span>
+          </button>
         </div>
 
         {/* Workspace Views */}
@@ -139,6 +151,11 @@ export default function App() {
                 setActiveTab('studio')
               }}
             />
+          </section>
+        )}
+        {activeTab === 'assets' && (
+          <section>
+            <AssetWorkspaceView />
           </section>
         )}
 

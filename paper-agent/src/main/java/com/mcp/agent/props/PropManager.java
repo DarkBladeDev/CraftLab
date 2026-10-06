@@ -36,8 +36,10 @@ public class PropManager {
     public static final int METADATA_INDEX_SCALE = 12;
     public static final int METADATA_INDEX_ROTATION_LEFT = 13;
     public static final int METADATA_INDEX_ITEM_STACK = 23;
+    public static final int METADATA_INDEX_ITEM_DISPLAY_CONTEXT = 24;
 
     private final PropStorage storage;
+    private final com.mcp.agent.storage.ItemStorage itemStorage;
     private final Logger logger;
     private final Map<String, PropDefinition> definitions = new ConcurrentHashMap<>();
     private final Map<UUID, PropInstance> instancesById = new ConcurrentHashMap<>();
@@ -47,7 +49,12 @@ public class PropManager {
     private final AtomicInteger nextEntityId = new AtomicInteger(2_000_000);
 
     public PropManager(PropStorage storage, Logger logger) {
+        this(storage, null, logger);
+    }
+
+    public PropManager(PropStorage storage, com.mcp.agent.storage.ItemStorage itemStorage, Logger logger) {
         this.storage = storage;
+        this.itemStorage = itemStorage;
         this.logger = logger;
         loadAll();
     }
@@ -251,8 +258,34 @@ public class PropManager {
         if (displayItem != null) {
             com.github.retrooper.packetevents.protocol.item.ItemStack peItem =
                     SpigotConversionUtil.fromBukkitItemStack(displayItem);
+
+            // Directly inject ITEM_MODEL into PacketEvents ItemStack if specified
+            if (def != null && def.getItemModel() != null && !def.getItemModel().isEmpty()) {
+                String model = def.getItemModel().trim().toLowerCase();
+                String ns = "minecraft";
+                String path = model;
+                if (model.contains(":")) {
+                    String[] parts = model.split(":", 2);
+                    ns = parts[0];
+                    path = parts[1];
+                }
+                try {
+                    peItem.setComponent(
+                            com.github.retrooper.packetevents.protocol.component.ComponentTypes.ITEM_MODEL,
+                            new com.github.retrooper.packetevents.protocol.component.builtin.item.ItemModel(
+                                    new com.github.retrooper.packetevents.resources.ResourceLocation(ns, path)
+                            )
+                    );
+                } catch (Throwable t) {
+                    logger.warning("Failed to set PacketEvents ITEM_MODEL: " + t.getMessage());
+                }
+            }
+
             metadata.add(new EntityData<>(METADATA_INDEX_ITEM_STACK, EntityDataTypes.ITEMSTACK, peItem));
         }
+
+        // Item Display Context (Index 24 in MC 1.20.5+: byte 8 = FIXED)
+        metadata.add(new EntityData<>(METADATA_INDEX_ITEM_DISPLAY_CONTEXT, EntityDataTypes.BYTE, (byte) 8));
 
         WrapperPlayServerEntityMetadata metaPacket = new WrapperPlayServerEntityMetadata(entityId, metadata);
         sendPacket(player, metaPacket);
@@ -306,27 +339,27 @@ public class PropManager {
     }
 
     private ItemStack createDisplayItemStack(PropDefinition def) {
-        ItemStack item = new ItemStack(Material.PAPER);
+        Material mat = (def != null && def.getItemModel() != null && !def.getItemModel().isEmpty())
+                ? Material.WHITE_WOOL
+                : Material.PAPER;
+        if (def != null && def.getDropItemId() != null && itemStorage != null) {
+            com.google.gson.JsonObject dropJson = itemStorage.getItem(def.getDropItemId());
+            if (dropJson != null && dropJson.has("material")) {
+                Material m = Material.matchMaterial(dropJson.get("material").getAsString());
+                if (m != null) {
+                    mat = m;
+                }
+            }
+        }
+
+        ItemStack item = new ItemStack(mat);
         ItemMeta meta = item.getItemMeta();
         if (meta != null) {
             if (def != null && def.getDisplayName() != null) {
                 meta.setDisplayName(def.getDisplayName());
             }
-            if (def != null && def.getItemModel() != null) {
-                try {
-                    // Try to apply item_model component via Paper 1.21.2+ API if present
-                    org.bukkit.NamespacedKey key = org.bukkit.NamespacedKey.fromString(def.getItemModel());
-                    if (key != null) {
-                        try {
-                            java.lang.reflect.Method m = meta.getClass().getMethod("setItemModel", org.bukkit.NamespacedKey.class);
-                            m.invoke(meta, key);
-                        } catch (NoSuchMethodException ignored) {
-                            // Fallback to custom model data hash if setItemModel is not present
-                            meta.setCustomModelData(Math.abs(def.getItemModel().hashCode() % 1000000));
-                        }
-                    }
-                } catch (Exception ignored) {
-                }
+            if (def != null && def.getItemModel() != null && !def.getItemModel().isEmpty()) {
+                com.mcp.agent.adapters.Paper121ItemAdapter.applyItemModel(meta, def.getItemModel());
             }
             item.setItemMeta(meta);
         }

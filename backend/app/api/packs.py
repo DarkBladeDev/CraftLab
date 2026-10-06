@@ -1,4 +1,5 @@
 import os
+import json
 import shutil
 import uuid
 import zipfile
@@ -12,12 +13,21 @@ from sqlalchemy import select
 from pydantic import BaseModel
 
 from app.core.database import get_db
-from app.models.entities import ItemModel, TargetModel
+from app.models.entities import ItemModel, TargetModel, BlockModel
 from app.domain.pack_sources import PackRepository, PackSourceSchema, CompiledPackSchema
 from app.domain.pack_validator import PreflightValidator, PreflightReport
 from app.domain.pack_merger import SemanticMerger, ItemModelMapping
 from app.domain.pack_compiler import DeterministicPackCompiler
 from app.gateway.manager import gateway_manager
+from app.domain.workspace import (
+    ensure_workspace_initialized,
+    safe_resolve_workspace_path,
+    validate_minecraft_identifier,
+    build_workspace_tree,
+    get_workspace_metadata,
+    get_default_workspace_dir,
+    resolve_resource_location,
+)
 
 router = APIRouter(prefix="/api/v1/packs", tags=["packs"])
 
@@ -43,6 +53,15 @@ class BuildPackRequest(BaseModel):
     pack_format: int = 34
     description: str = "Minecraft Content Platform Resource Pack"
     force: bool = False
+
+
+class WriteWorkspaceFileRequest(BaseModel):
+    path: str
+    content: str
+
+
+class CreateWorkspaceDirRequest(BaseModel):
+    path: str
 
 
 @router.get("/sources")
@@ -138,6 +157,160 @@ async def delete_source(source_id: str, db: AsyncSession = Depends(get_db)):
     return {"success": success}
 
 
+# ---------------------------------------------------------
+# Workspace Pack Filesystem & Metadata Endpoints
+# ---------------------------------------------------------
+
+@router.get("/workspace/tree")
+async def get_workspace_tree_endpoint():
+    workspace_dir = ensure_workspace_initialized()
+    return build_workspace_tree(workspace_dir)
+
+
+@router.get("/workspace/file")
+async def get_workspace_file_endpoint(path: str, raw: bool = False):
+    workspace_dir = ensure_workspace_initialized()
+    try:
+        target_path = safe_resolve_workspace_path(workspace_dir, path)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+    if not target_path.exists() or not target_path.is_file():
+        raise HTTPException(status_code=404, detail=f"File '{path}' not found")
+
+    ext = target_path.suffix.lower()
+    if raw or ext in [".png", ".ogg"]:
+        media_type = "image/png" if ext == ".png" else ("audio/ogg" if ext == ".ogg" else "application/octet-stream")
+        return FileResponse(path=target_path, media_type=media_type)
+
+    try:
+        content = target_path.read_text(encoding="utf-8")
+        return {"path": path, "content": content}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error reading file: {str(e)}")
+
+
+@router.put("/workspace/file")
+async def write_workspace_file_endpoint(req: WriteWorkspaceFileRequest):
+    workspace_dir = ensure_workspace_initialized()
+    try:
+        target_path = safe_resolve_workspace_path(workspace_dir, req.path)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+    ext = target_path.suffix.lower()
+    if ext == ".json":
+        try:
+            json.loads(req.content)
+        except Exception as e:
+            raise HTTPException(status_code=400, detail=f"Invalid JSON syntax: {str(e)}")
+
+    target_path.parent.mkdir(parents=True, exist_ok=True)
+    target_path.write_text(req.content, encoding="utf-8")
+    return {"success": True, "path": req.path, "size": len(req.content)}
+
+
+@router.post("/workspace/directory")
+async def create_workspace_directory_endpoint(req: CreateWorkspaceDirRequest):
+    workspace_dir = ensure_workspace_initialized()
+    clean_path = req.path.replace("\\", "/").strip("/")
+    if not clean_path:
+        raise HTTPException(status_code=400, detail="Directory path cannot be empty")
+
+    segments = clean_path.split("/")
+    for seg in segments:
+        if not validate_minecraft_identifier(seg):
+            raise HTTPException(
+                status_code=400,
+                detail=f"Invalid directory segment '{seg}'. Must be lowercase and match ^[a-z0-9_.-]+$"
+            )
+
+    try:
+        target_path = safe_resolve_workspace_path(workspace_dir, clean_path)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+    target_path.mkdir(parents=True, exist_ok=True)
+    return {"success": True, "path": clean_path}
+
+
+@router.post("/workspace/upload")
+async def upload_workspace_file_endpoint(
+    file: UploadFile = File(...),
+    directory: str = Form("")
+):
+    workspace_dir = ensure_workspace_initialized()
+    clean_dir = directory.replace("\\", "/").strip("/")
+
+    if clean_dir:
+        for seg in clean_dir.split("/"):
+            if not validate_minecraft_identifier(seg):
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"Invalid directory segment '{seg}'. Must match ^[a-z0-9_.-]+$"
+                )
+
+    try:
+        target_dir = safe_resolve_workspace_path(workspace_dir, clean_dir)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+    target_dir.mkdir(parents=True, exist_ok=True)
+
+    filename = file.filename
+    stem = filename.split(".", 1)[0]
+    if not validate_minecraft_identifier(stem):
+        raise HTTPException(
+            status_code=400,
+            detail=f"Invalid file name '{filename}'. Stem '{stem}' must be lowercase and match ^[a-z0-9_.-]+$"
+        )
+
+    target_file = target_dir / filename
+    with open(target_file, "wb") as buffer:
+        while chunk := await file.read(65536):
+            buffer.write(chunk)
+
+    rel_path = str(target_file.resolve().relative_to(workspace_dir.resolve())).replace("\\", "/")
+    return {"success": True, "path": rel_path, "filename": filename}
+
+
+@router.delete("/workspace/file")
+async def delete_workspace_file_endpoint(path: str):
+    workspace_dir = ensure_workspace_initialized()
+    clean_path = path.replace("\\", "/").strip("/")
+    if not clean_path or clean_path == ".":
+        raise HTTPException(status_code=400, detail="Cannot delete root workspace directory")
+
+    try:
+        target_path = safe_resolve_workspace_path(workspace_dir, clean_path)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+    if not target_path.exists():
+        raise HTTPException(status_code=404, detail=f"Path '{clean_path}' not found")
+
+    if target_path.is_dir():
+        shutil.rmtree(target_path, ignore_errors=True)
+    else:
+        target_path.unlink()
+
+    return {"success": True, "path": clean_path}
+
+
+@router.get("/workspace/metadata")
+async def get_workspace_metadata_endpoint(path: str):
+    workspace_dir = ensure_workspace_initialized()
+    try:
+        meta = get_workspace_metadata(workspace_dir, path)
+        return meta
+    except FileNotFoundError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @router.post("/preflight", response_model=PreflightReport)
 async def run_preflight_check(
     target_id: Optional[str] = None,
@@ -147,13 +320,22 @@ async def run_preflight_check(
     res = await db.execute(select(ItemModel))
     items = res.scalars().all()
 
-    # 2. Fetch active pack sources
+    # 2. Fetch active pack sources + workspace pack
     sources = await PackRepository.list_sources(db, target_id=target_id)
+    workspace_dir = ensure_workspace_initialized()
+    all_sources = list(sources)
+    if workspace_dir.exists():
+        class WorkspaceSourceWrapper:
+            id = "workspace"
+            name = "Workspace Pack"
+            storage_path = str(workspace_dir)
+            layer_priority = 90
+        all_sources.append(WorkspaceSourceWrapper())
 
     # 3. Validate
     report = PreflightValidator.validate(
         studio_items=items,
-        sources=sources
+        sources=all_sources
     )
     return report
 
@@ -164,9 +346,11 @@ async def build_resource_pack(
     request: Request,
     db: AsyncSession = Depends(get_db)
 ):
-    # 1. Fetch Studio items & pack sources
+    # 1. Fetch Studio items & pack sources & blocks
     res = await db.execute(select(ItemModel))
     items = res.scalars().all()
+    res_blocks = await db.execute(select(BlockModel))
+    blocks = res_blocks.scalars().all()
     sources = await PackRepository.list_sources(db, target_id=request_data.target_id)
 
     # 2. Pre-flight check
@@ -199,12 +383,22 @@ async def build_resource_pack(
                 mat = it.material.strip().upper()
                 materials_with_cmd.setdefault(mat, []).append(it)
 
+        def resolve_model_path(identifier: Optional[str], default_id: str) -> str:
+            if not identifier:
+                return f"studio:item/{default_id}"
+            if ":" not in identifier:
+                return f"studio:item/{identifier}"
+            ns, name = identifier.split(":", 1)
+            if "/" in name:
+                return identifier
+            return f"{ns}:item/{name}"
+
         for mat, mat_items in materials_with_cmd.items():
             mappings = [
                 ItemModelMapping(
                     material=mat,
                     custom_model_data=it.custom_model_data,
-                    model_path=f"studio:item/{it.id}",
+                    model_path=resolve_model_path(it.item_model, it.id),
                     item_model=it.item_model
                 )
                 for it in mat_items
@@ -223,21 +417,44 @@ async def build_resource_pack(
             modern_def_data = SemanticMerger.build_modern_item_definition(mat, mappings)
             modern_file.write_text(json.dumps(modern_def_data, indent=2), encoding="utf-8")
 
-            # 3. Dedicated item_model definitions and root geometry models
-            for it in mat_items:
-                im_target = it.item_model or f"studio:{it.id}"
-                if ":" in im_target:
-                    ns, name = im_target.split(":", 1)
-                    im_file = studio_layer_dir / "overlay_v1_21_2" / "assets" / ns / "items" / f"{name}.json"
-                    im_file.parent.mkdir(parents=True, exist_ok=True)
-                    im_file.write_text(json.dumps({
-                        "model": {
-                            "type": "minecraft:model",
-                            "model": f"studio:item/{it.id}"
-                        }
-                    }, indent=2), encoding="utf-8")
+        # 3. Dedicated item_model definitions and root geometry models
+        def emit_item_definition(identifier: str, target_model: str):
+            """Writes ItemDefinition to both overlay and base items/ with path aliases."""
+            if ":" not in identifier:
+                return
+            ns, name = identifier.split(":", 1)
+            def_body = json.dumps({
+                "model": {
+                    "type": "minecraft:model",
+                    "model": target_model
+                }
+            }, indent=2)
 
-                # Shared root geometric model
+            file_names = [name]
+            if name.startswith("item/"):
+                file_names.append(name[5:])
+            elif "/" not in name:
+                file_names.append(f"item/{name}")
+
+            for fname in file_names:
+                for base_sub in ["overlay_v1_21_2", ""]:
+                    if base_sub:
+                        target_f = studio_layer_dir / base_sub / "assets" / ns / "items" / f"{fname}.json"
+                    else:
+                        target_f = studio_layer_dir / "assets" / ns / "items" / f"{fname}.json"
+                    target_f.parent.mkdir(parents=True, exist_ok=True)
+                    target_f.write_text(def_body, encoding="utf-8")
+
+        for it in items:
+            mat = (it.material or "PAPER").strip().upper()
+            if it.item_model:
+                target_m = resolve_model_path(it.item_model, it.id)
+                emit_item_definition(it.item_model, target_m)
+            else:
+                target_m = f"studio:item/{it.id}"
+                emit_item_definition(f"studio:{it.id}", target_m)
+
+            if target_m.startswith("studio:item/"):
                 geom_file = studio_layer_dir / "assets" / "studio" / "models" / "item" / f"{it.id}.json"
                 if not geom_file.exists():
                     geom_file.parent.mkdir(parents=True, exist_ok=True)
@@ -247,6 +464,16 @@ async def build_resource_pack(
                             "layer0": f"minecraft:item/{mat.lower()}"
                         }
                     }, indent=2), encoding="utf-8")
+
+        for b in blocks:
+            if b.item_model:
+                target_m = resolve_model_path(b.item_model, b.id)
+                emit_item_definition(b.item_model, target_m)
+
+        # Workspace Pack layer has high precedence
+        workspace_dir = ensure_workspace_initialized()
+        if workspace_dir.exists():
+            source_dirs.append(workspace_dir)
 
         # Studio layer has highest priority
         source_dirs.append(studio_layer_dir)
@@ -323,7 +550,14 @@ async def build_resource_pack(
             "download_url": download_url,
             "build_summary": compiled_record.build_summary
         }
-
+    except Exception as e:
+        import traceback
+        err_msg = traceback.format_exc()
+        try:
+            Path("build_error.log").write_text(err_msg, encoding="utf-8")
+        except Exception:
+            pass
+        raise e
     finally:
         shutil.rmtree(stage_dir, ignore_errors=True)
 

@@ -117,6 +117,7 @@ async def create_revision_from_current(db: AsyncSession = Depends(get_db)):
             display_name=i.display_name,
             lore=i.lore or [],
             custom_model_data=i.custom_model_data,
+            item_model=i.item_model,
             item_flags=i.item_flags or [],
             amount=i.amount,
             components=i.components or {},

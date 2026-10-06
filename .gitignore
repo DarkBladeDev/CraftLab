@@ -19,3 +19,6 @@ paper-agent/build/
 backend/data/
 data/
 scripts/internal/*
+*.log
+backend/logs/
+logs/

@@ -106,7 +106,7 @@ public class McpCommand implements CommandExecutor, TabCompleter {
             if (propManager != null) {
                 com.mcp.agent.props.PropDefinition propDef = propManager.getDefinition(itemId);
                 if (propDef != null) {
-                    ItemStack stack = com.mcp.agent.props.PropPlaceBreakListener.createPropItemStack(propDef, itemId);
+                    ItemStack stack = com.mcp.agent.props.PropPlaceBreakListener.createPropItemStack(propDef, itemId, storage, adapter);
                     targetPlayer.getInventory().addItem(stack);
                     sender.sendMessage(Component.text("[MCP] Gave 1x prop/block '" + itemId + "' to " + targetPlayer.getName() + ".", NamedTextColor.GREEN));
                     return true;

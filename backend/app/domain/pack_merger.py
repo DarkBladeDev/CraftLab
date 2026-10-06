@@ -447,7 +447,9 @@ class SemanticMerger:
                 "supported_formats": {
                     "min_inclusive": 34,
                     "max_inclusive": 65
-                }
+                },
+                "min_format": 34,
+                "max_format": 65
             },
             "overlays": {
                 "entries": [
@@ -456,6 +458,8 @@ class SemanticMerger:
                             "min_inclusive": 42,
                             "max_inclusive": 65
                         },
+                        "min_format": 42,
+                        "max_format": 65,
                         "directory": "overlay_v1_21_2"
                     }
                 ]

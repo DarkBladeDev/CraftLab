@@ -5,6 +5,7 @@ import pytest
 from httpx import AsyncClient, ASGITransport
 from main import app
 from app.core.database import init_db, AsyncSessionLocal
+from sqlalchemy import delete
 from app.models.entities import ItemModel, TargetModel
 
 
@@ -12,8 +13,12 @@ from app.models.entities import ItemModel, TargetModel
 async def test_packs_api_full_workflow():
     await init_db()
 
-    # Create target and item
+    # Clean up test records
     async with AsyncSessionLocal() as session:
+        await session.execute(delete(ItemModel).where(ItemModel.id.in_(["emerald_rapier", "colliding_blade"])))
+        await session.execute(delete(TargetModel).where(TargetModel.id == "target-pack-test"))
+        await session.commit()
+
         target = TargetModel(
             id="target-pack-test",
             name="Test Paper Server",
@@ -114,3 +119,84 @@ async def test_packs_api_full_workflow():
         # Delete source cleanup
         resp_del = await client.delete(f"/api/v1/packs/sources/{source_id}")
         assert resp_del.status_code == 200
+
+
+@pytest.mark.asyncio
+async def test_packs_api_custom_item_model_and_blocks_build():
+    await init_db()
+
+    async with AsyncSessionLocal() as session:
+        from app.models.entities import BlockModel, ItemModel, TargetModel
+        # Clean up existing test items if any
+        await session.execute(delete(BlockModel).where(BlockModel.id == "custom_chair_block"))
+        await session.execute(delete(ItemModel).where(ItemModel.id == "custom_chair_item"))
+        await session.execute(delete(TargetModel).where(TargetModel.id == "target-model-test"))
+        await session.commit()
+
+        target = TargetModel(
+            id="target-model-test",
+            name="Model Test Server",
+            secret="model-secret"
+        )
+        session.add(target)
+
+        item = ItemModel(
+            id="custom_chair_item",
+            material="WHITE_WOOL",
+            display_name="Custom Chair",
+            custom_model_data=20001,
+            item_model="minecraft:item/test_chair"
+        )
+        session.add(item)
+
+        block = BlockModel(
+            id="custom_chair_block",
+            display_name="Custom Chair Prop",
+            mode="display_prop",
+            item_model="minecraft:item/test_chair",
+            drop_item_id="custom_chair_item"
+        )
+        session.add(block)
+        await session.commit()
+
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        build_payload = {
+            "target_id": "target-model-test",
+            "pack_format": 34,
+            "description": "Custom Model Pack",
+            "force": True
+        }
+        resp_build = await client.post("/api/v1/packs/build", json=build_payload)
+        assert resp_build.status_code == 200
+
+        resp_dl = await client.get("/api/v1/packs/target-model-test/download")
+        assert resp_dl.status_code == 200
+
+        with zipfile.ZipFile(io.BytesIO(resp_dl.content), "r") as zf:
+            namelist = zf.namelist()
+            # 1. pack.mcmeta format compliance (> 64 requires min_format and max_format)
+            mcmeta = json.loads(zf.read("pack.mcmeta").decode("utf-8"))
+            assert mcmeta["pack"]["min_format"] == 34
+            assert mcmeta["pack"]["max_format"] == 65
+            assert mcmeta["overlays"]["entries"][0]["min_format"] == 42
+            assert mcmeta["overlays"]["entries"][0]["max_format"] == 65
+
+            # 2. Modern Item Definitions in overlay and base
+            assert "overlay_v1_21_2/assets/minecraft/items/item/test_chair.json" in namelist
+            assert "overlay_v1_21_2/assets/minecraft/items/test_chair.json" in namelist
+            assert "assets/minecraft/items/item/test_chair.json" in namelist
+            assert "assets/minecraft/items/test_chair.json" in namelist
+
+            item_def = json.loads(zf.read("overlay_v1_21_2/assets/minecraft/items/item/test_chair.json").decode("utf-8"))
+            assert item_def["model"]["type"] == "minecraft:model"
+            assert item_def["model"]["model"] == "minecraft:item/test_chair"
+
+            # 3. Legacy base override points to custom model, NOT dummy studio model
+            white_wool = json.loads(zf.read("assets/minecraft/models/item/white_wool.json").decode("utf-8"))
+            assert any(
+                ov.get("predicate", {}).get("custom_model_data") == 20001 and
+                ov.get("model") == "minecraft:item/test_chair"
+                for ov in white_wool["overrides"]
+            )
+

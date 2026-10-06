@@ -17,6 +17,10 @@ import org.bukkit.persistence.PersistentDataContainer;
 import org.bukkit.persistence.PersistentDataType;
 import org.bukkit.plugin.Plugin;
 
+import com.google.gson.JsonObject;
+import com.mcp.agent.adapters.ItemAdapter;
+import com.mcp.agent.adapters.Paper121ItemAdapter;
+import com.mcp.agent.storage.ItemStorage;
 import java.util.List;
 import java.util.UUID;
 import java.util.logging.Logger;
@@ -26,11 +30,19 @@ public class PropPlaceBreakListener implements Listener {
 
     private final Plugin plugin;
     private final PropManager propManager;
+    private final ItemStorage itemStorage;
+    private final ItemAdapter itemAdapter;
     private final Logger logger;
 
     public PropPlaceBreakListener(Plugin plugin, PropManager propManager, Logger logger) {
+        this(plugin, propManager, null, null, logger);
+    }
+
+    public PropPlaceBreakListener(Plugin plugin, PropManager propManager, ItemStorage itemStorage, ItemAdapter itemAdapter, Logger logger) {
         this.plugin = plugin;
         this.propManager = propManager;
+        this.itemStorage = itemStorage;
+        this.itemAdapter = itemAdapter;
         this.logger = logger;
     }
 
@@ -135,22 +147,45 @@ public class PropPlaceBreakListener implements Listener {
 
         // Drop item
         if (event.getPlayer().getGameMode() != GameMode.CREATIVE) {
-            ItemStack dropStack = createPropItemStack(def, instance.getPropId());
+            ItemStack dropStack = createPropItemStack(def, instance.getPropId(), itemStorage, itemAdapter);
             block.getWorld().dropItemNaturally(center, dropStack);
         }
 
         logger.info("Destroyed prop " + instance.getPropId() + " at " + center);
     }
 
-    public static ItemStack createPropItemStack(PropDefinition def, String propId) {
-        ItemStack item = new ItemStack(Material.PAPER);
+    public static ItemStack createPropItemStack(PropDefinition def, String propId, ItemStorage storage, ItemAdapter adapter) {
+        if (def != null && def.getDropItemId() != null && !def.getDropItemId().isEmpty() && storage != null && adapter != null) {
+            JsonObject dropJson = storage.getItem(def.getDropItemId());
+            if (dropJson != null) {
+                ItemStack stack = adapter.compile(dropJson);
+                ItemMeta meta = stack.getItemMeta();
+                if (meta != null) {
+                    meta.getPersistentDataContainer().set(PROP_ID_KEY, PersistentDataType.STRING, propId);
+                    stack.setItemMeta(meta);
+                }
+                return stack;
+            }
+        }
+
+        Material mat = (def != null && def.getItemModel() != null && !def.getItemModel().isEmpty())
+                ? Material.WHITE_WOOL
+                : Material.PAPER;
+        ItemStack item = new ItemStack(mat);
         ItemMeta meta = item.getItemMeta();
         if (meta != null) {
             String name = (def != null && def.getDisplayName() != null) ? def.getDisplayName() : propId;
             meta.setDisplayName(name);
             meta.getPersistentDataContainer().set(PROP_ID_KEY, PersistentDataType.STRING, propId);
+            if (def != null && def.getItemModel() != null && !def.getItemModel().isEmpty()) {
+                Paper121ItemAdapter.applyItemModel(meta, def.getItemModel());
+            }
             item.setItemMeta(meta);
         }
         return item;
+    }
+
+    public static ItemStack createPropItemStack(PropDefinition def, String propId) {
+        return createPropItemStack(def, propId, null, null);
     }
 }

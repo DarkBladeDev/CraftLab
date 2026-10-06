@@ -103,5 +103,6 @@ public class PropManagerTest {
         assertEquals(12, PropManager.METADATA_INDEX_SCALE, "Scale must be index 12");
         assertEquals(13, PropManager.METADATA_INDEX_ROTATION_LEFT, "Rotation Left must be index 13");
         assertEquals(23, PropManager.METADATA_INDEX_ITEM_STACK, "Item display stack must be index 23");
+        assertEquals(24, PropManager.METADATA_INDEX_ITEM_DISPLAY_CONTEXT, "Item display context must be index 24");
     }
 }
