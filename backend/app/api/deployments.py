@@ -20,7 +20,14 @@ class CreatePlanRequest(BaseModel):
 
 @router.post("/plans", response_model=dict)
 async def create_plan(req: CreatePlanRequest, db: AsyncSession = Depends(get_db)):
-    rev_res = await db.execute(select(RevisionModel).where(RevisionModel.id == req.revision_id))
+    if req.revision_id.lower() == "latest":
+        rev_res = await db.execute(select(RevisionModel).order_by(RevisionModel.revision_number.desc()).limit(1))
+    else:
+        rev_res = await db.execute(
+            select(RevisionModel).where(
+                (RevisionModel.id == req.revision_id) | (RevisionModel.revision_hash == req.revision_id)
+            )
+        )
     revision = rev_res.scalar_one_or_none()
     if not revision:
         raise HTTPException(status_code=404, detail="Revision not found")
@@ -105,16 +112,26 @@ async def execute_plan(plan_id: str, db: AsyncSession = Depends(get_db)):
 
     for op in plan.operations:
         op_id = op["operationId"]
+        resource_kind = op.get("resourceKind", "item")
+        envelope_payload = {
+            "action": op["action"],
+            "operationId": op_id,
+            "resourceKind": resource_kind,
+            "resourceId": op.get("resourceId"),
+            "payload": op["payload"],
+        }
+        if resource_kind == "block":
+            envelope_payload["block"] = op["payload"]
+            envelope_payload["prop"] = op["payload"]
+        else:
+            envelope_payload["item"] = op["payload"]
+
         envelope = MessageEnvelope(
             messageType="request",
             messageId=f"msg-{uuid.uuid4().hex[:8]}",
             correlationId=op_id,
             targetId=plan.target_id,
-            payload={
-                "action": op["action"],
-                "operationId": op_id,
-                "item": op["payload"]
-            }
+            payload=envelope_payload
         )
 
         try:

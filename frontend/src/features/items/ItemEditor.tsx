@@ -378,15 +378,28 @@ export function ItemEditor({ onRevisionCreated }: { onRevisionCreated?: () => vo
             {revisions.length === 0 ? (
               <div className="text-xs text-gray-500 py-2">No revisions snapshot yet.</div>
             ) : (
-              <div className="space-y-1.5 max-h-40 overflow-y-auto pr-1 text-xs font-mono">
-                {revisions.map((r) => (
+              <div className="space-y-1.5 max-h-48 overflow-y-auto pr-1 text-xs font-mono">
+                {revisions.map((r, idx) => (
                   <div
                     key={r.id}
-                    className="flex items-center justify-between p-2 rounded bg-[#131317] border border-[#24242c]"
+                    className="p-2 rounded bg-[#131317] border border-[#24242c] space-y-1"
+                    title={`Internal ID: ${r.id}`}
                   >
-                    <span className="text-emerald-400 font-semibold">Rev #{r.revision_number}</span>
-                    <span className="text-gray-500">{r.revision_hash.slice(0, 10)}...</span>
-                    <span className="text-gray-400">{r.items_count} items</span>
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center space-x-1.5">
+                        <span className="text-emerald-400 font-semibold">Rev #{r.revision_number}</span>
+                        {idx === 0 && (
+                          <span className="text-[9px] px-1.5 py-0.2 rounded bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
+                            Latest
+                          </span>
+                        )}
+                      </div>
+                      <span className="text-gray-400">{r.items_count} items</span>
+                    </div>
+                    <div className="flex items-center justify-between text-[10px] text-gray-500">
+                      <span>Hash: {r.revision_hash.slice(0, 10)}...</span>
+                      <span className="font-mono text-gray-500">{r.id}</span>
+                    </div>
                   </div>
                 ))}
               </div>

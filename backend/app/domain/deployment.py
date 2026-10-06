@@ -17,13 +17,23 @@ def compute_plan_hash(revision_hash: str, target_id: str, operations: List[Dict[
 
 def generate_deployment_plan(revision: RevisionModel, target: TargetModel) -> DeploymentPlanModel:
     operations = []
-    for item in revision.items_snapshot:
+    for item in (revision.items_snapshot or []):
         op = {
             "operationId": f"op-{uuid.uuid4().hex[:8]}",
             "action": "create_or_update_item",
             "resourceKind": "item",
             "resourceId": item["id"],
             "payload": item
+        }
+        operations.append(op)
+
+    for block in (revision.blocks_snapshot or []):
+        op = {
+            "operationId": f"op-{uuid.uuid4().hex[:8]}",
+            "action": "create_or_update_block",
+            "resourceKind": "block",
+            "resourceId": block["id"],
+            "payload": block
         }
         operations.append(op)
 

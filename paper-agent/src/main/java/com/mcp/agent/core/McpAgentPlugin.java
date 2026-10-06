@@ -12,6 +12,7 @@ public class McpAgentPlugin extends JavaPlugin {
     private ItemStorage itemStorage;
     private ItemAdapter itemAdapter;
     private AgentWebSocketClient wsClient;
+    private com.mcp.agent.props.PropManager propManager;
 
     @Override
     public void onEnable() {
@@ -32,9 +33,9 @@ public class McpAgentPlugin extends JavaPlugin {
         // 3b. Props Engine (Virtual Displays via PacketEvents)
         java.io.File propsDataDir = new java.io.File(getDataFolder(), "data");
         com.mcp.agent.props.PropStorage propStorage = new com.mcp.agent.props.PropStorage(propsDataDir, getLogger());
-        com.mcp.agent.props.PropManager propManager = new com.mcp.agent.props.PropManager(propStorage, getLogger());
-        getServer().getPluginManager().registerEvents(new com.mcp.agent.props.PropPlaceBreakListener(this, propManager, getLogger()), this);
-        getServer().getPluginManager().registerEvents(new com.mcp.agent.props.PropInteractionListener(this, propManager, getLogger()), this);
+        this.propManager = new com.mcp.agent.props.PropManager(propStorage, getLogger());
+        getServer().getPluginManager().registerEvents(new com.mcp.agent.props.PropPlaceBreakListener(this, this.propManager, getLogger()), this);
+        getServer().getPluginManager().registerEvents(new com.mcp.agent.props.PropInteractionListener(this, this.propManager, getLogger()), this);
 
         // 4. Oraxen Integration & WebSocket Client
         String gatewayUrl = getConfig().getString("gateway.url", "ws://127.0.0.1:8000/ws/agent");
@@ -47,11 +48,11 @@ public class McpAgentPlugin extends JavaPlugin {
         com.mcp.agent.adapters.oraxen.OraxenItemExporter oraxenExporter = new com.mcp.agent.adapters.oraxen.OraxenItemExporter(oraxenItemsFolder, getLogger());
         com.mcp.agent.adapters.oraxen.OraxenPackScanner oraxenPackScanner = new com.mcp.agent.adapters.oraxen.OraxenPackScanner(oraxenRoot, getLogger());
 
-        this.wsClient = new AgentWebSocketClient(gatewayUrl, targetId, secret, itemStorage, oraxenHook, oraxenExporter, resourcePackManager, oraxenPackScanner, getLogger());
+        this.wsClient = new AgentWebSocketClient(gatewayUrl, targetId, secret, itemStorage, oraxenHook, oraxenExporter, resourcePackManager, oraxenPackScanner, this.propManager, getLogger());
         this.wsClient.start();
 
         // 5. Command
-        McpCommand commandHandler = new McpCommand(itemStorage, itemAdapter, wsClient, resourcePackManager);
+        McpCommand commandHandler = new McpCommand(itemStorage, itemAdapter, wsClient, resourcePackManager, this.propManager);
         PluginCommand cmd = getCommand("mcp");
         if (cmd != null) {
             cmd.setExecutor(commandHandler);
@@ -80,5 +81,9 @@ public class McpAgentPlugin extends JavaPlugin {
 
     public AgentWebSocketClient getWsClient() {
         return wsClient;
+    }
+
+    public com.mcp.agent.props.PropManager getPropManager() {
+        return propManager;
     }
 }

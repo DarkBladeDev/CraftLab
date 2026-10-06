@@ -129,3 +129,110 @@ async def test_deployment_execution_with_agent_result():
 
         # Clean up
         await gateway_manager.unregister_session("server-2", AsyncSessionLocal)
+
+
+@pytest.mark.asyncio
+async def test_deployment_with_blocks_and_props():
+    await reset_db()
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        # 1. Target
+        await client.post("/api/targets", json={"id": "server-blocks", "name": "Creative Server"})
+
+        # 2. Item
+        await client.post("/api/items", json={
+            "id": "magic_wand",
+            "material": "STICK",
+            "display_name": "<purple>Magic Wand</purple>"
+        })
+
+        # 3. Block / Prop
+        await client.post("/api/v1/blocks", json={
+            "id": "oak_throne",
+            "display_name": "<gold>Oak Throne</gold>",
+            "mode": "display_prop",
+            "item_model": "studio:furniture/oak_throne",
+            "scale": [1.0, 1.2, 1.0],
+            "translation": [0.0, 0.0, 0.0],
+            "hitbox_type": "solid",
+            "hitbox_offsets": [[0, 0, 0]],
+            "interaction_type": "seat",
+            "seat_height": 0.6,
+            "hardness": 2.0,
+            "tool_type": "AXE"
+        })
+
+        # 4. Snapshot revision
+        rev_resp = await client.post("/api/revisions")
+        assert rev_resp.status_code == 200
+        rev_data = rev_resp.json()
+        assert rev_data["items_count"] == 1
+        assert rev_data["blocks_count"] == 1
+        rev_id = rev_data["id"]
+
+        # 5. Generate plan
+        plan_resp = await client.post("/api/deployments/plans", json={
+            "revision_id": rev_id,
+            "target_id": "server-blocks"
+        })
+        assert plan_resp.status_code == 200
+        plan_data = plan_resp.json()
+        assert len(plan_data["operations"]) == 2
+
+        actions = {op["action"]: op for op in plan_data["operations"]}
+        assert "create_or_update_item" in actions
+        assert actions["create_or_update_item"]["resourceId"] == "magic_wand"
+        assert actions["create_or_update_item"]["resourceKind"] == "item"
+
+        assert "create_or_update_block" in actions
+        assert actions["create_or_update_block"]["resourceId"] == "oak_throne"
+        assert actions["create_or_update_block"]["resourceKind"] == "block"
+        assert actions["create_or_update_block"]["payload"]["item_model"] == "studio:furniture/oak_throne"
+
+        # 6. Approve
+        plan_id = plan_data["id"]
+        approve_resp = await client.post(f"/api/deployments/plans/{plan_id}/approve")
+        assert approve_resp.status_code == 200
+
+        # 7. Mock agent execution
+        class MockBlockAgent:
+            def __init__(self):
+                self.received_messages = []
+
+            async def send_text(self, text):
+                self.received_messages.append(text)
+                msg = MessageEnvelope.model_validate_json(text)
+                op_id = msg.payload.get("operationId")
+                action = msg.payload.get("action")
+                resp_payload = {"status": "applied", "success": True, "action": action}
+                if action == "create_or_update_block":
+                    assert "block" in msg.payload
+                    assert msg.payload["block"]["id"] == "oak_throne"
+                elif action == "create_or_update_item":
+                    assert "item" in msg.payload
+                    assert msg.payload["item"]["id"] == "magic_wand"
+
+                resp_env = MessageEnvelope(
+                    messageType="response",
+                    correlationId=op_id,
+                    targetId="server-blocks",
+                    payload=resp_payload
+                )
+                asyncio.create_task(
+                    gateway_manager.handle_message(self, resp_env.model_dump_json(), AsyncSessionLocal)
+                )
+
+        mock_ws = MockBlockAgent()
+        await gateway_manager.register_session("server-blocks", mock_ws)
+
+        # 8. Execute plan
+        exec_resp = await client.post(f"/api/deployments/plans/{plan_id}/execute")
+        assert exec_resp.status_code == 200
+        exec_data = exec_resp.json()
+        assert exec_data["status"] == "applied"
+        assert len(exec_data["log"]) == 2
+        for log_entry in exec_data["log"]:
+            assert log_entry["status"] == "success"
+
+        await gateway_manager.unregister_session("server-blocks", AsyncSessionLocal)
+

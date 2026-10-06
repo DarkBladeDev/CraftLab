@@ -24,16 +24,22 @@ public class McpCommand implements CommandExecutor, TabCompleter {
     private final ItemAdapter adapter;
     private final AgentWebSocketClient wsClient;
     private final com.mcp.agent.pack.ResourcePackManager packManager;
+    private final com.mcp.agent.props.PropManager propManager;
 
     public McpCommand(ItemStorage storage, ItemAdapter adapter, AgentWebSocketClient wsClient) {
-        this(storage, adapter, wsClient, null);
+        this(storage, adapter, wsClient, null, null);
     }
 
     public McpCommand(ItemStorage storage, ItemAdapter adapter, AgentWebSocketClient wsClient, com.mcp.agent.pack.ResourcePackManager packManager) {
+        this(storage, adapter, wsClient, packManager, null);
+    }
+
+    public McpCommand(ItemStorage storage, ItemAdapter adapter, AgentWebSocketClient wsClient, com.mcp.agent.pack.ResourcePackManager packManager, com.mcp.agent.props.PropManager propManager) {
         this.storage = storage;
         this.adapter = adapter;
         this.wsClient = wsClient;
         this.packManager = packManager;
+        this.propManager = propManager;
     }
 
     @Override
@@ -53,12 +59,20 @@ public class McpCommand implements CommandExecutor, TabCompleter {
                     .append(Component.text(connected ? "Connected" : "Disconnected", statusColor)));
             sender.sendMessage(Component.text("Registered Items: ", NamedTextColor.GRAY)
                     .append(Component.text(storage.getAllItems().size(), NamedTextColor.AQUA)));
+            if (propManager != null) {
+                sender.sendMessage(Component.text("Registered Blocks/Props: ", NamedTextColor.GRAY)
+                        .append(Component.text(propManager.getDefinitions().size(), NamedTextColor.LIGHT_PURPLE)));
+            }
             return true;
         }
 
         if ("reload".equals(sub)) {
             storage.loadAll();
-            sender.sendMessage(Component.text("[MCP] Local storage reloaded. " + storage.getAllItems().size() + " items active.", NamedTextColor.GREEN));
+            if (propManager != null) {
+                propManager.loadAll();
+            }
+            int propsCount = propManager != null ? propManager.getDefinitions().size() : 0;
+            sender.sendMessage(Component.text("[MCP] Local storage reloaded. " + storage.getAllItems().size() + " items, " + propsCount + " blocks/props active.", NamedTextColor.GREEN));
             return true;
         }
 
@@ -77,19 +91,29 @@ public class McpCommand implements CommandExecutor, TabCompleter {
                 targetPlayer = player;
                 itemId = args[1];
             } else {
-                sender.sendMessage(Component.text("Usage: /mcp give <player> <item_id> (or /mcp give <item_id> for self)", NamedTextColor.RED));
+                sender.sendMessage(Component.text("Usage: /mcp give <player> <item_or_prop_id> (or /mcp give <id> for self)", NamedTextColor.RED));
                 return true;
             }
 
             JsonObject itemJson = storage.getItem(itemId);
-            if (itemJson == null) {
-                sender.sendMessage(Component.text("Item '" + itemId + "' not found in MCP registry.", NamedTextColor.RED));
+            if (itemJson != null) {
+                ItemStack stack = adapter.compile(itemJson);
+                targetPlayer.getInventory().addItem(stack);
+                sender.sendMessage(Component.text("[MCP] Gave 1x '" + itemId + "' to " + targetPlayer.getName() + ".", NamedTextColor.GREEN));
                 return true;
             }
 
-            ItemStack stack = adapter.compile(itemJson);
-            targetPlayer.getInventory().addItem(stack);
-            sender.sendMessage(Component.text("[MCP] Gave 1x '" + itemId + "' to " + targetPlayer.getName() + ".", NamedTextColor.GREEN));
+            if (propManager != null) {
+                com.mcp.agent.props.PropDefinition propDef = propManager.getDefinition(itemId);
+                if (propDef != null) {
+                    ItemStack stack = com.mcp.agent.props.PropPlaceBreakListener.createPropItemStack(propDef, itemId);
+                    targetPlayer.getInventory().addItem(stack);
+                    sender.sendMessage(Component.text("[MCP] Gave 1x prop/block '" + itemId + "' to " + targetPlayer.getName() + ".", NamedTextColor.GREEN));
+                    return true;
+                }
+            }
+
+            sender.sendMessage(Component.text("Resource '" + itemId + "' not found in MCP registry.", NamedTextColor.RED));
             return true;
         }
 
@@ -136,10 +160,17 @@ public class McpCommand implements CommandExecutor, TabCompleter {
                 list.add(p.getName());
             }
             list.addAll(storage.getAllItems().keySet());
+            if (propManager != null) {
+                list.addAll(propManager.getDefinitions().keySet());
+            }
             return list;
         }
         if (args.length == 3 && "give".equalsIgnoreCase(args[0])) {
-            return new ArrayList<>(storage.getAllItems().keySet());
+            List<String> list = new ArrayList<>(storage.getAllItems().keySet());
+            if (propManager != null) {
+                list.addAll(propManager.getDefinitions().keySet());
+            }
+            return list;
         }
         return Collections.emptyList();
     }

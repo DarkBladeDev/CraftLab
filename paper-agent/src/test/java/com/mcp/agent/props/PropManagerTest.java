@@ -95,4 +95,13 @@ public class PropManagerTest {
         assertEquals(1, afterRemove.size());
         assertEquals(p2Id, afterRemove.get(0).getInstanceId());
     }
+
+    @Test
+    public void testMetadataIndicesForMinecraft121() {
+        // Ensure entity metadata indices align with Minecraft 1.20.5+ / 1.21.x ItemDisplay entity protocol specifications
+        assertEquals(11, PropManager.METADATA_INDEX_TRANSLATION, "Translation must be index 11");
+        assertEquals(12, PropManager.METADATA_INDEX_SCALE, "Scale must be index 12");
+        assertEquals(13, PropManager.METADATA_INDEX_ROTATION_LEFT, "Rotation Left must be index 13");
+        assertEquals(23, PropManager.METADATA_INDEX_ITEM_STACK, "Item display stack must be index 23");
+    }
 }

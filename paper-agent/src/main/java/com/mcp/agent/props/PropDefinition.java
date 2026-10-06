@@ -136,4 +136,51 @@ public class PropDefinition {
     public void setDropItemId(String dropItemId) {
         this.dropItemId = dropItemId;
     }
+
+    public static PropDefinition fromJson(com.google.gson.JsonObject obj) {
+        PropDefinition def = new PropDefinition();
+        if (obj.has("id")) def.setId(obj.get("id").getAsString());
+        if (obj.has("display_name")) def.setDisplayName(obj.get("display_name").getAsString());
+        else if (obj.has("displayName")) def.setDisplayName(obj.get("displayName").getAsString());
+
+        if (obj.has("mode")) def.setMode(obj.get("mode").getAsString());
+        if (obj.has("item_model") && !obj.get("item_model").isJsonNull()) def.setItemModel(obj.get("item_model").getAsString());
+        else if (obj.has("itemModel") && !obj.get("itemModel").isJsonNull()) def.setItemModel(obj.get("itemModel").getAsString());
+
+        Gson gson = new Gson();
+        if (obj.has("scale") && obj.get("scale").isJsonArray()) {
+            List<Float> scale = gson.fromJson(obj.get("scale"), new TypeToken<List<Float>>(){}.getType());
+            def.setScale(scale);
+        }
+        if (obj.has("translation") && obj.get("translation").isJsonArray()) {
+            List<Float> translation = gson.fromJson(obj.get("translation"), new TypeToken<List<Float>>(){}.getType());
+            def.setTranslation(translation);
+        }
+        if (obj.has("hitbox_type")) def.setHitboxType(obj.get("hitbox_type").getAsString());
+        else if (obj.has("hitboxType")) def.setHitboxType(obj.get("hitboxType").getAsString());
+
+        if (obj.has("hitbox_offsets") && obj.get("hitbox_offsets").isJsonArray()) {
+            List<int[]> offsets = gson.fromJson(obj.get("hitbox_offsets"), new TypeToken<List<int[]>>(){}.getType());
+            def.setHitboxOffsets(offsets);
+        } else if (obj.has("hitboxOffsets") && obj.get("hitboxOffsets").isJsonArray()) {
+            List<int[]> offsets = gson.fromJson(obj.get("hitboxOffsets"), new TypeToken<List<int[]>>(){}.getType());
+            def.setHitboxOffsets(offsets);
+        }
+
+        if (obj.has("interaction_type") && !obj.get("interaction_type").isJsonNull()) def.setInteractionType(obj.get("interaction_type").getAsString());
+        else if (obj.has("interactionType") && !obj.get("interactionType").isJsonNull()) def.setInteractionType(obj.get("interactionType").getAsString());
+
+        if (obj.has("seat_height")) def.setSeatHeight(obj.get("seat_height").getAsFloat());
+        else if (obj.has("seatHeight")) def.setSeatHeight(obj.get("seatHeight").getAsFloat());
+
+        if (obj.has("hardness")) def.setHardness(obj.get("hardness").getAsFloat());
+
+        if (obj.has("tool_type")) def.setToolType(obj.get("tool_type").getAsString());
+        else if (obj.has("toolType")) def.setToolType(obj.get("toolType").getAsString());
+
+        if (obj.has("drop_item_id") && !obj.get("drop_item_id").isJsonNull()) def.setDropItemId(obj.get("drop_item_id").getAsString());
+        else if (obj.has("dropItemId") && !obj.get("dropItemId").isJsonNull()) def.setDropItemId(obj.get("dropItemId").getAsString());
+
+        return def;
+    }
 }

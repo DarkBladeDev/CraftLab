@@ -16,6 +16,6 @@ paper-agent/.gradle/
 paper-agent/build/
 
 # Local Dev Mock Storage
-backend/mock_server_storage/
 backend/data/
 data/
+scripts/internal/*

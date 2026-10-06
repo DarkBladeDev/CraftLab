@@ -60,8 +60,8 @@ export default function App() {
             </div>
 
             <button
-              onClick={() => {
-                refreshLatestRevision()
+              onClick={async () => {
+                await refreshLatestRevision()
                 setIsDeployModalOpen(true)
               }}
               className="flex items-center space-x-2 px-4 py-2 bg-gradient-to-r from-emerald-600 to-emerald-500 hover:from-emerald-500 hover:to-emerald-400 text-white text-xs font-semibold rounded-xl shadow-lg shadow-emerald-950/50 transition transform active:scale-95"

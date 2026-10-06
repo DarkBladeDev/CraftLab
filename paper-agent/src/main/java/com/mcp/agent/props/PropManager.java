@@ -25,6 +25,18 @@ import java.util.logging.Logger;
 public class PropManager {
     public static final double TRACKING_RANGE = 32.0;
 
+    // Minecraft 1.20.5+ / 1.21.x ItemDisplay entity data indices:
+    // Display:
+    //  11: translation (Vector3f)
+    //  12: scale (Vector3f)
+    //  13: rotation_left (Quaternionf)
+    // ItemDisplay:
+    //  23: item_stack (ItemStack)
+    public static final int METADATA_INDEX_TRANSLATION = 11;
+    public static final int METADATA_INDEX_SCALE = 12;
+    public static final int METADATA_INDEX_ROTATION_LEFT = 13;
+    public static final int METADATA_INDEX_ITEM_STACK = 23;
+
     private final PropStorage storage;
     private final Logger logger;
     private final Map<String, PropDefinition> definitions = new ConcurrentHashMap<>();
@@ -201,45 +213,45 @@ public class PropManager {
                 Optional.of(UUID.randomUUID()),
                 EntityTypes.ITEM_DISPLAY,
                 new Vector3d(spawnX, spawnY, spawnZ),
+                0.0f,
                 prop.getYaw(),
-                0.0f,
-                0.0f,
+                prop.getYaw(),
                 0,
                 Optional.empty()
         );
         sendPacket(player, spawnPacket);
 
-        // 2. Set Entity Metadata (Scale, Translation, Rotation quaternion, Item display)
+        // 2. Set Entity Metadata (Translation, Scale, Rotation quaternion, Item display)
         List<EntityData<?>> metadata = new ArrayList<>();
 
-        // Scale
-        float sx = 1.0f, sy = 1.0f, sz = 1.0f;
-        if (def != null && def.getScale() != null && def.getScale().size() >= 3) {
-            sx = def.getScale().get(0);
-            sy = def.getScale().get(1);
-            sz = def.getScale().get(2);
-        }
-        metadata.add(new EntityData<>(16, EntityDataTypes.VECTOR3F, new Vector3f(sx, sy, sz)));
-
-        // Translation
+        // Translation (Index 11 in MC 1.20.5+)
         float tx = 0.0f, ty = 0.0f, tz = 0.0f;
         if (def != null && def.getTranslation() != null && def.getTranslation().size() >= 3) {
             tx = def.getTranslation().get(0);
             ty = def.getTranslation().get(1);
             tz = def.getTranslation().get(2);
         }
-        metadata.add(new EntityData<>(15, EntityDataTypes.VECTOR3F, new Vector3f(tx, ty, tz)));
+        metadata.add(new EntityData<>(METADATA_INDEX_TRANSLATION, EntityDataTypes.VECTOR3F, new Vector3f(tx, ty, tz)));
 
-        // Rotation Quaternion
+        // Scale (Index 12 in MC 1.20.5+)
+        float sx = 1.0f, sy = 1.0f, sz = 1.0f;
+        if (def != null && def.getScale() != null && def.getScale().size() >= 3) {
+            sx = def.getScale().get(0);
+            sy = def.getScale().get(1);
+            sz = def.getScale().get(2);
+        }
+        metadata.add(new EntityData<>(METADATA_INDEX_SCALE, EntityDataTypes.VECTOR3F, new Vector3f(sx, sy, sz)));
+
+        // Rotation Quaternion (Rotation Left - Index 13 in MC 1.20.5+)
         Quaternion4f rotQuaternion = calculateRotationQuaternion(prop.getYaw());
-        metadata.add(new EntityData<>(17, EntityDataTypes.QUATERNION, rotQuaternion));
+        metadata.add(new EntityData<>(METADATA_INDEX_ROTATION_LEFT, EntityDataTypes.QUATERNION, rotQuaternion));
 
-        // Display Item
+        // Display Item (Index 23 in MC 1.20.5+)
         ItemStack displayItem = createDisplayItemStack(def);
         if (displayItem != null) {
             com.github.retrooper.packetevents.protocol.item.ItemStack peItem =
                     SpigotConversionUtil.fromBukkitItemStack(displayItem);
-            metadata.add(new EntityData<>(23, EntityDataTypes.ITEMSTACK, peItem));
+            metadata.add(new EntityData<>(METADATA_INDEX_ITEM_STACK, EntityDataTypes.ITEMSTACK, peItem));
         }
 
         WrapperPlayServerEntityMetadata metaPacket = new WrapperPlayServerEntityMetadata(entityId, metadata);

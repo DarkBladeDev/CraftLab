@@ -96,6 +96,7 @@ async def list_revisions(db: AsyncSession = Depends(get_db)):
             "revision_number": r.revision_number,
             "revision_hash": r.revision_hash,
             "items_count": len(r.items_snapshot),
+            "blocks_count": len(r.blocks_snapshot) if r.blocks_snapshot else 0,
             "created_at": r.created_at.isoformat() if r.created_at else None
         }
         for r in revisions

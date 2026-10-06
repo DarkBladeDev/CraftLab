@@ -23,6 +23,7 @@ public class AgentWebSocketClient implements WebSocket.Listener {
     private final com.mcp.agent.adapters.oraxen.OraxenItemExporter oraxenExporter;
     private final com.mcp.agent.pack.ResourcePackManager resourcePackManager;
     private final com.mcp.agent.adapters.oraxen.OraxenPackScanner oraxenPackScanner;
+    private final com.mcp.agent.props.PropManager propManager;
     private final Logger logger;
     private final Gson gson = new Gson();
 
@@ -34,14 +35,14 @@ public class AgentWebSocketClient implements WebSocket.Listener {
     private final StringBuilder messageBuffer = new StringBuilder();
 
     public AgentWebSocketClient(String gatewayUrl, String targetId, String secret, ItemStorage storage, Logger logger) {
-        this(gatewayUrl, targetId, secret, storage, null, null, null, null, logger);
+        this(gatewayUrl, targetId, secret, storage, null, null, null, null, null, logger);
     }
 
     public AgentWebSocketClient(String gatewayUrl, String targetId, String secret, ItemStorage storage,
                                 com.mcp.agent.adapters.oraxen.OraxenCatalogHook oraxenHook,
                                 com.mcp.agent.adapters.oraxen.OraxenItemExporter oraxenExporter,
                                 Logger logger) {
-        this(gatewayUrl, targetId, secret, storage, oraxenHook, oraxenExporter, null, null, logger);
+        this(gatewayUrl, targetId, secret, storage, oraxenHook, oraxenExporter, null, null, null, logger);
     }
 
     public AgentWebSocketClient(String gatewayUrl, String targetId, String secret, ItemStorage storage,
@@ -49,6 +50,16 @@ public class AgentWebSocketClient implements WebSocket.Listener {
                                 com.mcp.agent.adapters.oraxen.OraxenItemExporter oraxenExporter,
                                 com.mcp.agent.pack.ResourcePackManager resourcePackManager,
                                 com.mcp.agent.adapters.oraxen.OraxenPackScanner oraxenPackScanner,
+                                Logger logger) {
+        this(gatewayUrl, targetId, secret, storage, oraxenHook, oraxenExporter, resourcePackManager, oraxenPackScanner, null, logger);
+    }
+
+    public AgentWebSocketClient(String gatewayUrl, String targetId, String secret, ItemStorage storage,
+                                com.mcp.agent.adapters.oraxen.OraxenCatalogHook oraxenHook,
+                                com.mcp.agent.adapters.oraxen.OraxenItemExporter oraxenExporter,
+                                com.mcp.agent.pack.ResourcePackManager resourcePackManager,
+                                com.mcp.agent.adapters.oraxen.OraxenPackScanner oraxenPackScanner,
+                                com.mcp.agent.props.PropManager propManager,
                                 Logger logger) {
         this.gatewayUri = URI.create(gatewayUrl);
         this.targetId = targetId;
@@ -58,6 +69,7 @@ public class AgentWebSocketClient implements WebSocket.Listener {
         this.oraxenExporter = oraxenExporter;
         this.resourcePackManager = resourcePackManager;
         this.oraxenPackScanner = oraxenPackScanner;
+        this.propManager = propManager;
         this.logger = logger;
     }
 
@@ -287,6 +299,46 @@ public class AgentWebSocketClient implements WebSocket.Listener {
                     respEnv.add("payload", respPayload);
 
                     webSocket.sendText(gson.toJson(respEnv), true);
+                    return;
+                }
+
+                if ("create_or_update_block".equals(action) || "create_or_update_prop".equals(action)) {
+                    JsonObject blockData = null;
+                    if (payload.has("block") && payload.get("block").isJsonObject()) {
+                        blockData = payload.getAsJsonObject("block");
+                    } else if (payload.has("prop") && payload.get("prop").isJsonObject()) {
+                        blockData = payload.getAsJsonObject("prop");
+                    } else if (payload.has("item") && payload.get("item").isJsonObject()) {
+                        blockData = payload.getAsJsonObject("item");
+                    } else if (payload.has("payload") && payload.get("payload").isJsonObject()) {
+                        blockData = payload.getAsJsonObject("payload");
+                    }
+
+                    if (blockData != null) {
+                        com.mcp.agent.props.PropDefinition def = com.mcp.agent.props.PropDefinition.fromJson(blockData);
+                        if (propManager != null) {
+                            propManager.registerDefinition(def);
+                        }
+                        logger.info("Successfully applied block/prop '" + def.getId() + "' via MCP deployment.");
+
+                        JsonObject respPayload = new JsonObject();
+                        respPayload.addProperty("status", "applied");
+                        respPayload.addProperty("success", true);
+                        respPayload.addProperty("blockId", def.getId());
+                        respPayload.addProperty("resourceId", def.getId());
+
+                        JsonObject respEnv = new JsonObject();
+                        respEnv.addProperty("protocolVersion", "1.0");
+                        respEnv.addProperty("messageType", "response");
+                        respEnv.addProperty("messageId", "msg-resp-" + UUID.randomUUID());
+                        respEnv.addProperty("correlationId", correlationId);
+                        respEnv.addProperty("targetId", targetId);
+                        respEnv.addProperty("sentAt", Instant.now().toString());
+                        respEnv.add("payload", respPayload);
+
+                        webSocket.sendText(gson.toJson(respEnv), true);
+                        return;
+                    }
                 }
             }
         } catch (Exception e) {
