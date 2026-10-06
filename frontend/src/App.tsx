@@ -1,7 +1,8 @@
 import { useState, useEffect } from 'react'
-import { Box, Rocket, ShieldCheck, Terminal, Package, Wrench } from 'lucide-react'
+import { Box, Rocket, ShieldCheck, Terminal, Package, Wrench, Armchair } from 'lucide-react'
 import { TargetMonitor } from './features/targets/TargetMonitor'
 import { ItemEditor } from './features/items/ItemEditor'
+import { BlockStudio } from './features/blocks/BlockStudio'
 import { DeployModal } from './features/deployments/DeployModal'
 import { ResourcePackManagerView } from './features/packs/ResourcePackManagerView'
 import { fetchRevisions, fetchTargets } from './api/client'
@@ -10,7 +11,7 @@ export default function App() {
   const [selectedTargetId, setSelectedTargetId] = useState<string>('local-paper-server')
   const [latestRevisionId, setLatestRevisionId] = useState<string | undefined>(undefined)
   const [isDeployModalOpen, setIsDeployModalOpen] = useState(false)
-  const [activeTab, setActiveTab] = useState<'studio' | 'packs'>('studio')
+  const [activeTab, setActiveTab] = useState<'studio' | 'blocks' | 'packs'>('studio')
 
   const refreshLatestRevision = async () => {
     try {
@@ -96,6 +97,17 @@ export default function App() {
             <span>Items Studio</span>
           </button>
           <button
+            onClick={() => setActiveTab('blocks')}
+            className={`flex items-center space-x-2 px-4 py-2 rounded-xl text-xs font-semibold transition ${
+              activeTab === 'blocks'
+                ? 'bg-blue-500/10 text-blue-400 border border-blue-500/30'
+                : 'text-gray-400 hover:text-gray-200 hover:bg-white/5'
+            }`}
+          >
+            <Armchair className="w-3.5 h-3.5" />
+            <span>Blocks & Props</span>
+          </button>
+          <button
             onClick={() => setActiveTab('packs')}
             className={`flex items-center space-x-2 px-4 py-2 rounded-xl text-xs font-semibold transition ${
               activeTab === 'packs'
@@ -109,11 +121,17 @@ export default function App() {
         </div>
 
         {/* Workspace Views */}
-        {activeTab === 'studio' ? (
+        {activeTab === 'studio' && (
           <section>
             <ItemEditor onRevisionCreated={refreshLatestRevision} />
           </section>
-        ) : (
+        )}
+        {activeTab === 'blocks' && (
+          <section>
+            <BlockStudio onRevisionCreated={refreshLatestRevision} />
+          </section>
+        )}
+        {activeTab === 'packs' && (
           <section>
             <ResourcePackManagerView
               selectedTargetId={selectedTargetId}

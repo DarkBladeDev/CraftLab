@@ -56,6 +56,9 @@ class DiscoveredCatalogItemModel(Base):
     target = relationship("TargetModel")
 
 
+from app.models.block import BlockModel
+
+
 class RevisionModel(Base):
     __tablename__ = "revisions"
 
@@ -63,6 +66,7 @@ class RevisionModel(Base):
     revision_number = Column(Integer, nullable=False, unique=True)
     revision_hash = Column(String, nullable=False)
     items_snapshot = Column(JSON, nullable=False, default=list)
+    blocks_snapshot = Column(JSON, nullable=False, default=list)
     created_at = Column(DateTime, default=utcnow)
 
 

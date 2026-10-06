@@ -29,6 +29,13 @@ public class McpAgentPlugin extends JavaPlugin {
         com.mcp.agent.pack.ResourcePackManager resourcePackManager = new com.mcp.agent.pack.ResourcePackManager(getLogger());
         getServer().getPluginManager().registerEvents(new com.mcp.agent.pack.ResourcePackJoinListener(resourcePackManager), this);
 
+        // 3b. Props Engine (Virtual Displays via PacketEvents)
+        java.io.File propsDataDir = new java.io.File(getDataFolder(), "data");
+        com.mcp.agent.props.PropStorage propStorage = new com.mcp.agent.props.PropStorage(propsDataDir, getLogger());
+        com.mcp.agent.props.PropManager propManager = new com.mcp.agent.props.PropManager(propStorage, getLogger());
+        getServer().getPluginManager().registerEvents(new com.mcp.agent.props.PropPlaceBreakListener(this, propManager, getLogger()), this);
+        getServer().getPluginManager().registerEvents(new com.mcp.agent.props.PropInteractionListener(this, propManager, getLogger()), this);
+
         // 4. Oraxen Integration & WebSocket Client
         String gatewayUrl = getConfig().getString("gateway.url", "ws://127.0.0.1:8000/ws/agent");
         String targetId = getConfig().getString("gateway.targetId", "local-paper-server");

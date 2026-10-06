@@ -74,11 +74,29 @@ export interface PluginSchema {
   default_yaml_template?: string
 }
 
+export interface Block {
+  id: string
+  display_name: string
+  mode: 'display_prop' | 'noteblock'
+  item_model?: string | null
+  scale: [number, number, number] | number[]
+  translation: [number, number, number] | number[]
+  hitbox_type: 'solid' | 'passable'
+  hitbox_offsets: number[][]
+  interaction_type?: string | null
+  seat_height: number
+  hardness: number
+  tool_type: string
+  drop_item_id?: string | null
+  plugin_properties?: Record<string, any>
+}
+
 export interface Revision {
   id: string
   revision_number: number
   revision_hash: string
   items_count: number
+  blocks_count?: number
   created_at: string
 }
 
@@ -347,4 +365,38 @@ export async function fetchLatestPack(targetId: string): Promise<any> {
   if (!res.ok) return null
   return res.json()
 }
+
+export async function fetchBlocks(): Promise<Block[]> {
+  const res = await fetch(`${API_BASE}/v1/blocks`)
+  if (!res.ok) {
+    const text = await res.text()
+    throw new Error(`Failed to fetch blocks (${res.status}): ${text}`)
+  }
+  return res.json()
+}
+
+export async function saveBlock(block: Block): Promise<Block> {
+  const res = await fetch(`${API_BASE}/v1/blocks`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(block),
+  })
+  if (!res.ok) {
+    const text = await res.text()
+    throw new Error(`Failed to save block (${res.status}): ${text}`)
+  }
+  return res.json()
+}
+
+export async function deleteBlock(id: string): Promise<any> {
+  const res = await fetch(`${API_BASE}/v1/blocks/${encodeURIComponent(id)}`, {
+    method: 'DELETE',
+  })
+  if (!res.ok) {
+    const text = await res.text()
+    throw new Error(`Failed to delete block (${res.status}): ${text}`)
+  }
+  return res.json()
+}
+
 

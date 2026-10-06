@@ -16,6 +16,7 @@ async def get_db() -> AsyncGenerator[AsyncSession, None]:
 
 
 async def init_db():
+    from app.models import entities  # noqa: F401
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
 
@@ -28,6 +29,10 @@ async def init_db():
                     connection.execute(text("ALTER TABLE items ADD COLUMN components JSON DEFAULT '{}'"))
                 if "item_model" not in columns:
                     connection.execute(text("ALTER TABLE items ADD COLUMN item_model VARCHAR DEFAULT NULL"))
+            if "revisions" in inspector.get_table_names():
+                rev_columns = [col["name"] for col in inspector.get_columns("revisions")]
+                if "blocks_snapshot" not in rev_columns:
+                    connection.execute(text("ALTER TABLE revisions ADD COLUMN blocks_snapshot JSON DEFAULT '[]'"))
 
         await conn.run_sync(check_and_migrate)
 

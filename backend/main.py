@@ -4,6 +4,7 @@ from fastapi.middleware.cors import CORSMiddleware
 import logging
 from app.core.database import init_db, AsyncSessionLocal
 from app.api.items import router as items_router, revisions_router
+from app.api.blocks import router as blocks_router
 from app.api.targets import router as targets_router
 from app.api.deployments import router as deployments_router
 from app.api.catalogs import router as catalogs_router
@@ -33,6 +34,7 @@ app.add_middleware(
 )
 
 app.include_router(items_router)
+app.include_router(blocks_router)
 app.include_router(revisions_router)
 app.include_router(targets_router)
 app.include_router(deployments_router)

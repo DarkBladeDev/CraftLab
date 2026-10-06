@@ -3,8 +3,9 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func
 from app.core.database import get_db
-from app.models.entities import ItemModel, RevisionModel
+from app.models.entities import ItemModel, RevisionModel, BlockModel
 from app.domain.items import ItemDefinition
+from app.domain.blocks import BlockDefinition
 from app.domain.revisions import create_revision_snapshot
 
 router = APIRouter(prefix="/api/items", tags=["items"])
@@ -129,12 +130,35 @@ async def create_revision_from_current(db: AsyncSession = Depends(get_db)):
     rev_count = count_res.scalar() or 0
     next_number = rev_count + 1
 
-    snapshot = create_revision_snapshot(domain_items, next_number)
+    b_result = await db.execute(select(BlockModel))
+    blocks = b_result.scalars().all()
+    domain_blocks = [
+        BlockDefinition(
+            id=b.id,
+            display_name=b.display_name,
+            mode=b.mode or "display_prop",
+            item_model=b.item_model,
+            scale=b.scale or [1.0, 1.0, 1.0],
+            translation=b.translation or [0.0, 0.0, 0.0],
+            hitbox_type=b.hitbox_type or "solid",
+            hitbox_offsets=b.hitbox_offsets or [[0, 0, 0]],
+            interaction_type=b.interaction_type or "none",
+            seat_height=b.seat_height if b.seat_height is not None else 0.5,
+            hardness=b.hardness if b.hardness is not None else 1.0,
+            tool_type=b.tool_type or "AXE",
+            drop_item_id=b.drop_item_id,
+            plugin_properties=b.plugin_properties or {},
+        )
+        for b in blocks
+    ]
+
+    snapshot = create_revision_snapshot(domain_items, next_number, domain_blocks)
     rev_model = RevisionModel(
         id=snapshot["id"],
         revision_number=snapshot["revision_number"],
         revision_hash=snapshot["revision_hash"],
-        items_snapshot=snapshot["items_snapshot"]
+        items_snapshot=snapshot["items_snapshot"],
+        blocks_snapshot=snapshot["blocks_snapshot"],
     )
     db.add(rev_model)
     await db.commit()
@@ -142,5 +166,6 @@ async def create_revision_from_current(db: AsyncSession = Depends(get_db)):
         "id": rev_model.id,
         "revision_number": rev_model.revision_number,
         "revision_hash": rev_model.revision_hash,
-        "items_count": len(rev_model.items_snapshot)
+        "items_count": len(rev_model.items_snapshot),
+        "blocks_count": len(rev_model.blocks_snapshot),
     }
