@@ -16,6 +16,7 @@ export interface Item {
   display_name: string
   lore: string[]
   custom_model_data?: number | null
+  item_model?: string | null
   item_flags: string[]
   amount?: number
   components?: Record<string, any>
@@ -99,6 +100,10 @@ const API_BASE = '/api'
 
 export async function fetchTargets(): Promise<Target[]> {
   const res = await fetch(`${API_BASE}/targets`)
+  if (!res.ok) {
+    const text = await res.text()
+    throw new Error(`Failed to fetch targets (${res.status}): ${text}`)
+  }
   return res.json()
 }
 
@@ -113,6 +118,10 @@ export async function registerTarget(id: string, name: string): Promise<any> {
 
 export async function fetchItems(): Promise<Item[]> {
   const res = await fetch(`${API_BASE}/items`)
+  if (!res.ok) {
+    const text = await res.text()
+    throw new Error(`Failed to fetch items (${res.status}): ${text}`)
+  }
   return res.json()
 }
 
@@ -136,6 +145,10 @@ export async function deleteItem(id: string): Promise<any> {
 
 export async function fetchRevisions(): Promise<Revision[]> {
   const res = await fetch(`${API_BASE}/revisions`)
+  if (!res.ok) {
+    const text = await res.text()
+    throw new Error(`Failed to fetch revisions (${res.status}): ${text}`)
+  }
   return res.json()
 }
 
@@ -235,18 +248,21 @@ export interface ConflictItem {
   item_id: string
   display_name: string
   material: string
-  custom_model_data: number
+  custom_model_data?: number | null
+  item_model?: string | null
   link?: string
 }
 
 export interface PreflightConflict {
   type: string
   severity: string
-  material: string
-  custom_model_data?: number
+  material?: string
+  custom_model_data?: number | null
+  item_model?: string | null
   items: ConflictItem[]
   message: string
 }
+
 
 export interface PreflightReport {
   is_valid: boolean
@@ -314,8 +330,14 @@ export async function buildResourcePack(targetId?: string, force = false): Promi
     throw err
   }
   if (!res.ok) {
-    const err = await res.json()
-    throw new Error(err.detail || 'Failed to build resource pack')
+    let errMsg = `Failed to build resource pack (${res.status})`
+    try {
+      const err = await res.json()
+      errMsg = err.detail || errMsg
+    } catch {
+      // Body is not JSON
+    }
+    throw new Error(errMsg)
   }
   return res.json()
 }

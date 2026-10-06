@@ -9,6 +9,7 @@ class ItemDefinition(BaseModel):
     display_name: str = Field(..., description="Display name, supports MiniMessage or plain text", min_length=1)
     lore: List[str] = Field(default_factory=list, description="List of lore lines")
     custom_model_data: Optional[int] = Field(default=None, description="Custom model data integer for resource packs", ge=0)
+    item_model: Optional[str] = Field(default=None, description="Namespaced item model identifier (e.g. 'studio:ruby_sword') for Minecraft 1.21.2+")
     item_flags: List[str] = Field(default_factory=list, description="Item flags such as HIDE_ATTRIBUTES")
     amount: int = Field(default=1, ge=1, le=64, description="Stack size count (1-64)")
     components: dict = Field(default_factory=dict, description="Minecraft 1.21 Data Components mapping")
@@ -21,6 +22,16 @@ class ItemDefinition(BaseModel):
     def validate_id(cls, v: str) -> str:
         if not re.match(r"^[a-z0-9_-]+$", v):
             raise ValueError("Item id must be lowercase alphanumeric with dashes or underscores only")
+        return v
+
+    @field_validator("item_model")
+    @classmethod
+    def validate_item_model(cls, v: Optional[str]) -> Optional[str]:
+        if v is not None:
+            cleaned = v.strip().lower()
+            if not re.match(r"^[a-z0-9_.-]+:[a-z0-9_./-]+$", cleaned):
+                raise ValueError("Item model must be a valid namespaced key (e.g. 'studio:ruby_sword')")
+            return cleaned
         return v
 
     @field_validator("material")
@@ -41,6 +52,7 @@ class ItemDefinition(BaseModel):
             "export_format": self.export_format,
             "id": self.id,
             "item_flags": sorted(self.item_flags),
+            "item_model": self.item_model,
             "lore": list(self.lore),
             "material": self.material,
             "plugin_properties": self.plugin_properties,

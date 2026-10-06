@@ -28,6 +28,7 @@ class ItemModel(Base):
     display_name = Column(String, nullable=False)
     lore = Column(JSON, default=list)
     custom_model_data = Column(Integer, nullable=True)
+    item_model = Column(String, nullable=True)
     item_flags = Column(JSON, default=list)
     amount = Column(Integer, default=1)
     components = Column(JSON, default=dict)

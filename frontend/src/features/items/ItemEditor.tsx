@@ -71,6 +71,7 @@ export function ItemEditor({ onRevisionCreated }: { onRevisionCreated?: () => vo
     '<gray>Forged in ancient magma chambers.</gray>\n<dark_red>Attack Damage: +14</dark_red>'
   )
   const [customModelData, setCustomModelData] = useState<string>('10001')
+  const [itemModel, setItemModel] = useState<string>('')
   const [selectedFlags, setSelectedFlags] = useState<string[]>(['HIDE_ATTRIBUTES'])
   const [exportFormat, setExportFormat] = useState<'native' | 'oraxen'>('native')
   const [components, setComponents] = useState<Record<string, any>>({
@@ -121,6 +122,9 @@ export function ItemEditor({ onRevisionCreated }: { onRevisionCreated?: () => vo
     if (template.custom_model_data !== undefined) {
       setCustomModelData(template.custom_model_data ? template.custom_model_data.toString() : '')
     }
+    if (template.item_model !== undefined) {
+      setItemModel(template.item_model || '')
+    }
     if (template.export_format) {
       setExportFormat(template.export_format as 'native' | 'oraxen')
     }
@@ -141,6 +145,7 @@ export function ItemEditor({ onRevisionCreated }: { onRevisionCreated?: () => vo
     setDisplayName(it.display_name)
     setLoreText((it.lore || []).join('\n'))
     setCustomModelData(it.custom_model_data ? it.custom_model_data.toString() : '')
+    setItemModel(it.item_model || '')
     setSelectedFlags(it.item_flags || [])
     setComponents(it.components || {})
     setExportFormat((it.export_format as 'native' | 'oraxen') || 'native')
@@ -154,6 +159,7 @@ export function ItemEditor({ onRevisionCreated }: { onRevisionCreated?: () => vo
     setDisplayName('')
     setLoreText('')
     setCustomModelData('')
+    setItemModel('')
     setSelectedFlags([])
     setComponents({})
     setPluginProperties({})
@@ -222,6 +228,7 @@ export function ItemEditor({ onRevisionCreated }: { onRevisionCreated?: () => vo
         display_name: displayName.trim(),
         lore: loreArray,
         custom_model_data: isNaN(cmdNum as number) ? null : cmdNum,
+        item_model: itemModel.trim() ? itemModel.trim() : null,
         item_flags: selectedFlags,
         amount: 1,
         components,
@@ -314,8 +321,14 @@ export function ItemEditor({ onRevisionCreated }: { onRevisionCreated?: () => vo
                             </span>
                           )}
                         </div>
-                        <div className="text-[11px] text-gray-400 truncate">
-                          {it.material} {it.custom_model_data ? `• CMD ${it.custom_model_data}` : ''}
+                        <div className="text-[11px] text-gray-400 truncate flex items-center space-x-1.5">
+                          <span>{it.material}</span>
+                          {it.custom_model_data ? <span>• CMD {it.custom_model_data}</span> : null}
+                          {it.item_model ? (
+                            <span className="text-cyan-400 font-mono text-[10px]">
+                              • {it.item_model}
+                            </span>
+                          ) : null}
                         </div>
                       </div>
                       <div className="flex items-center space-x-1 ml-2">
@@ -505,50 +518,106 @@ export function ItemEditor({ onRevisionCreated }: { onRevisionCreated?: () => vo
               />
             </div>
 
-            {/* Custom Model Data & Item Flags */}
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <label className="block text-xs font-medium text-gray-400 mb-1">
-                  Custom Model Data <span className="text-[11px] text-gray-500">(CMD)</span>
-                </label>
-                <input
-                  type="number"
-                  value={customModelData}
-                  onChange={(e) => setCustomModelData(e.target.value)}
-                  placeholder="10001"
-                  min="0"
-                  className="w-full px-3 py-2 text-xs bg-[#111114] border border-[#30303a] rounded-lg text-gray-200 focus:outline-none focus:border-amber-400 font-mono"
-                />
-              </div>
-              <div>
-                <label className="block text-xs font-medium text-gray-400 mb-1">
-                  Item Flags
-                </label>
-                <div className="flex flex-wrap gap-1 mt-0.5">
-                  {AVAILABLE_FLAGS.slice(0, 4).map((flag) => {
-                    const checked = selectedFlags.includes(flag)
-                    return (
-                      <button
-                        key={flag}
-                        type="button"
-                        onClick={() => {
-                          setSelectedFlags(
-                            checked
-                              ? selectedFlags.filter((f) => f !== flag)
-                              : [...selectedFlags, flag]
-                          )
-                        }}
-                        className={`text-[10px] px-2 py-0.5 rounded border transition ${
-                          checked
-                            ? 'bg-amber-500/20 text-amber-300 border-amber-500/40'
-                            : 'bg-[#1e1e24] text-gray-400 border-[#30303a]'
-                        }`}
-                      >
-                        {flag.replace('HIDE_', '')}
-                      </button>
-                    )
-                  })}
+            {/* Multi-Version Model Identifiers: CMD (1.21.1) and Item Model (1.21.2+) */}
+            <div className="p-3.5 rounded-xl bg-[#121216] border border-[#262632] space-y-3">
+              <div className="flex items-center justify-between pb-2 border-b border-[#20202a]">
+                <div className="flex items-center space-x-2">
+                  <Layers className="w-3.5 h-3.5 text-cyan-400" />
+                  <span className="text-xs font-semibold text-gray-200">
+                    Multi-Version Model Configuration
+                  </span>
                 </div>
+                <span className="text-[10px] text-gray-400">
+                  Universal Hybrid (1.21.1 – 1.21.11)
+                </span>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                {/* 1.21.1 CMD */}
+                <div>
+                  <div className="flex items-center justify-between mb-1">
+                    <label className="block text-xs font-medium text-gray-300">
+                      Legacy CMD <span className="text-[10px] text-purple-400">(1.21.1)</span>
+                    </label>
+                  </div>
+                  <input
+                    type="number"
+                    value={customModelData}
+                    onChange={(e) => setCustomModelData(e.target.value)}
+                    placeholder="10001"
+                    min="0"
+                    className="w-full px-3 py-2 text-xs bg-[#17171f] border border-[#30303e] rounded-lg text-gray-200 focus:outline-none focus:border-purple-400 font-mono"
+                  />
+                  <span className="text-[10px] text-gray-500 block mt-1">
+                    Used by 1.21.1 via models/item override
+                  </span>
+                </div>
+
+                {/* 1.21.2+ item_model */}
+                <div>
+                  <div className="flex items-center justify-between mb-1">
+                    <label className="block text-xs font-medium text-gray-300">
+                      Item Model Key <span className="text-[10px] text-cyan-400">(1.21.2+)</span>
+                    </label>
+                    <span
+                      className={`text-[9px] px-1.5 py-0.2 rounded font-mono ${
+                        itemModel.trim()
+                          ? 'bg-amber-500/10 text-amber-300 border border-amber-500/20'
+                          : 'bg-cyan-500/10 text-cyan-300 border border-cyan-500/20'
+                      }`}
+                    >
+                      {itemModel.trim() ? 'Custom' : 'Auto-Derived'}
+                    </span>
+                  </div>
+                  <input
+                    type="text"
+                    value={itemModel}
+                    onChange={(e) => setItemModel(e.target.value)}
+                    placeholder={id.trim() ? `studio:${id.trim()}` : 'studio:<id>'}
+                    className="w-full px-3 py-2 text-xs bg-[#17171f] border border-[#30303e] rounded-lg text-gray-200 focus:outline-none focus:border-cyan-400 font-mono"
+                  />
+                  <span className="text-[10px] text-gray-500 block mt-1 truncate">
+                    {itemModel.trim() ? (
+                      <span className="text-amber-400/80">Explicit: {itemModel.trim()}</span>
+                    ) : (
+                      <span>
+                        Auto-derives as <code className="text-cyan-400">studio:{id.trim() || 'id'}</code>
+                      </span>
+                    )}
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            {/* Item Flags */}
+            <div>
+              <label className="block text-xs font-medium text-gray-400 mb-1">
+                Item Flags
+              </label>
+              <div className="flex flex-wrap gap-1.5">
+                {AVAILABLE_FLAGS.slice(0, 4).map((flag) => {
+                  const checked = selectedFlags.includes(flag)
+                  return (
+                    <button
+                      key={flag}
+                      type="button"
+                      onClick={() => {
+                        setSelectedFlags(
+                          checked
+                            ? selectedFlags.filter((f) => f !== flag)
+                            : [...selectedFlags, flag]
+                        )
+                      }}
+                      className={`text-[10px] px-2.5 py-1 rounded-md border transition ${
+                        checked
+                          ? 'bg-amber-500/20 text-amber-300 border-amber-500/40'
+                          : 'bg-[#1e1e24] text-gray-400 border-[#30303a]'
+                      }`}
+                    >
+                      {flag.replace('HIDE_', '')}
+                    </button>
+                  )
+                })}
               </div>
             </div>
 
@@ -601,6 +670,7 @@ export function ItemEditor({ onRevisionCreated }: { onRevisionCreated?: () => vo
                 .map((l) => l.trim())
                 .filter((l) => l.length > 0),
               customModelData: customModelData ? parseInt(customModelData, 10) : null,
+              itemModel: itemModel.trim() || (id.trim() ? `studio:${id.trim()}` : null),
               itemFlags: selectedFlags,
               amount: 1,
               components,

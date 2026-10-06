@@ -62,3 +62,52 @@ class DeterministicPackCompiler:
         file_size = output_zip_path.stat().st_size
 
         return sha1_hex, file_size
+
+    @classmethod
+    def generate_multiversion_mcmeta(
+        cls,
+        pack_format: int = 34,
+        min_inclusive: int = 34,
+        max_inclusive: int = 65,
+        overlay_min: int = 42,
+        overlay_max: int = 65,
+        overlay_dir: str = "overlay_v1_21_2",
+        description: str = "Universal Multi-Version Resource Pack (1.21.1 - 1.21.11)"
+    ) -> Dict[str, Any]:
+        """Generates pack.mcmeta with overlays for multi-version client compatibility."""
+        return {
+            "pack": {
+                "pack_format": pack_format,
+                "description": description,
+                "supported_formats": {
+                    "min_inclusive": min_inclusive,
+                    "max_inclusive": max_inclusive
+                }
+            },
+            "overlays": {
+                "entries": [
+                    {
+                        "formats": {
+                            "min_inclusive": overlay_min,
+                            "max_inclusive": overlay_max
+                        },
+                        "directory": overlay_dir
+                    }
+                ]
+            }
+        }
+
+    @classmethod
+    def write_multiversion_mcmeta(
+        cls,
+        target_dir: Path,
+        pack_format: int = 34,
+        description: str = "Universal Multi-Version Resource Pack (1.21.1 - 1.21.11)"
+    ) -> Path:
+        """Writes multi-version pack.mcmeta into target_dir."""
+        import json
+        mcmeta_path = target_dir / "pack.mcmeta"
+        content = cls.generate_multiversion_mcmeta(pack_format=pack_format, description=description)
+        mcmeta_path.write_text(json.dumps(content, indent=2), encoding="utf-8")
+        return mcmeta_path
+

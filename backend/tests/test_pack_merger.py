@@ -108,3 +108,67 @@ def test_merge_layers_to_directory(tmp_path: Path):
     assert "sound1" in merged_sounds
     assert "sound2" in merged_sounds
     assert summary["total_textures"] == 2
+    assert summary["is_hybrid_multiversion"] is True
+
+    # Verify multi-version pack.mcmeta
+    mcmeta = json.loads((output_dir / "pack.mcmeta").read_text(encoding="utf-8"))
+    assert mcmeta["pack"]["pack_format"] == 34
+    assert mcmeta["pack"]["supported_formats"]["min_inclusive"] == 34
+    assert mcmeta["pack"]["supported_formats"]["max_inclusive"] == 65
+    assert len(mcmeta["overlays"]["entries"]) == 1
+    assert mcmeta["overlays"]["entries"][0]["directory"] == "overlay_v1_21_2"
+
+
+def test_merge_item_definition_json():
+    base = {
+        "model": {
+            "type": "minecraft:select",
+            "property": "minecraft:custom_model_data",
+            "cases": [
+                {"when": "1001", "model": {"type": "minecraft:model", "model": "base:item/one"}},
+                {"when": "1003", "model": {"type": "minecraft:model", "model": "base:item/three"}}
+            ]
+        }
+    }
+    overlay = {
+        "model": {
+            "type": "minecraft:select",
+            "property": "minecraft:custom_model_data",
+            "cases": [
+                {"when": "1002", "model": {"type": "minecraft:model", "model": "overlay:item/two"}},
+                {"when": "1001", "model": {"type": "minecraft:model", "model": "overlay:item/one_updated"}}
+            ]
+        }
+    }
+    merged = SemanticMerger.merge_item_definition_json(base, overlay)
+    cases = merged["model"]["cases"]
+    assert len(cases) == 3
+    when_vals = [c["when"] for c in cases]
+    assert when_vals == ["1001", "1002", "1003"]
+    assert cases[0]["model"]["model"] == "overlay:item/one_updated"
+
+
+def test_dual_projection_cross_generation(tmp_path: Path):
+    pack_dir = tmp_path / "test_dual_pack"
+
+    # Only provide legacy models/item/diamond_sword.json
+    legacy_file = pack_dir / "assets" / "minecraft" / "models" / "item" / "diamond_sword.json"
+    legacy_file.parent.mkdir(parents=True)
+    legacy_file.write_text(json.dumps({
+        "parent": "item/handheld",
+        "overrides": [
+            {"predicate": {"custom_model_data": 9001}, "model": "custom:item/excalibur"}
+        ]
+    }), encoding="utf-8")
+
+    # Run dual projection
+    SemanticMerger.apply_dual_projection(pack_dir)
+
+    # Modern overlay definition must have been created!
+    modern_file = pack_dir / "overlay_v1_21_2" / "assets" / "minecraft" / "items" / "diamond_sword.json"
+    assert modern_file.exists()
+    modern_data = json.loads(modern_file.read_text(encoding="utf-8"))
+    assert modern_data["model"]["type"] == "minecraft:select"
+    assert modern_data["model"]["cases"][0]["when"] == "9001"
+    assert modern_data["model"]["cases"][0]["model"]["model"] == "custom:item/excalibur"
+

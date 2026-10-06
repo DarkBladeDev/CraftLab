@@ -54,6 +54,12 @@ public class Paper121ItemAdapter implements ItemAdapter {
             meta.setCustomModelData(cmd);
         }
 
+        // Modern 1.21.2+ Item Model Component (reflective invocation for multi-version server compatibility)
+        if (itemJson.has("item_model") && !itemJson.get("item_model").isJsonNull()) {
+            String itemModelKey = itemJson.get("item_model").getAsString();
+            applyItemModel(meta, itemModelKey);
+        }
+
         // Item Flags
         if (itemJson.has("item_flags") && itemJson.get("item_flags").isJsonArray()) {
             JsonArray flagsArray = itemJson.getAsJsonArray("item_flags");
@@ -69,6 +75,24 @@ public class Paper121ItemAdapter implements ItemAdapter {
 
         stack.setItemMeta(meta);
         return stack;
+    }
+
+    void applyItemModel(ItemMeta meta, String itemModelStr) {
+        if (itemModelStr == null || itemModelStr.trim().isEmpty()) {
+            return;
+        }
+        try {
+            org.bukkit.NamespacedKey key = org.bukkit.NamespacedKey.fromString(itemModelStr.trim().toLowerCase());
+            if (key != null) {
+                // In Paper 1.21.2+, meta.setItemModel(NamespacedKey) is present
+                java.lang.reflect.Method method = meta.getClass().getMethod("setItemModel", org.bukkit.NamespacedKey.class);
+                method.invoke(meta, key);
+            }
+        } catch (NoSuchMethodException ignored) {
+            // Server runtime is Paper 1.21.0 - 1.21.1 where setItemModel does not exist yet; safe fallback
+        } catch (Exception ignored) {
+            // Reflective error or unsupported mock environment
+        }
     }
 
     @Override

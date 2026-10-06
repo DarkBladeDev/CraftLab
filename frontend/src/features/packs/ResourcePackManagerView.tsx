@@ -188,11 +188,14 @@ export const ResourcePackManagerView: React.FC<ResourcePackManagerViewProps> = (
             <h2 className="text-base font-bold text-gray-100 flex items-center space-x-2">
               <span>Resource Pack Pipeline & Merger</span>
               <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-purple-500/10 text-purple-400 border border-purple-500/20">
-                1.21 Ready
+                Universal Hybrid (1.21.1 – 1.21.11)
+              </span>
+              <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-cyan-500/10 text-cyan-400 border border-cyan-500/20">
+                Formats 34..65
               </span>
             </h2>
             <p className="text-xs text-gray-400">
-              Automated multi-layer packaging, deterministic bit-for-bit SHA-1 hashing, and HTTP distribution.
+              Automated multi-layer packaging, dual AST projection (1.21.1 CMD + 1.21.2+ item_model overlay), and deterministic bit-for-bit SHA-1 distribution.
             </p>
           </div>
         </div>
@@ -312,6 +315,39 @@ export const ResourcePackManagerView: React.FC<ResourcePackManagerViewProps> = (
               </div>
             </div>
           </div>
+
+          {/* Universal Multi-Version Structure Info */}
+          <div className="p-3.5 rounded-xl bg-[#0f0f13] border border-[#22222b] space-y-2">
+            <div className="flex items-center justify-between">
+              <span className="text-[11px] font-semibold text-gray-300 flex items-center space-x-1.5">
+                <Layers className="w-3.5 h-3.5 text-cyan-400" />
+                <span>Universal Multi-Version Architecture</span>
+              </span>
+              <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-cyan-950/50 text-cyan-300 border border-cyan-800/40">
+                Single Pack .zip
+              </span>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 pt-1 text-[11px]">
+              <div className="p-2.5 rounded-lg bg-[#141419] border border-[#242430]">
+                <div className="text-gray-400 font-medium">Base Layer (1.21.1)</div>
+                <div className="text-purple-300 font-mono text-[10px] mt-0.5">Format 34</div>
+                <div className="text-gray-500 text-[10px] mt-0.5">models/item/*.json overrides</div>
+              </div>
+
+              <div className="p-2.5 rounded-lg bg-[#141419] border border-[#242430]">
+                <div className="text-gray-400 font-medium">Overlay Layer (1.21.2 – 1.21.11)</div>
+                <div className="text-cyan-300 font-mono text-[10px] mt-0.5">Formats 42..65</div>
+                <div className="text-gray-500 text-[10px] mt-0.5">overlay_v1_21_2/items/*.json</div>
+              </div>
+
+              <div className="p-2.5 rounded-lg bg-[#141419] border border-[#242430]">
+                <div className="text-gray-400 font-medium">Deduplicated Assets</div>
+                <div className="text-emerald-300 font-mono text-[10px] mt-0.5">Zero Bloat</div>
+                <div className="text-gray-500 text-[10px] mt-0.5">Root textures & audio shared</div>
+              </div>
+            </div>
+          </div>
         </div>
       )}
 
@@ -345,13 +381,20 @@ export const ResourcePackManagerView: React.FC<ResourcePackManagerViewProps> = (
                     100
                   </span>
                 </td>
-                <td className="py-3 px-3 font-semibold text-gray-200">Studio Items & Custom Overrides</td>
+                <td className="py-3 px-3 font-semibold text-gray-200">
+                  <div className="flex items-center space-x-1.5">
+                    <span>Studio Items & Custom Overrides</span>
+                    <span className="text-[9px] font-mono px-1.5 py-0.2 rounded bg-cyan-950/60 text-cyan-300 border border-cyan-800/40">
+                      Dual AST
+                    </span>
+                  </div>
+                </td>
                 <td className="py-3 px-3">
                   <span className="text-[10px] font-semibold px-2 py-0.5 rounded bg-purple-500/20 text-purple-400">
                     Studio Core
                   </span>
                 </td>
-                <td className="py-3 px-3 text-gray-400">Native Platform Items</td>
+                <td className="py-3 px-3 text-gray-400">Dual Projected (1.21.1 CMD + 1.21.2+ Overlay)</td>
                 <td className="py-3 px-3 font-mono text-gray-500">Live Workspace</td>
                 <td className="py-3 px-3 text-right text-gray-500 italic text-[11px]">Master Layer</td>
               </tr>

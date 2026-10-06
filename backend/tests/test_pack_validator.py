@@ -97,3 +97,64 @@ def test_preflight_studio_and_external_pack_collision(tmp_path: Path):
     sources_in_conflict = {i.source for i in conflict.items}
     assert "Studio" in sources_in_conflict
     assert "Oraxen Live Pack" in sources_in_conflict
+
+
+def test_preflight_item_model_collision():
+    item1 = ItemDefinition(
+        id="ruby_sword",
+        material="DIAMOND_SWORD",
+        display_name="Ruby Sword",
+        custom_model_data=1001,
+        item_model="studio:items/ruby_sword"
+    )
+    item2 = ItemDefinition(
+        id="ruby_blade",
+        material="NETHERITE_SWORD",  # Different material, but same item_model!
+        display_name="Ruby Blade",
+        custom_model_data=1002,
+        item_model="studio:items/ruby_sword"  # Collision!
+    )
+
+    report = PreflightValidator.validate([item1, item2])
+    assert report.is_valid is False
+    assert any(c.type == "item_model_collision" for c in report.conflicts)
+    conflict = [c for c in report.conflicts if c.type == "item_model_collision"][0]
+    assert conflict.path == "studio:items/ruby_sword"
+    assert len(conflict.items) == 2
+
+
+def test_preflight_modern_item_definition_collision(tmp_path: Path):
+    pack_dir = tmp_path / "modern_pack"
+    items_dir = pack_dir / "assets" / "minecraft" / "items"
+    items_dir.mkdir(parents=True)
+
+    sword_file = items_dir / "diamond_sword.json"
+    sword_file.write_text(json.dumps({
+        "model": {
+            "type": "minecraft:select",
+            "property": "minecraft:custom_model_data",
+            "cases": [
+                {
+                    "when": 7007,
+                    "model": {"type": "minecraft:model", "model": "plugin:item/blade"}
+                }
+            ]
+        }
+    }), encoding="utf-8")
+
+    external_source = {
+        "name": "Modern Pack",
+        "storage_path": str(pack_dir)
+    }
+
+    studio_item = ItemDefinition(
+        id="studio_blade",
+        material="DIAMOND_SWORD",
+        display_name="Studio Blade",
+        custom_model_data=7007
+    )
+
+    report = PreflightValidator.validate([studio_item], sources=[external_source])
+    assert report.is_valid is False
+    assert any(c.custom_model_data == 7007 for c in report.conflicts)
+

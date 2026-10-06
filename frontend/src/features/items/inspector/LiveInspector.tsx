@@ -61,11 +61,23 @@ export function LiveInspector({ itemData }: LiveInspectorProps) {
               material={itemData.material}
               amount={itemData.amount || 1}
               customModelData={itemData.customModelData}
+              itemModel={itemData.itemModel}
               size="lg"
             />
             <div className="text-[11px] font-mono text-gray-400 text-center">
               {itemData.material}
               {itemData.customModelData ? ` • CMD #${itemData.customModelData}` : ''}
+              {itemData.itemModel ? ` • ${itemData.itemModel}` : ''}
+            </div>
+
+            {/* Multi-Version Dual Projection Badges */}
+            <div className="flex items-center justify-center gap-1.5 pt-1 w-full flex-wrap">
+              <span className="px-2 py-0.5 rounded-full text-[10px] bg-purple-500/15 text-purple-300 border border-purple-500/30 font-mono">
+                1.21.1: {itemData.customModelData ? `CMD #${itemData.customModelData}` : 'Base'}
+              </span>
+              <span className="px-2 py-0.5 rounded-full text-[10px] bg-cyan-500/15 text-cyan-300 border border-cyan-500/30 font-mono">
+                1.21.2+: {itemData.itemModel || (itemData.id ? `studio:${itemData.id}` : 'Base')}
+              </span>
             </div>
           </div>
 

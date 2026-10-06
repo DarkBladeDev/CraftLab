@@ -36,7 +36,7 @@ export const PreflightConflictModal: React.FC<PreflightConflictModalProps> = ({
                 </span>
               </h3>
               <p className="text-xs text-gray-400">
-                Multiple items share identical CustomModelData numbers on the same base Minecraft item.
+                Multiple items share identical CustomModelData numbers or Modern item_model identifiers.
               </p>
             </div>
           </div>
@@ -57,13 +57,27 @@ export const PreflightConflictModal: React.FC<PreflightConflictModalProps> = ({
             >
               <div className="flex items-center justify-between">
                 <div className="flex items-center space-x-2">
-                  <span className="text-xs font-mono font-bold text-amber-400 bg-amber-500/10 px-2 py-0.5 rounded border border-amber-500/20">
-                    {conflict.material}
-                  </span>
-                  <span className="text-xs text-gray-400">CustomModelData:</span>
-                  <span className="text-xs font-mono font-bold text-red-400 bg-red-500/10 px-2 py-0.5 rounded border border-red-500/20">
-                    #{conflict.custom_model_data}
-                  </span>
+                  {conflict.material && (
+                    <span className="text-xs font-mono font-bold text-amber-400 bg-amber-500/10 px-2 py-0.5 rounded border border-amber-500/20">
+                      {conflict.material}
+                    </span>
+                  )}
+                  {conflict.custom_model_data !== undefined && conflict.custom_model_data !== null && (
+                    <>
+                      <span className="text-xs text-gray-400">CMD:</span>
+                      <span className="text-xs font-mono font-bold text-red-400 bg-red-500/10 px-2 py-0.5 rounded border border-red-500/20">
+                        #{conflict.custom_model_data}
+                      </span>
+                    </>
+                  )}
+                  {conflict.item_model && (
+                    <>
+                      <span className="text-xs text-gray-400">item_model:</span>
+                      <span className="text-xs font-mono font-bold text-purple-400 bg-purple-500/10 px-2 py-0.5 rounded border border-purple-500/20">
+                        {conflict.item_model}
+                      </span>
+                    </>
+                  )}
                 </div>
                 <span className="text-[11px] text-gray-400">{conflict.items.length} conflicting sources</span>
               </div>

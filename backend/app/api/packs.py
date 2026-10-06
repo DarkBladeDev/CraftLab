@@ -15,7 +15,7 @@ from app.core.database import get_db
 from app.models.entities import ItemModel, TargetModel
 from app.domain.pack_sources import PackRepository, PackSourceSchema, CompiledPackSchema
 from app.domain.pack_validator import PreflightValidator, PreflightReport
-from app.domain.pack_merger import SemanticMerger
+from app.domain.pack_merger import SemanticMerger, ItemModelMapping
 from app.domain.pack_compiler import DeterministicPackCompiler
 from app.gateway.manager import gateway_manager
 
@@ -192,7 +192,7 @@ async def build_resource_pack(
         studio_layer_dir = stage_dir / "studio_layer"
         studio_layer_dir.mkdir(parents=True, exist_ok=True)
 
-        # Build overrides for vanilla item models from studio items with CMD
+        # Build dual projection for studio items (Legacy Base + Modern Overlay)
         materials_with_cmd: Dict[str, List[ItemModel]] = {}
         for it in items:
             if it.material and it.custom_model_data is not None:
@@ -200,25 +200,53 @@ async def build_resource_pack(
                 materials_with_cmd.setdefault(mat, []).append(it)
 
         for mat, mat_items in materials_with_cmd.items():
-            model_file = studio_layer_dir / "assets" / "minecraft" / "models" / "item" / f"{mat.lower()}.json"
-            model_file.parent.mkdir(parents=True, exist_ok=True)
+            mappings = [
+                ItemModelMapping(
+                    material=mat,
+                    custom_model_data=it.custom_model_data,
+                    model_path=f"studio:item/{it.id}",
+                    item_model=it.item_model
+                )
+                for it in mat_items
+            ]
 
-            overrides = []
-            for item_entity in mat_items:
-                overrides.append({
-                    "predicate": {"custom_model_data": item_entity.custom_model_data},
-                    "model": f"studio:item/{item_entity.id}"
-                })
-            # Sort ascending by CMD
-            overrides.sort(key=lambda x: x["predicate"]["custom_model_data"])
-
+            # 1. Legacy base model: assets/minecraft/models/item/{mat.lower()}.json
+            legacy_file = studio_layer_dir / "assets" / "minecraft" / "models" / "item" / f"{mat.lower()}.json"
+            legacy_file.parent.mkdir(parents=True, exist_ok=True)
+            legacy_model_data = SemanticMerger.build_legacy_item_model(mat, mappings)
             import json
-            model_data = {
-                "parent": "item/handheld" if "SWORD" in mat or "AXE" in mat else "item/generated",
-                "textures": {"layer0": f"minecraft:item/{mat.lower()}"},
-                "overrides": overrides
-            }
-            model_file.write_text(json.dumps(model_data, indent=2), encoding="utf-8")
+            legacy_file.write_text(json.dumps(legacy_model_data, indent=2), encoding="utf-8")
+
+            # 2. Modern overlay definition: overlay_v1_21_2/assets/minecraft/items/{mat.lower()}.json
+            modern_file = studio_layer_dir / "overlay_v1_21_2" / "assets" / "minecraft" / "items" / f"{mat.lower()}.json"
+            modern_file.parent.mkdir(parents=True, exist_ok=True)
+            modern_def_data = SemanticMerger.build_modern_item_definition(mat, mappings)
+            modern_file.write_text(json.dumps(modern_def_data, indent=2), encoding="utf-8")
+
+            # 3. Dedicated item_model definitions and root geometry models
+            for it in mat_items:
+                im_target = it.item_model or f"studio:{it.id}"
+                if ":" in im_target:
+                    ns, name = im_target.split(":", 1)
+                    im_file = studio_layer_dir / "overlay_v1_21_2" / "assets" / ns / "items" / f"{name}.json"
+                    im_file.parent.mkdir(parents=True, exist_ok=True)
+                    im_file.write_text(json.dumps({
+                        "model": {
+                            "type": "minecraft:model",
+                            "model": f"studio:item/{it.id}"
+                        }
+                    }, indent=2), encoding="utf-8")
+
+                # Shared root geometric model
+                geom_file = studio_layer_dir / "assets" / "studio" / "models" / "item" / f"{it.id}.json"
+                if not geom_file.exists():
+                    geom_file.parent.mkdir(parents=True, exist_ok=True)
+                    geom_file.write_text(json.dumps({
+                        "parent": "item/handheld" if any(w in mat for w in ("SWORD", "AXE", "HOE", "SHOVEL", "PICKAXE")) else "item/generated",
+                        "textures": {
+                            "layer0": f"minecraft:item/{mat.lower()}"
+                        }
+                    }, indent=2), encoding="utf-8")
 
         # Studio layer has highest priority
         source_dirs.append(studio_layer_dir)

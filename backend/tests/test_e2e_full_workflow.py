@@ -6,6 +6,7 @@ from pathlib import Path
 from httpx import AsyncClient, ASGITransport
 from main import app
 from app.core.database import init_db, AsyncSessionLocal, engine, Base
+from app.models import entities as _entities  # Ensure all model tables are registered in Base.metadata
 from app.gateway.manager import gateway_manager
 from app.protocol.envelope import MessageEnvelope
 
@@ -443,4 +444,177 @@ async def test_end_to_end_resource_pack_pipeline():
         assert conflict_report["conflicts"][0]["custom_model_data"] == 12001
 
     await gateway_manager.unregister_session(target_id, AsyncSessionLocal)
+
+
+@pytest.mark.asyncio
+async def test_end_to_end_multiversion_hybrid_resource_pack():
+    import io
+    import zipfile
+
+    await init_db()
+    async with engine.begin() as conn:
+        await conn.run_sync(Base.metadata.drop_all)
+        await conn.run_sync(Base.metadata.create_all)
+
+    target_id = "paper-multiversion-e2e"
+
+    class MockWebSocket:
+        def __init__(self):
+            self.messages = []
+
+        async def send_text(self, text):
+            self.messages.append(text)
+
+    agent_ws = MockWebSocket()
+
+    # 1. Connect agent
+    hello_msg = json.dumps({
+        "protocolVersion": "1.0",
+        "messageType": "hello",
+        "messageId": "msg-mv-hello",
+        "targetId": target_id,
+        "payload": {
+            "agentVersion": "1.2.0",
+            "minecraftVersion": "1.21.2",
+            "paperVersion": "1.21.2-R0.1-SNAPSHOT",
+            "adapters": ["paper-1.21"]
+        }
+    })
+    await gateway_manager.handle_message(agent_ws, hello_msg, AsyncSessionLocal)
+
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        # 2. Author Studio items with CMD and item_model
+        item1 = {
+            "id": "astral_blade",
+            "material": "NETHERITE_SWORD",
+            "display_name": "<aqua>Astral Blade</aqua>",
+            "custom_model_data": 10001,
+            "item_model": "studio:astral_blade"
+        }
+        item2 = {
+            "id": "void_walker_boots",
+            "material": "NETHERITE_BOOTS",
+            "display_name": "<dark_purple>Void Walker Boots</dark_purple>",
+            "custom_model_data": 10002
+            # item_model omitted -> auto-derives to studio:void_walker_boots
+        }
+        res1 = await client.post("/api/items", json=item1)
+        assert res1.status_code == 200
+        res2 = await client.post("/api/items", json=item2)
+        assert res2.status_code == 200
+
+        # 3. Preflight Check
+        pre_res = await client.post(f"/api/v1/packs/preflight?target_id={target_id}")
+        assert pre_res.status_code == 200
+        report = pre_res.json()
+        assert report["is_valid"] is True
+        assert report["summary"]["total_cmd_indexed"] == 2
+        assert report["summary"]["total_item_models_indexed"] == 2
+
+        # 4. Build Universal Hybrid Pack
+        build_payload = {
+            "target_id": target_id,
+            "pack_format": 34,
+            "description": "Universal Hybrid Multi-Version Pack (1.21.1 - 1.21.11)"
+        }
+        build_res = await client.post("/api/v1/packs/build", json=build_payload)
+        assert build_res.status_code == 200
+        build_data = build_res.json()
+        assert len(build_data["sha1_hash"]) == 40
+        assert build_data["file_size"] > 0
+        sha1 = build_data["sha1_hash"]
+
+        # 5. Download pack and inspect zip structure
+        dl_res = await client.get(f"/api/v1/packs/{target_id}/download")
+        assert dl_res.status_code == 200
+
+        with zipfile.ZipFile(io.BytesIO(dl_res.content), "r") as zf:
+            namelist = zf.namelist()
+
+            # Verify pack.mcmeta multi-version overlays
+            assert "pack.mcmeta" in namelist
+            mcmeta = json.loads(zf.read("pack.mcmeta").decode("utf-8"))
+            assert mcmeta["pack"]["pack_format"] == 34
+            assert mcmeta["pack"]["supported_formats"] == {"min_inclusive": 34, "max_inclusive": 65}
+            assert "overlays" in mcmeta
+            assert any(
+                entry.get("directory") == "overlay_v1_21_2" and
+                entry.get("formats") == {"min_inclusive": 42, "max_inclusive": 65}
+                for entry in mcmeta["overlays"]["entries"]
+            )
+
+            # Verify 1.21.1 Legacy base overrides in models/item/
+            assert "assets/minecraft/models/item/netherite_sword.json" in namelist
+            base_sword = json.loads(zf.read("assets/minecraft/models/item/netherite_sword.json").decode("utf-8"))
+            assert "overrides" in base_sword
+            assert any(
+                ov.get("predicate", {}).get("custom_model_data") == 10001 and
+                ov.get("model") == "studio:item/astral_blade"
+                for ov in base_sword["overrides"]
+            )
+
+            assert "assets/minecraft/models/item/netherite_boots.json" in namelist
+            base_boots = json.loads(zf.read("assets/minecraft/models/item/netherite_boots.json").decode("utf-8"))
+            assert any(
+                ov.get("predicate", {}).get("custom_model_data") == 10002 and
+                ov.get("model") == "studio:item/void_walker_boots"
+                for ov in base_boots["overrides"]
+            )
+
+            # Verify 1.21.2+ Modern overlay Item Definitions in overlay_v1_21_2/assets/minecraft/items/
+            assert "overlay_v1_21_2/assets/minecraft/items/netherite_sword.json" in namelist
+            overlay_sword = json.loads(
+                zf.read("overlay_v1_21_2/assets/minecraft/items/netherite_sword.json").decode("utf-8")
+            )
+            assert overlay_sword["model"]["type"] == "minecraft:select"
+            assert overlay_sword["model"]["property"] == "minecraft:custom_model_data"
+            assert any(
+                c.get("when") == "10001" and c.get("model", {}).get("model") == "studio:item/astral_blade"
+                for c in overlay_sword["model"]["cases"]
+            )
+
+            assert "overlay_v1_21_2/assets/minecraft/items/netherite_boots.json" in namelist
+            overlay_boots = json.loads(
+                zf.read("overlay_v1_21_2/assets/minecraft/items/netherite_boots.json").decode("utf-8")
+            )
+            assert any(
+                c.get("when") == "10002" and c.get("model", {}).get("model") == "studio:item/void_walker_boots"
+                for c in overlay_boots["model"]["cases"]
+            )
+
+            # Verify dedicated modern item definitions in overlay
+            assert "overlay_v1_21_2/assets/studio/items/astral_blade.json" in namelist
+            assert "overlay_v1_21_2/assets/studio/items/void_walker_boots.json" in namelist
+
+            # Verify shared root geometry models
+            assert "assets/studio/models/item/astral_blade.json" in namelist
+            assert "assets/studio/models/item/void_walker_boots.json" in namelist
+
+        # 6. Test item_model collision rejection
+        colliding_item = {
+            "id": "shadow_blade",
+            "material": "IRON_SWORD",
+            "display_name": "Shadow Blade",
+            "custom_model_data": 99999,
+            "item_model": "studio:astral_blade"  # Collides with astral_blade!
+        }
+        await client.post("/api/items", json=colliding_item)
+
+        conflict_pre_res = await client.post(f"/api/v1/packs/preflight?target_id={target_id}")
+        assert conflict_pre_res.status_code == 200
+        conflict_report = conflict_pre_res.json()
+        assert conflict_report["is_valid"] is False
+        assert any(
+            c.get("type") == "item_model_collision" and c.get("item_model") == "studio:astral_blade"
+            for c in conflict_report["conflicts"]
+        )
+
+        conflict_build_res = await client.post("/api/v1/packs/build", json=build_payload)
+        assert conflict_build_res.status_code == 409
+        conflict_build_data = conflict_build_res.json()
+        assert conflict_build_data["is_valid"] is False
+
+    await gateway_manager.unregister_session(target_id, AsyncSessionLocal)
+
 

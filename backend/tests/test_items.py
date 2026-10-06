@@ -66,3 +66,27 @@ def test_invalid_material_rejected():
             material="DIAMOND SWORD WITH SPACES!",
             display_name="Ruby Sword"
         )
+
+
+def test_item_definition_with_item_model():
+    item = ItemDefinition(
+        id="ruby_blade",
+        material="DIAMOND_SWORD",
+        display_name="Ruby Blade",
+        custom_model_data=1001,
+        item_model="studio:items/ruby_blade"
+    )
+    assert item.item_model == "studio:items/ruby_blade"
+    canonical = item.to_canonical_dict()
+    assert canonical["item_model"] == "studio:items/ruby_blade"
+
+
+def test_invalid_item_model_rejected():
+    with pytest.raises(ValidationError):
+        ItemDefinition(
+            id="ruby_blade",
+            material="DIAMOND_SWORD",
+            display_name="Ruby Blade",
+            item_model="invalid no namespace"
+        )
+

@@ -26,6 +26,8 @@ async def init_db():
                 columns = [col["name"] for col in inspector.get_columns("items")]
                 if "components" not in columns:
                     connection.execute(text("ALTER TABLE items ADD COLUMN components JSON DEFAULT '{}'"))
+                if "item_model" not in columns:
+                    connection.execute(text("ALTER TABLE items ADD COLUMN item_model VARCHAR DEFAULT NULL"))
 
         await conn.run_sync(check_and_migrate)
 

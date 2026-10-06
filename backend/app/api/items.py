@@ -21,6 +21,7 @@ async def list_items(db: AsyncSession = Depends(get_db)):
             "display_name": i.display_name,
             "lore": i.lore,
             "custom_model_data": i.custom_model_data,
+            "item_model": i.item_model,
             "item_flags": i.item_flags,
             "amount": i.amount,
             "components": i.components or {},
@@ -42,6 +43,7 @@ async def create_or_update_item(item_in: ItemDefinition, db: AsyncSession = Depe
         existing.display_name = item_in.display_name
         existing.lore = item_in.lore
         existing.custom_model_data = item_in.custom_model_data
+        existing.item_model = item_in.item_model
         existing.item_flags = item_in.item_flags
         existing.amount = item_in.amount
         existing.components = item_in.components
@@ -55,6 +57,7 @@ async def create_or_update_item(item_in: ItemDefinition, db: AsyncSession = Depe
             display_name=item_in.display_name,
             lore=item_in.lore,
             custom_model_data=item_in.custom_model_data,
+            item_model=item_in.item_model,
             item_flags=item_in.item_flags,
             amount=item_in.amount,
             components=item_in.components,

@@ -7,6 +7,7 @@ export interface ItemTooltipData {
   displayName?: string
   lore?: string[]
   customModelData?: number | null
+  itemModel?: string | null
   itemFlags?: string[]
   amount?: number
   components?: Record<string, any>
@@ -55,10 +56,12 @@ const VANILLA_BASE_STATS: Record<
 }
 
 export function MinecraftTooltip({
+  id,
   material,
   displayName,
   lore = [],
   customModelData,
+  itemModel,
   itemFlags = [],
   components = {},
 }: ItemTooltipData) {
@@ -246,6 +249,19 @@ export function MinecraftTooltip({
             CustomModelData: {customModelData}
           </div>
         )}
+        {itemModel && (
+          <div className="text-[#555555] font-mono leading-tight">
+            item_model: {itemModel}
+          </div>
+        )}
+        <div className="flex flex-wrap items-center gap-1.5 pt-1.5 mt-1 border-t border-[#22102f]/60">
+          <span className="px-1.5 py-0.5 rounded text-[9px] bg-purple-950/80 text-purple-300 border border-purple-800/50 font-mono">
+            1.21.1: {customModelData != null ? `CMD #${customModelData}` : 'Base'}
+          </span>
+          <span className="px-1.5 py-0.5 rounded text-[9px] bg-cyan-950/80 text-cyan-300 border border-cyan-800/50 font-mono">
+            1.21.2+: {itemModel || (id ? `studio:${id}` : 'Base')}
+          </span>
+        </div>
       </div>
     </div>
   )

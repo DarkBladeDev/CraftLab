@@ -5,6 +5,7 @@ interface MinecraftSlotProps {
   material: string
   amount?: number
   customModelData?: number | null
+  itemModel?: string | null
   size?: 'sm' | 'md' | 'lg'
   className?: string
 }
@@ -13,6 +14,7 @@ export function MinecraftSlot({
   material,
   amount = 1,
   customModelData,
+  itemModel,
   size = 'md',
   className = '',
 }: MinecraftSlotProps) {
@@ -43,7 +45,7 @@ export function MinecraftSlot({
           'inset 2px 2px 0px #373737, inset -2px -2px 0px #ffffff, inset 4px 4px 0px #222222, inset -4px -4px 0px #ffffff',
         border: '2px solid #181818',
       }}
-      title={`${material} (Amount: ${amount}${customModelData ? `, CMD: ${customModelData}` : ''})`}
+      title={`${material} (Amount: ${amount}${customModelData ? `, CMD: ${customModelData}` : ''}${itemModel ? `, Model: ${itemModel}` : ''})`}
     >
       {/* Texture sprite or fallback icon */}
       {!imgError ? (
@@ -83,13 +85,23 @@ export function MinecraftSlot({
         </span>
       )}
 
-      {/* Custom Model Data Indicator Badge */}
+      {/* Custom Model Data Indicator Badge (1.21.1) */}
       {customModelData !== null && customModelData !== undefined && (
         <div
           className="absolute -top-1.5 -left-1.5 w-4 h-4 rounded-full bg-purple-600 border border-purple-300 flex items-center justify-center shadow-lg"
-          title={`Custom Model Data: ${customModelData}`}
+          title={`1.21.1 Custom Model Data: ${customModelData}`}
         >
           <Sparkles className="w-2.5 h-2.5 text-purple-100" />
+        </div>
+      )}
+
+      {/* Modern Item Model Indicator Badge (1.21.2+) */}
+      {itemModel && (
+        <div
+          className="absolute -top-1.5 -right-1.5 w-4 h-4 rounded-full bg-cyan-600 border border-cyan-300 flex items-center justify-center shadow-lg"
+          title={`1.21.2+ Item Model: ${itemModel}`}
+        >
+          <Sparkles className="w-2.5 h-2.5 text-cyan-100" />
         </div>
       )}
     </div>
