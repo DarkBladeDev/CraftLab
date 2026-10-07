@@ -2,7 +2,7 @@ import os
 import time
 import logging
 from contextlib import asynccontextmanager
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from sqlalchemy import text
@@ -15,7 +15,10 @@ from app.api.targets import router as targets_router
 from app.api.deployments import router as deployments_router
 from app.api.catalogs import router as catalogs_router
 from app.api.packs import router as packs_router
+from app.api.auth import router as auth_router
+from app.core.auth import require_roles
 from app.gateway.manager import gateway_manager
+from craftlab_ctl.auth import Role
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("mcp")
@@ -94,13 +97,16 @@ async def readiness_check():
     return JSONResponse(status_code=503, content={"status": "degraded", "checks": checks})
 
 
-app.include_router(items_router)
-app.include_router(blocks_router)
-app.include_router(revisions_router)
-app.include_router(targets_router)
-app.include_router(deployments_router)
-app.include_router(catalogs_router)
-app.include_router(packs_router)
+app.include_router(auth_router)
+
+content_auth = [Depends(require_roles(Role.CREATOR.value, Role.ADMIN.value))]
+app.include_router(items_router, dependencies=content_auth)
+app.include_router(blocks_router, dependencies=content_auth)
+app.include_router(revisions_router, dependencies=content_auth)
+app.include_router(targets_router, dependencies=content_auth)
+app.include_router(deployments_router, dependencies=content_auth)
+app.include_router(catalogs_router, dependencies=content_auth)
+app.include_router(packs_router, dependencies=content_auth)
 
 
 @app.websocket("/ws/agent")

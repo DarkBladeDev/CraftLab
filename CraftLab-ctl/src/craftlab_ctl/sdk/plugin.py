@@ -25,6 +25,10 @@ class CommandDefinition:
         self.description = description
         self.parameters = parameters
 
+    @property
+    def handler(self) -> Callable:
+        return self.func
+
     def to_schema(self) -> Dict[str, Any]:
         return {
             "name": self.name,

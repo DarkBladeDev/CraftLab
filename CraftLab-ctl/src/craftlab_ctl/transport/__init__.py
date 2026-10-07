@@ -5,10 +5,12 @@ from craftlab_ctl.transport.base import (
     TransportAuthError,
     TransportMessage,
 )
+from craftlab_ctl.transport.remote import RemoteControlClient
 
 __all__ = [
     "LocalControlServer",
     "LocalControlClient",
+    "RemoteControlClient",
     "TransportError",
     "TransportAuthError",
     "TransportMessage",

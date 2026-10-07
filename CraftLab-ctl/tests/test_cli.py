@@ -28,3 +28,11 @@ def test_cli_daemon_status():
     result = runner.invoke(cli, ["daemon", "status"])
     assert result.exit_code == 0
     assert "craftctld daemon is" in result.output
+
+
+def test_cli_remote_flags_error_handling():
+    runner = CliRunner()
+    # Test remote with unavailable server
+    result = runner.invoke(cli, ["--server", "http://127.0.0.1:59999", "--token", "fake_token", "status"])
+    assert result.exit_code == 1
+    assert "Remote execution error" in result.output

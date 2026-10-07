@@ -6,12 +6,15 @@ import { BlockStudio } from './features/blocks/BlockStudio'
 import { DeployModal } from './features/deployments/DeployModal'
 import { ResourcePackManagerView } from './features/packs/ResourcePackManagerView'
 import { AssetWorkspaceView } from './features/assets/AssetWorkspaceView'
+import { AuthModal } from './components/AuthModal'
 import { fetchRevisions, fetchTargets } from './api/client'
 
 export default function App() {
   const [selectedTargetId, setSelectedTargetId] = useState<string>('local-paper-server')
   const [latestRevisionId, setLatestRevisionId] = useState<string | undefined>(undefined)
   const [isDeployModalOpen, setIsDeployModalOpen] = useState(false)
+  const [isAuthModalOpen, setIsAuthModalOpen] = useState(false)
+  const [currentUser, setCurrentUser] = useState<{ username: string; roles: string[] } | null>(null)
   const [activeTab, setActiveTab] = useState<'studio' | 'blocks' | 'packs' | 'assets'>('studio')
 
   const refreshLatestRevision = async () => {
@@ -32,6 +35,12 @@ export default function App() {
         setSelectedTargetId(targets[0].id)
       }
     })
+    fetch('/api/v1/auth/me', { credentials: 'include' })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((u) => {
+        if (u) setCurrentUser(u)
+      })
+      .catch(() => {})
   }, [])
 
   return (
@@ -59,6 +68,32 @@ export default function App() {
               <ShieldCheck className="w-4 h-4 text-emerald-400" />
               <span>Allowlisted Protocol: Strict</span>
             </div>
+
+            {currentUser ? (
+              <div className="flex items-center space-x-2 text-xs px-3 py-1.5 rounded-xl bg-[#1c1c22] border border-[#2b2b35]">
+                <span className="w-2 h-2 rounded-full bg-emerald-400"></span>
+                <span className="font-semibold text-gray-200">{currentUser.username}</span>
+                <span className="text-[10px] text-emerald-400 bg-emerald-500/10 px-1.5 py-0.5 rounded border border-emerald-500/20">
+                  {currentUser.roles[0] || 'user'}
+                </span>
+                <button
+                  onClick={async () => {
+                    await fetch('/api/v1/auth/logout', { method: 'POST', credentials: 'include' })
+                    setCurrentUser(null)
+                  }}
+                  className="text-[10px] text-gray-400 hover:text-red-400 ml-1 transition"
+                >
+                  Exit
+                </button>
+              </div>
+            ) : (
+              <button
+                onClick={() => setIsAuthModalOpen(true)}
+                className="px-3 py-1.5 bg-[#1c1c22] hover:bg-[#252530] text-gray-200 border border-[#2b2b35] text-xs font-semibold rounded-xl transition"
+              >
+                Sign In
+              </button>
+            )}
 
             <button
               onClick={async () => {
@@ -187,6 +222,13 @@ export default function App() {
         onClose={() => setIsDeployModalOpen(false)}
         revisionId={latestRevisionId}
         targetId={selectedTargetId}
+      />
+
+      {/* Auth Modal */}
+      <AuthModal
+        isOpen={isAuthModalOpen}
+        onClose={() => setIsAuthModalOpen(false)}
+        onLoginSuccess={(user) => setCurrentUser(user)}
       />
     </div>
   )

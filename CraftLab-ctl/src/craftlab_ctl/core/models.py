@@ -44,6 +44,12 @@ class OperationResult(BaseModel):
     def fail(cls, error: str, **kwargs) -> "OperationResult":
         return cls(success=False, error=error, data=kwargs)
 
+    @property
+    def message(self) -> str:
+        if self.data and "message" in self.data:
+            return str(self.data["message"])
+        return self.error or ("Operation succeeded" if self.success else "Operation failed")
+
 
 class AuditEvent(BaseModel):
     timestamp: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())

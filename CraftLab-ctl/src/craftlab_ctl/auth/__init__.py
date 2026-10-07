@@ -1,0 +1,63 @@
+from craftlab_ctl.auth.models import (
+    Role,
+    User,
+    Session,
+    AuthContext,
+    LoginRequest,
+    LoginResponse,
+    UserCreateRequest,
+    UserResponse,
+)
+from craftlab_ctl.auth.crypto import (
+    hash_password,
+    verify_password,
+    get_or_create_auth_secret,
+    sign_session_token,
+    unsign_session_token,
+)
+from craftlab_ctl.auth.db import (
+    init_auth_db,
+    create_user,
+    get_user_by_username,
+    get_user_by_id,
+    list_users,
+    create_session,
+    get_session,
+    delete_session,
+    create_api_token,
+    get_user_by_api_token,
+)
+from craftlab_ctl.auth.rbac import (
+    resolve_auth_context,
+    verify_break_glass,
+    get_break_glass_key,
+)
+
+__all__ = [
+    "Role",
+    "User",
+    "Session",
+    "AuthContext",
+    "LoginRequest",
+    "LoginResponse",
+    "UserCreateRequest",
+    "UserResponse",
+    "hash_password",
+    "verify_password",
+    "get_or_create_auth_secret",
+    "sign_session_token",
+    "unsign_session_token",
+    "init_auth_db",
+    "create_user",
+    "get_user_by_username",
+    "get_user_by_id",
+    "list_users",
+    "create_session",
+    "get_session",
+    "delete_session",
+    "create_api_token",
+    "get_user_by_api_token",
+    "resolve_auth_context",
+    "verify_break_glass",
+    "get_break_glass_key",
+]

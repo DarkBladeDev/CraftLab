@@ -1,4 +1,5 @@
 import os
+import sys
 from pathlib import Path
 from typing import Optional
 from pydantic import BaseModel
@@ -24,6 +25,10 @@ class CtlPaths(BaseModel):
         ):
             d.mkdir(parents=True, exist_ok=True)
 
+    @property
+    def auth_db_path(self) -> Path:
+        return self.data_dir / "auth.db"
+
 
 def resolve_home(env_home: Optional[str] = None) -> Path:
     if env_home:
@@ -39,6 +44,14 @@ def resolve_home(env_home: Optional[str] = None) -> Path:
 
 def get_paths(home: Optional[Path] = None) -> CtlPaths:
     resolved_home = home or resolve_home()
+    if "pytest" not in sys.modules and "PYTEST_CURRENT_TEST" not in os.environ:
+        env_file = resolved_home / ".env"
+        if env_file.exists():
+            try:
+                from dotenv import load_dotenv
+                load_dotenv(env_file)
+            except ImportError:
+                pass
     paths = CtlPaths(
         home=resolved_home,
         config_dir=resolved_home / "config",

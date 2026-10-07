@@ -66,6 +66,50 @@ class CorePlugin(Plugin):
                 message=f"craftlab.toml syntax error: {e}",
             )
 
+    @check("auth.database")
+    def check_auth_database(self, ctx: Context) -> CheckResult:
+        auth_db = ctx.paths.auth_db_path
+        if not auth_db.exists():
+            return CheckResult(
+                check_id="auth.database",
+                status=CheckStatus.PASS,
+                message="data/auth.db does not exist yet (will auto-initialize on boot/login)",
+            )
+        try:
+            import sqlite3
+            with sqlite3.connect(str(auth_db), timeout=2.0) as conn:
+                cur = conn.execute("PRAGMA integrity_check")
+                row = cur.fetchone()
+                if row and row[0] == "ok":
+                    return CheckResult(
+                        check_id="auth.database",
+                        status=CheckStatus.PASS,
+                        message="data/auth.db SQLite integrity check passed",
+                    )
+                else:
+                    return CheckResult(
+                        check_id="auth.database",
+                        status=CheckStatus.WARN,
+                        message=f"data/auth.db integrity issue: {row}",
+                    )
+        except Exception as e:
+            return CheckResult(
+                check_id="auth.database",
+                status=CheckStatus.FAIL,
+                message=f"Error accessing data/auth.db: {e}",
+            )
+
+    @check("ctl.web_engine")
+    def check_web_engine(self, ctx: Context) -> CheckResult:
+        dist_dir = ctx.paths.home / "CraftLab-ctl" / "web" / "dist"
+        has_spa = dist_dir.exists() and (dist_dir / "index.html").exists()
+        spa_msg = "Web Admin Dashboard SPA bundle ready" if has_spa else "Web Admin Dashboard SPA bundle not built (run 'npm run build' in CraftLab-ctl/web)"
+        return CheckResult(
+            check_id="ctl.web_engine",
+            status=CheckStatus.PASS if has_spa else CheckStatus.WARN,
+            message=f"FastAPI/Uvicorn control server engine available; {spa_msg}",
+        )
+
     @command(name="doctor", runs_in="local", danger=DangerLevel.SAFE)
     async def doctor(self, ctx: Context) -> OperationResult:
         """Run system environmental diagnostics and checks."""
@@ -74,6 +118,8 @@ class CorePlugin(Plugin):
             self.check_directories(ctx).model_dump(),
             self.check_python(ctx).model_dump(),
             self.check_backend_config(ctx).model_dump(),
+            self.check_auth_database(ctx).model_dump(),
+            self.check_web_engine(ctx).model_dump(),
         ]
         has_fail = any(c["status"] == "FAIL" for c in checks_data)
         has_warn = any(c["status"] == "WARN" for c in checks_data)

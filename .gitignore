@@ -1,28 +1,37 @@
 minecraft-content-platform-spec-v1/
 
 # Python
+**/.venv/
 backend/.venv/
 **/__pycache__/
 *.pyc
 *.db
 backend/*.db
 
+# Environment & Secrets
+.env
+*.env
+.env.*
+!.env.example
+
 # Frontend
-frontend/node_modules/
-frontend/dist/
+**/node_modules/
+**/dist/
 
 # Gradle / Java
-paper-agent/.gradle/
-paper-agent/build/
+**/.gradle/
+**/gradle/
+**/build/
+**/gradlew
+**/gradlew.bat
+**/gradle-wrapper.jar
 
 # Local Dev Mock Storage
-backend/data/
-data/
+**/data/
 scripts/internal/*
 *.log
-backend/logs/
-logs/
-run/
+**/logs/
+**/run/
 state/
 *.egg-info/
-
+

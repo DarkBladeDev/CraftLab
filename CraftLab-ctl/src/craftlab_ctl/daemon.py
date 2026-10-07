@@ -1,4 +1,5 @@
 import sys
+import os
 import asyncio
 import signal
 from pathlib import Path
@@ -27,6 +28,8 @@ class DaemonService:
         self.lock = OperationLock()
         self.audit = AuditLogger(state_dir=self.paths.state_dir)
         self.server: Optional[LocalControlServer] = None
+        self.web_server: Optional[Any] = None
+        self.web_task: Optional[asyncio.Task] = None
         self._running = False
 
     def setup(self) -> None:
@@ -164,13 +167,46 @@ class DaemonService:
 
         yield {"event": "error", "error": f"Unknown daemon action '{action}'"}
 
-    async def start(self) -> None:
+    async def start(self, enable_web: Optional[bool] = None) -> None:
         self.setup()
         self.server = LocalControlServer(paths=self.paths, handler=self.handle_action)
         await self.server.start()
         self._running = True
 
+        should_web = enable_web if enable_web is not None else ("pytest" not in sys.modules)
+        if should_web:
+            try:
+                import uvicorn
+                from craftlab_ctl.server.app import create_control_app
+
+                host = os.getenv("CRAFTLAB_CTL_HOST", "127.0.0.1")
+                port = int(os.getenv("CRAFTLAB_CTL_PORT", "8443"))
+
+                self.web_app = create_control_app(daemon_service=self, paths=self.paths)
+                web_config = uvicorn.Config(
+                    app=self.web_app,
+                    host=host,
+                    port=port,
+                    log_level="info",
+                    access_log=False,
+                )
+                self.web_server = uvicorn.Server(web_config)
+                self.web_server.install_signal_handlers = lambda: None
+                self.web_task = asyncio.create_task(self.web_server.serve())
+            except Exception as e:
+                print(f"[warning] Failed to start craftctld web control plane: {e}", file=sys.stderr)
+
     async def stop(self) -> None:
+        if self.web_server:
+            self.web_server.should_exit = True
+            if self.web_task:
+                try:
+                    await asyncio.wait_for(self.web_task, timeout=2.0)
+                except (asyncio.TimeoutError, asyncio.CancelledError, Exception):
+                    pass
+                self.web_task = None
+            self.web_server = None
+
         if self.server:
             await self.server.stop()
             self._running = False
@@ -178,8 +214,10 @@ class DaemonService:
 
 async def run_daemon():
     daemon = DaemonService()
-    await daemon.start()
-    print("craftctld daemon started.")
+    await daemon.start(enable_web=True)
+    host = os.getenv("CRAFTLAB_CTL_HOST", "127.0.0.1")
+    port = int(os.getenv("CRAFTLAB_CTL_PORT", "8443"))
+    print(f"craftctld daemon started (Web Control Plane: http://{host}:{port})")
 
     stop_event = asyncio.Event()
 

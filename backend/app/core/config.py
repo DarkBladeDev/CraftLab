@@ -1,4 +1,5 @@
 import os
+import sys
 import tomllib
 from pathlib import Path
 from typing import List, Optional
@@ -9,6 +10,7 @@ class ServerSettings(BaseModel):
     host: str = "127.0.0.1"
     port: int = 8000
     cors_origins: List[str] = Field(default_factory=lambda: ["*"])
+    auth_enabled: bool = False
 
 
 class DatabaseSettings(BaseModel):
@@ -51,6 +53,15 @@ def resolve_home(env_home: Optional[str] = None) -> Path:
 
 def load_settings(home: Optional[Path] = None, config_file: Optional[Path] = None) -> Settings:
     resolved_home = home or resolve_home()
+    if "pytest" not in sys.modules and "PYTEST_CURRENT_TEST" not in os.environ:
+        env_file = resolved_home / ".env"
+        if env_file.exists():
+            try:
+                from dotenv import load_dotenv
+                load_dotenv(env_file)
+            except ImportError:
+                pass
+
     config_dir = resolved_home / "config"
     data_dir = resolved_home / "data"
     run_dir = resolved_home / "run"
@@ -85,6 +96,8 @@ def load_settings(home: Optional[Path] = None, config_file: Optional[Path] = Non
         server_data["host"] = os.getenv("CRAFTLAB_HOST")
     if os.getenv("CRAFTLAB_PORT"):
         server_data["port"] = int(os.getenv("CRAFTLAB_PORT"))
+    if os.getenv("CRAFTLAB_AUTH_ENABLED"):
+        server_data["auth_enabled"] = os.getenv("CRAFTLAB_AUTH_ENABLED").lower() in ("true", "1", "yes")
     if os.getenv("CRAFTLAB_DATABASE_URL"):
         database_data["url"] = os.getenv("CRAFTLAB_DATABASE_URL")
 
