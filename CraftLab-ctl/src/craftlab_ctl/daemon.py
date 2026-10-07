@@ -19,6 +19,7 @@ from craftlab_ctl.transport import LocalControlServer
 from craftlab_ctl.sdk import PluginRegistry, Context, VetoException
 from craftlab_ctl.plugins.lifecycle import LifecyclePlugin
 from craftlab_ctl.plugins.core import CorePlugin
+from craftlab_ctl.plugins.update import UpdatePlugin
 
 
 class DaemonService:
@@ -37,6 +38,7 @@ class DaemonService:
         # Register built-ins
         self.registry.register_plugin(LifecyclePlugin())
         self.registry.register_plugin(CorePlugin())
+        self.registry.register_plugin(UpdatePlugin())
         # Discover third-party plugins from entry points
         self.registry.discover_and_load()
 

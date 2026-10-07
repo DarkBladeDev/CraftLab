@@ -8,16 +8,63 @@ from typing import Dict, Any, Optional
 import click
 
 from craftlab_ctl.core.paths import get_paths
-from craftlab_ctl.core.models import CheckStatus
+from craftlab_ctl.core.models import CheckStatus, OperationResult
 from craftlab_ctl.transport import LocalControlClient, RemoteControlClient, TransportError
 from craftlab_ctl.plugins.lifecycle import LifecyclePlugin
 from craftlab_ctl.plugins.core import CorePlugin
-from craftlab_ctl.sdk import Context
+from craftlab_ctl.plugins.update import UpdatePlugin
+from craftlab_ctl.sdk import Context, PluginRegistry
 
 
 def get_client() -> LocalControlClient:
     paths = get_paths()
     return LocalControlClient(paths=paths)
+
+
+def format_command_output(command_name: str, data: Dict[str, Any]) -> None:
+    if not isinstance(data, dict):
+        return
+    if command_name == "status":
+        click.echo(json.dumps(data, indent=2))
+    elif command_name in ("releases", "update.releases"):
+        installed = data.get("installed_releases", [])
+        active = data.get("active_release")
+        maint = data.get("maintenance", {})
+        click.secho("\nInstalled Releases:", fg="cyan", bold=True)
+        if not installed:
+            click.echo("  (no packaged releases installed; running in repository/dev mode)")
+        else:
+            for r in installed:
+                is_active = (r == active) or (f"v{r}" == active) or (r == f"v{active}")
+                badge = click.style(" (active)", fg="green", bold=True) if is_active else ""
+                click.echo(f"  - {r}{badge}")
+        click.secho(f"\nActive release: {active or 'dev (workspace)'}", fg="green" if active else "yellow")
+        m_enabled = maint.get("enabled", False) if isinstance(maint, dict) else False
+        m_msg = maint.get("message", "") if isinstance(maint, dict) else ""
+        m_color = "red" if m_enabled else "green"
+        msg_extra = f" ({m_msg})" if m_msg else ""
+        click.secho(f"Maintenance mode: {'ENABLED' if m_enabled else 'DISABLED'}{msg_extra}\n", fg=m_color)
+    elif command_name in ("check", "update.check"):
+        curr = data.get("current_version", "unknown")
+        latest = data.get("latest_version")
+        avail = data.get("update_available", False)
+        click.echo(f"Current version: {curr}")
+        click.echo(f"Latest release:  {latest or 'None'}")
+        if avail:
+            click.secho(f"\n[!] A new version ({latest}) is available!", fg="yellow", bold=True)
+            if data.get("release_notes"):
+                click.echo(f"\nRelease notes:\n{data.get('release_notes')}\n")
+        else:
+            click.secho("\nCraftLab is up to date.\n", fg="green")
+    elif command_name in ("maintenance", "update.maintenance"):
+        if "enabled" in data:
+            st = "ENABLED" if data["enabled"] else "DISABLED"
+            color = "red" if data["enabled"] else "green"
+            click.secho(f"Maintenance status: {st}", fg=color, bold=True)
+            if data.get("message"):
+                click.echo(f"Message: {data['message']}")
+            if data.get("enabled_at"):
+                click.echo(f"Enabled at: {data['enabled_at']}")
 
 
 async def run_client_command(
@@ -36,7 +83,37 @@ async def run_client_command(
             elif command_name == "status":
                 res = await remote.get_status()
                 click.secho(f"[ok] Service status: {res.get('status')}", fg="green")
-                click.echo(json.dumps(res, indent=2))
+                format_command_output("status", res)
+                return 0
+            elif command_name in ("check", "update.check"):
+                res = await remote.check_updates(parameters.get("github_repo"))
+                click.secho(f"[ok] {res.get('message', 'Update check complete')}", fg="green")
+                format_command_output("check", res)
+                return 0
+            elif command_name in ("releases", "update.releases"):
+                res = await remote.get_releases()
+                click.secho("[ok] Releases fetched", fg="green")
+                format_command_output("releases", res)
+                return 0
+            elif command_name in ("prepare", "update.prepare"):
+                res = await remote.prepare_update(**parameters)
+                click.secho(f"[ok] {res.get('message', 'Release prepared')}", fg="green")
+                return 0 if res.get("success") else 1
+            elif command_name in ("apply", "update.apply"):
+                res = await remote.apply_update(**parameters)
+                click.secho(f"[ok] {res.get('message', 'Release applied')}", fg="green")
+                return 0 if res.get("success") else 1
+            elif command_name in ("rollback", "update.rollback"):
+                res = await remote.rollback(**parameters)
+                click.secho(f"[ok] {res.get('message', 'Rollback complete')}", fg="green")
+                return 0 if res.get("success") else 1
+            elif command_name in ("maintenance", "update.maintenance"):
+                if parameters.get("enable") is not None:
+                    res = await remote.set_maintenance(enable=parameters.get("enable"), message=parameters.get("message", ""))
+                else:
+                    res = await remote.get_maintenance()
+                click.secho(f"[ok] {res.get('message', 'Maintenance updated')}", fg="green")
+                format_command_output("maintenance", res.get("data", res))
                 return 0
         except Exception as e:
             click.secho(f"[error] Remote execution error: {e}", fg="red")
@@ -49,9 +126,13 @@ async def run_client_command(
         # Fallback to direct execution for seamless dev experience
         click.secho("[info] craftctld daemon is not running; executing locally...", fg="yellow")
         ctx = Context(paths=paths)
-        lifecycle = LifecyclePlugin()
-        func = getattr(lifecycle, command_name, None)
-        if not func:
+        registry = PluginRegistry()
+        registry.register_plugin(LifecyclePlugin())
+        registry.register_plugin(CorePlugin())
+        registry.register_plugin(UpdatePlugin())
+
+        cmd_def = registry.get_command(command_name)
+        if not cmd_def:
             click.secho(f"Error: Command '{command_name}' not available locally without daemon.", fg="red")
             return 1
 
@@ -59,11 +140,14 @@ async def run_client_command(
             click.secho(f"  -> [{step_evt.status}] {step_evt.step}", fg="cyan")
 
         ctx._step_callback = step_cb
-        res = await func(ctx, **parameters)
+        res = await cmd_def.func(ctx, **parameters)
+        if not isinstance(res, OperationResult):
+            res = OperationResult.ok(data=res)
+
         if res.success:
-            click.secho(f"[ok] {res.data.get('message', 'Success')}", fg="green")
-            if command_name == "status":
-                click.echo(json.dumps(res.data, indent=2))
+            msg = res.message or (res.data.get("message", "Success") if isinstance(res.data, dict) else "Success")
+            click.secho(f"[ok] {msg}", fg="green")
+            format_command_output(command_name, res.data if isinstance(res.data, dict) else {})
             return 0
         else:
             click.secho(f"[error] {res.error}", fg="red")
@@ -83,10 +167,10 @@ async def run_client_command(
             elif evt_type == "result":
                 res_data = event.get("data", {})
                 if res_data.get("success"):
-                    msg = res_data.get("data", {}).get("message", "Operation completed successfully.")
+                    inner_data = res_data.get("data", {})
+                    msg = res_data.get("message") or (inner_data.get("message", "Operation completed successfully.") if isinstance(inner_data, dict) else "Operation completed successfully.")
                     click.secho(f"[ok] {msg}", fg="green")
-                    if command_name == "status":
-                        click.echo(json.dumps(res_data.get("data", {}), indent=2))
+                    format_command_output(command_name, inner_data if isinstance(inner_data, dict) else {})
                 else:
                     err = res_data.get("error", "Operation failed.")
                     click.secho(f"[error] {err}", fg="red")
@@ -284,6 +368,162 @@ def daemon_status():
         click.secho("craftctld daemon is running.", fg="green")
     else:
         click.secho("craftctld daemon is stopped.", fg="yellow")
+
+
+class UpdateGroup(click.Group):
+    def get_command(self, ctx, cmd_name):
+        rv = click.Group.get_command(self, ctx, cmd_name)
+        if rv is not None:
+            return rv
+        run_cmd = click.Group.get_command(self, ctx, "run")
+        if run_cmd:
+            ctx.args = [cmd_name] + ctx.args
+            return run_cmd
+        return None
+
+
+@cli.group(cls=UpdateGroup)
+def update():
+    """Manage application updates and release lifecycle."""
+    pass
+
+
+@update.command(name="check")
+@click.option("--repo", default="DarkBladeDev/CraftLab", help="GitHub repository (owner/repo)")
+@click.pass_context
+def update_check(ctx, repo: str):
+    """Check for newer releases published on GitHub."""
+    server = ctx.obj.get("server") if ctx.obj else None
+    token = ctx.obj.get("token") if ctx.obj else None
+    sys.exit(asyncio.run(run_client_command("check", {"github_repo": repo}, server=server, token=token)))
+
+
+@update.command(name="prepare")
+@click.argument("version")
+@click.option("--repo", default="DarkBladeDev/CraftLab", help="GitHub repository (owner/repo)")
+@click.option("--file", "local_file", default=None, help="Local release tar.gz archive")
+@click.pass_context
+def update_prepare(ctx, version: str, repo: str, local_file: Optional[str]):
+    """Download, verify, and stage release environment without downtime."""
+    server = ctx.obj.get("server") if ctx.obj else None
+    token = ctx.obj.get("token") if ctx.obj else None
+    sys.exit(asyncio.run(run_client_command("prepare", {"version": version, "github_repo": repo, "local_file": local_file}, server=server, token=token)))
+
+
+@update.command(name="apply")
+@click.argument("version")
+@click.option("--yes", "-y", is_flag=True, help="Skip confirmation prompt")
+@click.option("--timeout", default=15, type=int, help="Readiness timeout in seconds")
+@click.option("--host", default="127.0.0.1", help="Host interface to bind")
+@click.option("--port", default=8000, type=int, help="Port to listen on")
+@click.pass_context
+def update_apply(ctx, version: str, yes: bool, timeout: int, host: str, port: int):
+    """Atomically activate prepared release with automated rollback."""
+    server = ctx.obj.get("server") if ctx.obj else None
+    token = ctx.obj.get("token") if ctx.obj else None
+    if not yes:
+        click.confirm(f"Applying release '{version}' will restart backend service. Proceed?", abort=True)
+    sys.exit(asyncio.run(run_client_command("apply", {"version": version, "timeout": timeout, "host": host, "port": port}, server=server, token=token)))
+
+
+@update.command(name="run")
+@click.argument("version")
+@click.option("--repo", default="DarkBladeDev/CraftLab", help="GitHub repository (owner/repo)")
+@click.option("--file", "local_file", default=None, help="Local release archive")
+@click.option("--yes", "-y", is_flag=True, help="Skip confirmation prompt")
+@click.option("--timeout", default=15, type=int, help="Readiness timeout in seconds")
+@click.option("--host", default="127.0.0.1", help="Host interface to bind")
+@click.option("--port", default=8000, type=int, help="Port to listen on")
+@click.pass_context
+def update_run(ctx, version: str, repo: str, local_file: Optional[str], yes: bool, timeout: int, host: str, port: int):
+    """Update CraftLab to <version> (runs prepare and apply in sequence)."""
+    server = ctx.obj.get("server") if ctx.obj else None
+    token = ctx.obj.get("token") if ctx.obj else None
+    if not yes:
+        click.confirm(f"Are you sure you want to update CraftLab to release '{version}'?", abort=True)
+    click.secho(f"[*] Phase 1/2: Preparing release '{version}'...", fg="cyan", bold=True)
+    prep_code = asyncio.run(run_client_command(
+        "prepare",
+        {"version": version, "github_repo": repo, "local_file": local_file},
+        server=server,
+        token=token,
+    ))
+    if prep_code != 0:
+        click.secho("[error] Preparation failed. Aborting update.", fg="red")
+        sys.exit(prep_code)
+    click.secho(f"\n[*] Phase 2/2: Applying release '{version}'...", fg="cyan", bold=True)
+    apply_code = asyncio.run(run_client_command(
+        "apply",
+        {"version": version, "timeout": timeout, "host": host, "port": port},
+        server=server,
+        token=token,
+    ))
+    sys.exit(apply_code)
+
+
+@cli.command()
+@click.argument("version", required=False, default=None)
+@click.option("--yes", "-y", is_flag=True, help="Skip confirmation prompt")
+@click.option("--timeout", default=15, type=int, help="Readiness timeout in seconds")
+@click.option("--host", default="127.0.0.1", help="Host interface to bind")
+@click.option("--port", default=8000, type=int, help="Port to listen on")
+@click.pass_context
+def rollback(ctx, version: Optional[str], yes: bool, timeout: int, host: str, port: int):
+    """Roll back to a previously installed release version."""
+    server = ctx.obj.get("server") if ctx.obj else None
+    token = ctx.obj.get("token") if ctx.obj else None
+    target_desc = f"release '{version}'" if version else "previous installed release"
+    if not yes:
+        click.confirm(f"Rollback to {target_desc} will restart backend service. Proceed?", abort=True)
+    sys.exit(asyncio.run(run_client_command("rollback", {"target_version": version, "timeout": timeout, "host": host, "port": port}, server=server, token=token)))
+
+
+@cli.command()
+@click.pass_context
+def releases(ctx):
+    """List all locally installed releases and active release pointer."""
+    server = ctx.obj.get("server") if ctx.obj else None
+    token = ctx.obj.get("token") if ctx.obj else None
+    sys.exit(asyncio.run(run_client_command("releases", {}, server=server, token=token)))
+
+
+@cli.group(invoke_without_command=True)
+@click.option("--message", "-m", default="", help="Maintenance message description")
+@click.pass_context
+def maintenance(ctx, message: str):
+    """Inspect or toggle application maintenance mode."""
+    server = ctx.obj.get("server") if ctx.obj else None
+    token = ctx.obj.get("token") if ctx.obj else None
+    if ctx.invoked_subcommand is None:
+        sys.exit(asyncio.run(run_client_command("maintenance", {}, server=server, token=token)))
+
+
+@maintenance.command(name="enable")
+@click.option("--message", "-m", default="Manual maintenance enabled", help="Reason for maintenance")
+@click.pass_context
+def maintenance_enable(ctx, message: str):
+    """Enable application maintenance mode."""
+    server = ctx.obj.get("server") if ctx.obj else None
+    token = ctx.obj.get("token") if ctx.obj else None
+    sys.exit(asyncio.run(run_client_command("maintenance", {"enable": True, "message": message}, server=server, token=token)))
+
+
+@maintenance.command(name="disable")
+@click.pass_context
+def maintenance_disable(ctx):
+    """Disable application maintenance mode."""
+    server = ctx.obj.get("server") if ctx.obj else None
+    token = ctx.obj.get("token") if ctx.obj else None
+    sys.exit(asyncio.run(run_client_command("maintenance", {"enable": False}, server=server, token=token)))
+
+
+@maintenance.command(name="status")
+@click.pass_context
+def maintenance_status(ctx):
+    """Show current maintenance mode status."""
+    server = ctx.obj.get("server") if ctx.obj else None
+    token = ctx.obj.get("token") if ctx.obj else None
+    sys.exit(asyncio.run(run_client_command("maintenance", {}, server=server, token=token)))
 
 
 @cli.group()

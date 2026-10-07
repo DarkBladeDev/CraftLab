@@ -1,5 +1,13 @@
 import React, { useState, useEffect, useRef } from "react";
-import { api, UserContext, ServiceStatus, SystemMetrics, DoctorResult } from "../api";
+import {
+  api,
+  UserContext,
+  ServiceStatus,
+  SystemMetrics,
+  DoctorResult,
+  ReleasesInfo,
+  UpdateCheckResult,
+} from "../api";
 
 interface DashboardProps {
   user: UserContext;
@@ -10,6 +18,10 @@ export const Dashboard: React.FC<DashboardProps> = ({ user, onLogout }) => {
   const [status, setStatus] = useState<ServiceStatus | null>(null);
   const [metrics, setMetrics] = useState<SystemMetrics | null>(null);
   const [doctor, setDoctor] = useState<DoctorResult | null>(null);
+  const [releasesInfo, setReleasesInfo] = useState<ReleasesInfo | null>(null);
+  const [updateCheck, setUpdateCheck] = useState<UpdateCheckResult | null>(null);
+  const [targetVersion, setTargetVersion] = useState<string>("");
+  const [selectedRollback, setSelectedRollback] = useState<string>("");
   const [logs, setLogs] = useState<string[]>([]);
   const [autoScroll, setAutoScroll] = useState(true);
   const [actionLoading, setActionLoading] = useState<string | null>(null);
@@ -20,12 +32,17 @@ export const Dashboard: React.FC<DashboardProps> = ({ user, onLogout }) => {
 
   const isAdminOrOperator = user.is_break_glass || user.roles.includes("admin") || user.roles.includes("operator");
 
-  // Fetch status & metrics
+  // Fetch status, metrics & releases
   const refreshData = async () => {
     try {
-      const [s, m] = await Promise.all([api.getStatus(), api.getMetrics()]);
+      const [s, m, r] = await Promise.all([
+        api.getStatus(),
+        api.getMetrics(),
+        api.getReleases().catch(() => null),
+      ]);
       setStatus(s);
       setMetrics(m);
+      if (r) setReleasesInfo(r);
     } catch (err: any) {
       console.error("Failed to refresh status/metrics:", err);
     }
@@ -88,6 +105,105 @@ export const Dashboard: React.FC<DashboardProps> = ({ user, onLogout }) => {
       setActionLoading(null);
     }
   };
+
+  const handleCheckUpdates = async () => {
+    setActionLoading("check_updates");
+    setMessage(null);
+    try {
+      const res = await api.checkUpdates();
+      setUpdateCheck(res);
+      setMessage({
+        text: res.update_available
+          ? `New version ${res.latest_version} is available!`
+          : `CraftLab is up to date (${res.current_version})`,
+        type: "ok",
+      });
+    } catch (err: any) {
+      setMessage({ text: err.message || "Failed to check for updates", type: "err" });
+    } finally {
+      setActionLoading(null);
+    }
+  };
+
+  const handlePrepareUpdate = async (ver: string) => {
+    if (!ver) return;
+    setActionLoading("prepare_update");
+    setMessage(null);
+    try {
+      const res = await api.prepareUpdate(ver);
+      if (res.success) {
+        setMessage({ text: res.message || `Release ${ver} prepared successfully!`, type: "ok" });
+        await refreshData();
+      } else {
+        setMessage({ text: res.error || `Failed to prepare release ${ver}`, type: "err" });
+      }
+    } catch (err: any) {
+      setMessage({ text: err.message || `Failed to prepare release ${ver}`, type: "err" });
+    } finally {
+      setActionLoading(null);
+    }
+  };
+
+  const handleApplyUpdate = async (ver: string) => {
+    if (!ver) return;
+    if (!window.confirm(`Applying release ${ver} will restart the backend service. Proceed?`)) {
+      return;
+    }
+    setActionLoading("apply_update");
+    setMessage(null);
+    try {
+      const res = await api.applyUpdate(ver);
+      if (res.success) {
+        setMessage({ text: res.message || `Release ${ver} applied successfully!`, type: "ok" });
+        await refreshData();
+      } else {
+        setMessage({ text: res.error || `Failed to apply release ${ver}`, type: "err" });
+      }
+    } catch (err: any) {
+      setMessage({ text: err.message || `Failed to apply release ${ver}`, type: "err" });
+    } finally {
+      setActionLoading(null);
+    }
+  };
+
+  const handleRollback = async (ver?: string) => {
+    const targetDesc = ver || "previous release";
+    if (!window.confirm(`Roll back to ${targetDesc}? This will restart the backend service.`)) {
+      return;
+    }
+    setActionLoading("rollback");
+    setMessage(null);
+    try {
+      const res = await api.rollbackUpdate(ver);
+      if (res.success) {
+        setMessage({ text: res.message || `Successfully rolled back to ${targetDesc}!`, type: "ok" });
+        await refreshData();
+      } else {
+        setMessage({ text: res.error || "Rollback failed", type: "err" });
+      }
+    } catch (err: any) {
+      setMessage({ text: err.message || "Rollback failed", type: "err" });
+    } finally {
+      setActionLoading(null);
+    }
+  };
+
+  const handleToggleMaintenance = async () => {
+    if (!releasesInfo) return;
+    const nextState = !releasesInfo.maintenance.enabled;
+    setActionLoading("maintenance");
+    setMessage(null);
+    try {
+      const res = await api.setMaintenance(nextState, nextState ? "Manual maintenance from web panel" : "");
+      setMessage({ text: res.message || `Maintenance mode ${nextState ? "enabled" : "disabled"}`, type: "ok" });
+      await refreshData();
+    } catch (err: any) {
+      setMessage({ text: err.message || "Failed to toggle maintenance mode", type: "err" });
+    } finally {
+      setActionLoading(null);
+    }
+  };
+
 
   return (
     <div style={{ minHeight: "100vh", backgroundColor: "#0b0f19", color: "#f8fafc", padding: "1.5rem" }}>
@@ -338,6 +454,265 @@ export const Dashboard: React.FC<DashboardProps> = ({ user, onLogout }) => {
           ) : (
             <div style={{ fontSize: "0.8125rem", color: "#64748b" }}>
               Click "Run Checks" to execute environment and database health checks.
+            </div>
+          )}
+        </div>
+
+        {/* Releases & Application Updates Card */}
+        <div style={{
+          backgroundColor: "#131b2e",
+          border: "1px solid #1e293b",
+          borderRadius: "10px",
+          padding: "1.25rem"
+        }}>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "1rem" }}>
+            <h2 style={{ fontSize: "1rem", fontWeight: "600", margin: 0, color: "#cbd5e1" }}>
+              Releases & Updates
+            </h2>
+            <button
+              onClick={handleCheckUpdates}
+              disabled={actionLoading !== null}
+              style={{
+                backgroundColor: "#2563eb",
+                border: "none",
+                borderRadius: "6px",
+                color: "white",
+                padding: "0.3rem 0.6rem",
+                fontSize: "0.75rem",
+                fontWeight: "600",
+                cursor: "pointer"
+              }}
+            >
+              {actionLoading === "check_updates" ? "Checking..." : "Check Updates"}
+            </button>
+          </div>
+
+          {/* Active pointer & Maintenance status */}
+          <div style={{ display: "flex", flexDirection: "column", gap: "0.5rem", marginBottom: "1rem", fontSize: "0.8125rem" }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+              <span style={{ color: "#94a3b8" }}>Active Release:</span>
+              <span style={{
+                backgroundColor: releasesInfo?.active_release ? "#1e3a5f" : "#1e293b",
+                color: releasesInfo?.active_release ? "#38bdf8" : "#94a3b8",
+                padding: "0.2rem 0.5rem",
+                borderRadius: "4px",
+                fontWeight: "bold"
+              }}>
+                {releasesInfo?.active_release || "dev (workspace)"}
+              </span>
+            </div>
+
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+              <span style={{ color: "#94a3b8" }}>Maintenance Mode:</span>
+              <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
+                <span style={{
+                  color: releasesInfo?.maintenance?.enabled ? "#f87171" : "#4ade80",
+                  fontWeight: "600"
+                }}>
+                  ● {releasesInfo?.maintenance?.enabled ? "ACTIVE" : "OFF"}
+                </span>
+                {isAdminOrOperator && (
+                  <button
+                    onClick={handleToggleMaintenance}
+                    disabled={actionLoading !== null}
+                    style={{
+                      backgroundColor: "#334155",
+                      border: "none",
+                      borderRadius: "4px",
+                      color: "#cbd5e1",
+                      fontSize: "0.6875rem",
+                      padding: "0.15rem 0.4rem",
+                      cursor: "pointer"
+                    }}
+                  >
+                    {releasesInfo?.maintenance?.enabled ? "Disable" : "Enable"}
+                  </button>
+                )}
+              </div>
+            </div>
+          </div>
+
+          {/* GitHub Update Check Result */}
+          {updateCheck && (
+            <div style={{
+              backgroundColor: updateCheck.update_available ? "rgba(37, 99, 235, 0.15)" : "#0f172a",
+              border: `1px solid ${updateCheck.update_available ? "#3b82f6" : "#1e293b"}`,
+              borderRadius: "6px",
+              padding: "0.6rem 0.75rem",
+              marginBottom: "1rem",
+              fontSize: "0.75rem"
+            }}>
+              <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "0.25rem" }}>
+                <span style={{ color: "#94a3b8" }}>Latest on GitHub:</span>
+                <span style={{ fontWeight: "bold", color: "#38bdf8" }}>{updateCheck.latest_version || "None"}</span>
+              </div>
+              {updateCheck.update_available ? (
+                <div style={{ marginTop: "0.5rem", display: "flex", gap: "0.5rem" }}>
+                  <button
+                    disabled={!isAdminOrOperator || actionLoading !== null}
+                    onClick={() => handlePrepareUpdate(updateCheck.latest_version!)}
+                    style={{
+                      flex: 1,
+                      backgroundColor: "#334155",
+                      border: "none",
+                      borderRadius: "4px",
+                      color: "white",
+                      padding: "0.35rem",
+                      fontSize: "0.75rem",
+                      cursor: "pointer"
+                    }}
+                  >
+                    {actionLoading === "prepare_update" ? "Staging..." : "1. Prepare"}
+                  </button>
+                  <button
+                    disabled={!isAdminOrOperator || actionLoading !== null}
+                    onClick={() => handleApplyUpdate(updateCheck.latest_version!)}
+                    style={{
+                      flex: 1,
+                      backgroundColor: "#16a34a",
+                      border: "none",
+                      borderRadius: "4px",
+                      color: "white",
+                      fontWeight: "600",
+                      padding: "0.35rem",
+                      fontSize: "0.75rem",
+                      cursor: "pointer"
+                    }}
+                  >
+                    {actionLoading === "apply_update" ? "Applying..." : "2. Apply Update"}
+                  </button>
+                </div>
+              ) : (
+                <div style={{ color: "#4ade80", fontSize: "0.6875rem", marginTop: "0.25rem" }}>
+                  System is running the latest available version.
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Installed Releases List */}
+          <div style={{ marginBottom: "1rem" }}>
+            <span style={{ fontSize: "0.75rem", color: "#94a3b8", display: "block", marginBottom: "0.35rem" }}>
+              Installed Releases ({releasesInfo?.installed_releases?.length || 0}):
+            </span>
+            <div style={{ display: "flex", flexWrap: "wrap", gap: "0.35rem" }}>
+              {releasesInfo?.installed_releases && releasesInfo.installed_releases.length > 0 ? (
+                releasesInfo.installed_releases.map((rel) => {
+                  const isActive = rel === releasesInfo.active_release || `v${rel}` === releasesInfo.active_release || rel === `v${releasesInfo.active_release}`;
+                  return (
+                    <span
+                      key={rel}
+                      style={{
+                        fontSize: "0.6875rem",
+                        padding: "0.2rem 0.4rem",
+                        borderRadius: "4px",
+                        backgroundColor: isActive ? "#166534" : "#1e293b",
+                        color: isActive ? "#bbf7d0" : "#94a3b8",
+                        fontWeight: isActive ? "bold" : "normal"
+                      }}
+                    >
+                      {rel} {isActive && "★"}
+                    </span>
+                  );
+                })
+              ) : (
+                <span style={{ fontSize: "0.6875rem", color: "#64748b", fontStyle: "italic" }}>
+                  No standalone releases installed yet.
+                </span>
+              )}
+            </div>
+          </div>
+
+          {/* Manual Version Actions */}
+          {isAdminOrOperator && (
+            <div style={{ borderTop: "1px solid #1e293b", paddingTop: "0.75rem", fontSize: "0.75rem" }}>
+              <div style={{ display: "flex", gap: "0.4rem", marginBottom: "0.5rem" }}>
+                <input
+                  type="text"
+                  placeholder="Target version (e.g. 0.2.0)"
+                  value={targetVersion}
+                  onChange={(e) => setTargetVersion(e.target.value)}
+                  style={{
+                    flex: 1,
+                    backgroundColor: "#0f172a",
+                    border: "1px solid #334155",
+                    borderRadius: "4px",
+                    color: "white",
+                    padding: "0.3rem 0.5rem",
+                    fontSize: "0.75rem"
+                  }}
+                />
+                <button
+                  disabled={!targetVersion || actionLoading !== null}
+                  onClick={() => handlePrepareUpdate(targetVersion)}
+                  style={{
+                    backgroundColor: "#334155",
+                    border: "none",
+                    borderRadius: "4px",
+                    color: "white",
+                    padding: "0.3rem 0.5rem",
+                    cursor: targetVersion ? "pointer" : "not-allowed"
+                  }}
+                >
+                  Prepare
+                </button>
+                <button
+                  disabled={!targetVersion || actionLoading !== null}
+                  onClick={() => handleApplyUpdate(targetVersion)}
+                  style={{
+                    backgroundColor: "#2563eb",
+                    border: "none",
+                    borderRadius: "4px",
+                    color: "white",
+                    fontWeight: "600",
+                    padding: "0.3rem 0.5rem",
+                    cursor: targetVersion ? "pointer" : "not-allowed"
+                  }}
+                >
+                  Apply
+                </button>
+              </div>
+
+              {/* Rollback Control */}
+              {releasesInfo && releasesInfo.installed_releases && releasesInfo.installed_releases.length > 1 && (
+                <div style={{ display: "flex", gap: "0.4rem", alignItems: "center", marginTop: "0.5rem" }}>
+                  <select
+                    value={selectedRollback}
+                    onChange={(e) => setSelectedRollback(e.target.value)}
+                    style={{
+                      flex: 1,
+                      backgroundColor: "#0f172a",
+                      border: "1px solid #334155",
+                      borderRadius: "4px",
+                      color: "white",
+                      padding: "0.3rem 0.5rem",
+                      fontSize: "0.75rem"
+                    }}
+                  >
+                    <option value="">Select prior release to rollback...</option>
+                    {releasesInfo.installed_releases
+                      .filter((r) => r !== releasesInfo.active_release && `v${r}` !== releasesInfo.active_release)
+                      .map((r) => (
+                        <option key={r} value={r}>{r}</option>
+                      ))}
+                  </select>
+                  <button
+                    disabled={actionLoading !== null}
+                    onClick={() => handleRollback(selectedRollback || undefined)}
+                    style={{
+                      backgroundColor: "#dc2626",
+                      border: "none",
+                      borderRadius: "4px",
+                      color: "white",
+                      fontWeight: "600",
+                      padding: "0.3rem 0.6rem",
+                      cursor: "pointer"
+                    }}
+                  >
+                    Rollback
+                  </button>
+                </div>
+              )}
             </div>
           )}
         </div>

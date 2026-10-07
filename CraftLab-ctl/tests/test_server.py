@@ -226,3 +226,54 @@ def test_static_spa_serving(temp_ctl_paths: CtlPaths):
     fallback_resp = client.get("/dashboard/lifecycle")
     assert fallback_resp.status_code == 200
     assert "Root SPA" in fallback_resp.text
+
+
+def test_update_endpoints(test_setup):
+    client = test_setup["client"]
+
+    # Unauthenticated rejected
+    assert client.get("/api/v1/update/releases").status_code == 401
+    assert client.get("/api/v1/update/maintenance").status_code == 401
+    assert client.post("/api/v1/update/prepare", json={"version": "1.0.0"}).status_code == 401
+
+    # Login as creator (non-admin/non-operator)
+    client.post(
+        "/api/v1/auth/login",
+        json={"username": "creator_user", "password": "CreatorPassword123!"},
+    )
+    # Creator can read releases
+    rel_resp = client.get("/api/v1/update/releases")
+    assert rel_resp.status_code == 200
+    assert "installed_releases" in rel_resp.json()
+
+    # Creator cannot trigger mutating prepare or maintenance
+    assert client.post("/api/v1/update/prepare", json={"version": "1.0.0"}).status_code == 403
+    assert client.post("/api/v1/update/maintenance", json={"enable": True}).status_code == 403
+
+    # Login as admin
+    client.post(
+        "/api/v1/auth/login",
+        json={"username": "admin_user", "password": "AdminPassword123!"},
+    )
+
+    # Admin maintenance control
+    maint_get = client.get("/api/v1/update/maintenance")
+    assert maint_get.status_code == 200
+    assert not maint_get.json()["enabled"]
+
+    maint_set = client.post(
+        "/api/v1/update/maintenance",
+        json={"enable": True, "message": "Upgrading system"},
+    )
+    assert maint_set.status_code == 200
+    assert maint_set.json()["success"]
+
+    maint_check = client.get("/api/v1/update/maintenance")
+    assert maint_check.status_code == 200
+    assert maint_check.json()["enabled"]
+    assert maint_check.json()["message"] == "Upgrading system"
+
+    # Disable maintenance
+    client.post("/api/v1/update/maintenance", json={"enable": False})
+    assert not client.get("/api/v1/update/maintenance").json()["enabled"]
+

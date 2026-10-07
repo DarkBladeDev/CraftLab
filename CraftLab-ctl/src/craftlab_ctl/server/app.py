@@ -3,10 +3,37 @@ import json
 import asyncio
 from pathlib import Path
 from typing import Dict, Any, Optional, List, Callable
+from pydantic import BaseModel
 from fastapi import FastAPI, Depends, HTTPException, Request, Response, WebSocket, WebSocketDisconnect, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, FileResponse
 from fastapi.staticfiles import StaticFiles
+
+
+class PrepareRequest(BaseModel):
+    version: str
+    github_repo: Optional[str] = "DarkBladeDev/CraftLab"
+    local_file: Optional[str] = None
+
+
+class ApplyRequest(BaseModel):
+    version: str
+    timeout: int = 15
+    host: str = "127.0.0.1"
+    port: int = 8000
+
+
+class RollbackRequest(BaseModel):
+    target_version: Optional[str] = None
+    timeout: int = 15
+    host: str = "127.0.0.1"
+    port: int = 8000
+
+
+class MaintenanceRequest(BaseModel):
+    enable: Optional[bool] = None
+    message: str = ""
+
 
 from craftlab_ctl.core.paths import CtlPaths, get_paths
 from craftlab_ctl.core.models import OperationResult, CheckStatus, AuditEvent
@@ -251,6 +278,190 @@ def create_control_app(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                 detail=str(e),
             )
+
+    # --- Update & Release Routes ---
+    @app.get("/api/v1/update/releases")
+    async def get_releases(auth: AuthContext = Depends(require_auth)):
+        cmd_def = daemon_service.registry.get_command("update.releases") or daemon_service.registry.get_command("releases")
+        if not cmd_def:
+            raise HTTPException(status_code=500, detail="Releases command not available")
+        ctx = Context(paths=ctl_paths, caller_id=f"web:{auth.username}")
+        res = await cmd_def.func(ctx)
+        return res.data if hasattr(res, "data") else res
+
+    @app.get("/api/v1/update/check")
+    async def check_updates(
+        repo: Optional[str] = None,
+        auth: AuthContext = Depends(require_auth),
+    ):
+        cmd_def = daemon_service.registry.get_command("update.check") or daemon_service.registry.get_command("check")
+        if not cmd_def:
+            raise HTTPException(status_code=500, detail="Update check command not available")
+        ctx = Context(paths=ctl_paths, caller_id=f"web:{auth.username}")
+        params = {"github_repo": repo} if repo else {}
+        res = await cmd_def.func(ctx, **params)
+        return res.data if hasattr(res, "data") else res
+
+    @app.post("/api/v1/update/prepare")
+    async def prepare_update(
+        req: PrepareRequest,
+        auth: AuthContext = Depends(require_roles(Role.ADMIN.value, Role.OPERATOR.value)),
+    ):
+        cmd_def = daemon_service.registry.get_command("update.prepare") or daemon_service.registry.get_command("prepare")
+        if not cmd_def:
+            raise HTTPException(status_code=500, detail="Update prepare command not available")
+        steps = []
+        async def step_cb(step_evt):
+            steps.append(step_evt.model_dump())
+        ctx = Context(paths=ctl_paths, caller_id=f"web:{auth.username}", step_callback=step_cb)
+        await daemon_service.lock.acquire("update.prepare")
+        try:
+            params = {"version": req.version}
+            if req.github_repo:
+                params["github_repo"] = req.github_repo
+            if req.local_file:
+                params["local_file"] = req.local_file
+            res = await cmd_def.func(ctx, **params)
+            outcome = "success" if res.success else "failed"
+            daemon_service.audit.log(
+                AuditEvent(
+                    caller_id=ctx.caller_id,
+                    command="update.prepare",
+                    parameters={"version": req.version},
+                    outcome=outcome,
+                    error=res.error,
+                )
+            )
+            return {
+                "success": res.success,
+                "message": res.message,
+                "error": res.error,
+                "data": res.data,
+                "steps": steps,
+            }
+        finally:
+            daemon_service.lock.release()
+
+    @app.post("/api/v1/update/apply")
+    async def apply_update(
+        req: ApplyRequest,
+        auth: AuthContext = Depends(require_roles(Role.ADMIN.value, Role.OPERATOR.value)),
+    ):
+        cmd_def = daemon_service.registry.get_command("update.apply") or daemon_service.registry.get_command("apply")
+        if not cmd_def:
+            raise HTTPException(status_code=500, detail="Update apply command not available")
+        steps = []
+        async def step_cb(step_evt):
+            steps.append(step_evt.model_dump())
+        ctx = Context(paths=ctl_paths, caller_id=f"web:{auth.username}", step_callback=step_cb)
+        await daemon_service.lock.acquire("update.apply")
+        try:
+            params = {
+                "version": req.version,
+                "timeout": req.timeout,
+                "host": req.host,
+                "port": req.port,
+            }
+            res = await cmd_def.func(ctx, **params)
+            outcome = "success" if res.success else "failed"
+            daemon_service.audit.log(
+                AuditEvent(
+                    caller_id=ctx.caller_id,
+                    command="update.apply",
+                    parameters={"version": req.version},
+                    outcome=outcome,
+                    error=res.error,
+                )
+            )
+            return {
+                "success": res.success,
+                "message": res.message,
+                "error": res.error,
+                "data": res.data,
+                "steps": steps,
+            }
+        finally:
+            daemon_service.lock.release()
+
+    @app.post("/api/v1/update/rollback")
+    async def rollback_update(
+        req: RollbackRequest,
+        auth: AuthContext = Depends(require_roles(Role.ADMIN.value, Role.OPERATOR.value)),
+    ):
+        cmd_def = daemon_service.registry.get_command("update.rollback") or daemon_service.registry.get_command("rollback")
+        if not cmd_def:
+            raise HTTPException(status_code=500, detail="Rollback command not available")
+        steps = []
+        async def step_cb(step_evt):
+            steps.append(step_evt.model_dump())
+        ctx = Context(paths=ctl_paths, caller_id=f"web:{auth.username}", step_callback=step_cb)
+        await daemon_service.lock.acquire("update.rollback")
+        try:
+            params = {
+                "target_version": req.target_version,
+                "timeout": req.timeout,
+                "host": req.host,
+                "port": req.port,
+            }
+            res = await cmd_def.func(ctx, **params)
+            outcome = "success" if res.success else "failed"
+            daemon_service.audit.log(
+                AuditEvent(
+                    caller_id=ctx.caller_id,
+                    command="update.rollback",
+                    parameters={"target_version": req.target_version},
+                    outcome=outcome,
+                    error=res.error,
+                )
+            )
+            return {
+                "success": res.success,
+                "message": res.message,
+                "error": res.error,
+                "data": res.data,
+                "steps": steps,
+            }
+        finally:
+            daemon_service.lock.release()
+
+    @app.get("/api/v1/update/maintenance")
+    async def get_maintenance(auth: AuthContext = Depends(require_auth)):
+        cmd_def = daemon_service.registry.get_command("update.maintenance") or daemon_service.registry.get_command("maintenance")
+        if not cmd_def:
+            raise HTTPException(status_code=500, detail="Maintenance command not available")
+        ctx = Context(paths=ctl_paths, caller_id=f"web:{auth.username}")
+        res = await cmd_def.func(ctx)
+        return res.data if hasattr(res, "data") else res
+
+    @app.post("/api/v1/update/maintenance")
+    async def set_maintenance_mode(
+        req: MaintenanceRequest,
+        auth: AuthContext = Depends(require_roles(Role.ADMIN.value, Role.OPERATOR.value)),
+    ):
+        cmd_def = daemon_service.registry.get_command("update.maintenance") or daemon_service.registry.get_command("maintenance")
+        if not cmd_def:
+            raise HTTPException(status_code=500, detail="Maintenance command not available")
+        ctx = Context(paths=ctl_paths, caller_id=f"web:{auth.username}")
+        await daemon_service.lock.acquire("update.maintenance")
+        try:
+            res = await cmd_def.func(ctx, enable=req.enable, message=req.message)
+            outcome = "success" if res.success else "failed"
+            daemon_service.audit.log(
+                AuditEvent(
+                    caller_id=ctx.caller_id,
+                    command="update.maintenance",
+                    parameters={"enable": req.enable, "message": req.message},
+                    outcome=outcome,
+                    error=res.error,
+                )
+            )
+            return {
+                "success": res.success,
+                "message": res.message,
+                "data": res.data,
+            }
+        finally:
+            daemon_service.lock.release()
 
     # --- WebSocket Routes ---
     @app.websocket("/api/v1/ws/logs")

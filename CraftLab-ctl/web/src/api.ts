@@ -50,6 +50,36 @@ export interface DoctorResult {
   }>;
 }
 
+export interface UpdateCheckResult {
+  current_version: string;
+  latest_version: string | null;
+  update_available: boolean;
+  published_at?: string;
+  release_notes?: string;
+  message: string;
+}
+
+export interface ReleasesInfo {
+  installed_releases: string[];
+  active_release: string | null;
+  maintenance: {
+    enabled: boolean;
+    message: string;
+    enabled_at: string | null;
+  };
+}
+
+export interface OperationResponse {
+  success: boolean;
+  message?: string;
+  error?: string;
+  data?: any;
+  steps?: Array<{
+    step: string;
+    status: string;
+  }>;
+}
+
 export const api = {
   async getMe(): Promise<UserContext | null> {
     try {
@@ -108,6 +138,81 @@ export const api = {
     if (!res.ok) {
       const err = await res.json().catch(() => ({}));
       throw new Error(err.detail || `Action ${action} failed`);
+    }
+    return await res.json();
+  },
+
+  async getReleases(): Promise<ReleasesInfo> {
+    const res = await fetch("/api/v1/update/releases", { credentials: "include" });
+    if (!res.ok) throw new Error("Failed to fetch releases");
+    return await res.json();
+  },
+
+  async checkUpdates(repo?: string): Promise<UpdateCheckResult> {
+    const url = repo ? `/api/v1/update/check?repo=${encodeURIComponent(repo)}` : "/api/v1/update/check";
+    const res = await fetch(url, { credentials: "include" });
+    if (!res.ok) throw new Error("Failed to check for updates");
+    return await res.json();
+  },
+
+  async prepareUpdate(version: string, repo?: string, localFile?: string): Promise<OperationResponse> {
+    const res = await fetch("/api/v1/update/prepare", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      credentials: "include",
+      body: JSON.stringify({ version, github_repo: repo, local_file: localFile }),
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.detail || err.error || "Prepare update failed");
+    }
+    return await res.json();
+  },
+
+  async applyUpdate(version: string, timeout = 15): Promise<OperationResponse> {
+    const res = await fetch("/api/v1/update/apply", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      credentials: "include",
+      body: JSON.stringify({ version, timeout }),
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.detail || err.error || "Apply update failed");
+    }
+    return await res.json();
+  },
+
+  async rollbackUpdate(targetVersion?: string, timeout = 15): Promise<OperationResponse> {
+    const res = await fetch("/api/v1/update/rollback", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      credentials: "include",
+      body: JSON.stringify({ target_version: targetVersion, timeout }),
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.detail || err.error || "Rollback failed");
+    }
+    return await res.json();
+  },
+
+  async getMaintenance(): Promise<any> {
+    const res = await fetch("/api/v1/update/maintenance", { credentials: "include" });
+    if (!res.ok) throw new Error("Failed to fetch maintenance status");
+    return await res.json();
+  },
+
+  async setMaintenance(enable: boolean, message?: string): Promise<any> {
+    const res = await fetch("/api/v1/update/maintenance", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      credentials: "include",
+      body: JSON.stringify({ enable, message: message || "" }),
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.detail || err.error || "Set maintenance failed");
     }
     return await res.json();
   },
