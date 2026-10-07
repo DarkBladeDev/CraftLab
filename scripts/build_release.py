@@ -138,6 +138,12 @@ def create_release_package(
         dest_frontend = staging_dir / "frontend_dist"
         shutil.copytree(frontend_dist, dest_frontend, dirs_exist_ok=True)
 
+        # 3. Control Panel Web dist (if present)
+        ctl_web_dir = repo_root / "CraftLab-ctl" / "web" / "dist"
+        if ctl_web_dir.exists() and (ctl_web_dir / "index.html").exists():
+            dest_ctl_web = staging_dir / "ctl_web_dist"
+            shutil.copytree(ctl_web_dir, dest_ctl_web, dirs_exist_ok=True)
+
         # 3. Compute component checksums for manifest
         checksums = {}
         for root, _, files in os.walk(staging_dir):

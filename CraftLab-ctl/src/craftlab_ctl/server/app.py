@@ -493,7 +493,13 @@ def create_control_app(
             pass
 
     # --- Static SPA Hosting ---
-    resolved_static = static_dir or (ctl_paths.home / "CraftLab-ctl" / "web" / "dist")
+    resolved_static = static_dir
+    if not resolved_static and ctl_paths.active_release_dir:
+        candidate_release_web = ctl_paths.active_release_dir / "ctl_web_dist"
+        if candidate_release_web.exists() and (candidate_release_web / "index.html").exists():
+            resolved_static = candidate_release_web
+    if not resolved_static:
+        resolved_static = ctl_paths.home / "CraftLab-ctl" / "web" / "dist"
     if resolved_static.exists() and (resolved_static / "index.html").exists():
         app.mount("/assets", StaticFiles(directory=str(resolved_static / "assets")), name="assets")
 
