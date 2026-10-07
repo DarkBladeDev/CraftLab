@@ -24,6 +24,45 @@ def test_paths_initialization():
         assert paths.state_dir.exists()
         assert paths.run_dir.exists()
         assert paths.logs_dir.exists()
+        assert paths.releases_dir.exists()
+        assert paths.cache_dir.exists()
+        assert paths.wheels_dir.exists()
+        assert paths.downloads_dir.exists()
+
+
+def test_release_pointer_resolution():
+    with tempfile.TemporaryDirectory() as tmpdir:
+        home = Path(tmpdir)
+        paths = get_paths(home=home)
+        assert paths.active_release_version is None
+        assert paths.active_release_dir is None
+
+        # Create two releases
+        rel1 = paths.releases_dir / "v1.0.0"
+        rel1.mkdir()
+        (rel1 / "backend").mkdir()
+        (rel1 / "backend" / "main.py").write_text("# v1.0.0")
+
+        rel2 = paths.releases_dir / "v1.1.0"
+        rel2.mkdir()
+        (rel2 / "backend").mkdir()
+        (rel2 / "backend" / "main.py").write_text("# v1.1.0")
+
+        installed = paths.get_installed_releases()
+        assert "v1.0.0" in installed
+        assert "v1.1.0" in installed
+
+        # Set active release to v1.0.0
+        paths.set_active_release("1.0.0")
+        assert paths.active_release_version in ("v1.0.0", "1.0.0")
+        assert paths.active_release_dir == rel1
+        assert paths.app_backend_dir == rel1 / "backend"
+
+        # Switch to v1.1.0
+        paths.set_active_release("v1.1.0")
+        assert paths.active_release_version == "v1.1.0"
+        assert paths.active_release_dir == rel2
+        assert paths.app_backend_dir == rel2 / "backend"
 
 
 def test_audit_logger():

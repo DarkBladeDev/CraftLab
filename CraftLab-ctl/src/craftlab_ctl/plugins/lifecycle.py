@@ -17,14 +17,22 @@ class LifecyclePlugin(Plugin):
         return ProcessSupervisor(paths=ctx.paths, service_name="backend")
 
     def _find_backend_python(self, ctx: Context) -> str:
+        candidates = []
+        if ctx.paths.active_release_dir:
+            rel = ctx.paths.active_release_dir
+            candidates.extend([
+                rel / ".venv" / "Scripts" / "python.exe",
+                rel / ".venv" / "bin" / "python",
+                rel / "backend" / ".venv" / "Scripts" / "python.exe",
+                rel / "backend" / ".venv" / "bin" / "python",
+            ])
         home = ctx.paths.home
-        # Try backend/.venv
-        candidates = [
+        candidates.extend([
             home / "backend" / ".venv" / "Scripts" / "python.exe",
             home / "backend" / ".venv" / "bin" / "python",
             home / ".venv" / "Scripts" / "python.exe",
             home / ".venv" / "bin" / "python",
-        ]
+        ])
         for c in candidates:
             if c.exists():
                 return str(c)
@@ -47,9 +55,7 @@ class LifecyclePlugin(Plugin):
 
         await ctx.step("prepare_command")
         py_exec = self._find_backend_python(ctx)
-        backend_dir = ctx.paths.home / "backend"
-        if not backend_dir.exists():
-            backend_dir = ctx.paths.home
+        backend_dir = ctx.paths.app_backend_dir
 
         cmd = [
             py_exec,

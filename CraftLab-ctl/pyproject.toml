@@ -4,11 +4,11 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "craftlab-ctl"
-version = "0.1.0"
+version = "0.2.0"
 description = "Control System CLI and Supervisor Daemon for CraftLab"
 readme = "README.md"
 requires-python = ">=3.11"
-authors = [{ name = "CraftLab Team" }]
+authors = [{ name = "DarkBladeDev" }]
 dependencies = [
     "click>=8.1.0",
     "pydantic>=2.7.0",
@@ -32,6 +32,7 @@ craftctld = "craftlab_ctl.daemon:main"
 [project.entry-points."craftlab_ctl.plugins"]
 lifecycle = "craftlab_ctl.plugins.lifecycle:LifecyclePlugin"
 core = "craftlab_ctl.plugins.core:CorePlugin"
+update = "craftlab_ctl.plugins.update:UpdatePlugin"
 
 [tool.setuptools.packages.find]
 where = ["src"]
