@@ -10,8 +10,8 @@ MINECRAFT_IDENTIFIER_REGEX = re.compile(r"^[a-z0-9_.-]+$")
 
 
 def get_default_workspace_dir() -> Path:
-    base_data_dir = Path(os.getenv("MCP_DATA_DIR", "data/packs"))
-    return (base_data_dir / "workspace").resolve()
+    from app.core.config import settings
+    return (settings.paths.packs_dir / "workspace").resolve()
 
 
 def validate_minecraft_identifier(name: str) -> bool:

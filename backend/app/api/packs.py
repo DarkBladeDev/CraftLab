@@ -31,7 +31,9 @@ from app.domain.workspace import (
 
 router = APIRouter(prefix="/api/v1/packs", tags=["packs"])
 
-BASE_DATA_DIR = Path(os.getenv("MCP_DATA_DIR", "data/packs"))
+from app.core.config import settings
+
+BASE_DATA_DIR = settings.paths.packs_dir
 SOURCES_DIR = BASE_DATA_DIR / "sources"
 DIST_DIR = BASE_DATA_DIR / "dist"
 BUILD_TMP_DIR = BASE_DATA_DIR / "tmp"

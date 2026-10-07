@@ -43,6 +43,20 @@ class AgentSessionManager:
         except Exception as e:
             logger.error(f"Error marking target {target_id} offline in db: {e}")
 
+    async def shutdown(self, db_session_maker):
+        """
+        Gracefully closes all active sessions and marks targets offline.
+        """
+        target_ids = list(self._active_sessions.keys())
+        for tid in target_ids:
+            ws = self._active_sessions.get(tid)
+            if ws:
+                try:
+                    await ws.close(code=1001, reason="Server shutting down")
+                except Exception:
+                    pass
+            await self.unregister_session(tid, db_session_maker)
+
     async def send_request(self, target_id: str, envelope: MessageEnvelope, timeout: float = 10.0) -> Dict[str, Any]:
         """
         Sends a request envelope to the target agent and awaits the correlated response.
@@ -180,8 +194,9 @@ class AgentSessionManager:
             plugin = env.payload.get("plugin", "oraxen")
             sha1 = env.payload.get("sha1")
             zip_b64 = env.payload.get("zipBase64")
+            from app.core.config import settings
             source_id = f"src-agent-{target_id}-{plugin}"
-            storage_path = f"data/packs/sources/{source_id}/contents"
+            storage_path = str(settings.paths.packs_dir / "sources" / source_id / "contents")
 
             if zip_b64:
                 try:

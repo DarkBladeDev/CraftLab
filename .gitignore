@@ -21,4 +21,8 @@ data/
 scripts/internal/*
 *.log
 backend/logs/
-logs/
+logs/
+run/
+state/
+*.egg-info/
+

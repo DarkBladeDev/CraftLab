@@ -1,8 +1,14 @@
+import os
+import time
+import logging
 from contextlib import asynccontextmanager
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
-import logging
-from app.core.database import init_db, AsyncSessionLocal
+from fastapi.responses import JSONResponse
+from sqlalchemy import text
+
+from app.core.config import settings
+from app.core.database import init_db, AsyncSessionLocal, engine
 from app.api.items import router as items_router, revisions_router
 from app.api.blocks import router as blocks_router
 from app.api.targets import router as targets_router
@@ -14,24 +20,79 @@ from app.gateway.manager import gateway_manager
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("mcp")
 
+start_time = time.time()
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     logger.info("Initializing database...")
     await init_db()
     yield
-    logger.info("Shutting down MCP...")
+    logger.info("Shutting down CraftLab backend...")
+    # Clean up active gateway connections
+    await gateway_manager.shutdown(AsyncSessionLocal)
+    # Dispose database connection pool
+    await engine.dispose()
+    logger.info("Graceful shutdown complete.")
 
 
 app = FastAPI(title="Minecraft Content Platform", lifespan=lifespan)
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=settings.server.cors_origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+@app.get("/health", tags=["system"])
+async def health_check():
+    """
+    Unauthenticated liveness check returning 200 OK and basic runtime info.
+    """
+    return {
+        "status": "pass",
+        "service": "craftlab-backend",
+        "uptime_seconds": round(time.time() - start_time, 2),
+        "pid": os.getpid(),
+    }
+
+
+@app.get("/ready", tags=["system"])
+async def readiness_check():
+    """
+    Unauthenticated readiness check verifying database and storage connectivity.
+    """
+    checks = {}
+    is_ready = True
+
+    # 1. Database connectivity
+    try:
+        async with AsyncSessionLocal() as session:
+            await session.execute(text("SELECT 1"))
+        checks["database"] = "ok"
+    except Exception as e:
+        checks["database"] = f"error: {str(e)}"
+        is_ready = False
+
+    # 2. Storage directories accessibility
+    try:
+        packs_dir = settings.paths.packs_dir
+        packs_dir.mkdir(parents=True, exist_ok=True)
+        test_file = packs_dir / ".ready_check"
+        test_file.touch()
+        test_file.unlink()
+        checks["storage"] = "ok"
+    except Exception as e:
+        checks["storage"] = f"error: {str(e)}"
+        is_ready = False
+
+    if is_ready:
+        return {"status": "ready", "checks": checks}
+    return JSONResponse(status_code=503, content={"status": "degraded", "checks": checks})
+
 
 app.include_router(items_router)
 app.include_router(blocks_router)
