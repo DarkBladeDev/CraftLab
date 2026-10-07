@@ -114,12 +114,14 @@ def create_release_package(
     commit = git_commit or get_git_commit(repo_root)
     output_dir.mkdir(parents=True, exist_ok=True)
 
-    frontend_dir = repo_root / "frontend"
+    frontend_dir = repo_root / "CraftLab-frontend"
+    if not frontend_dir.exists():
+        frontend_dir = repo_root / "frontend"
     frontend_dist = frontend_dir / "dist"
     if not skip_frontend_build:
         build_frontend_bundle(frontend_dir)
     elif not (frontend_dist / "index.html").exists():
-        raise RuntimeError("skip_frontend_build was specified, but frontend/dist/index.html does not exist.")
+        raise RuntimeError(f"skip_frontend_build was specified, but {frontend_dist / 'index.html'} does not exist.")
 
     with tempfile.TemporaryDirectory() as tmp_dir:
         staging_dir = Path(tmp_dir) / f"craftlab-v{norm_version}"
@@ -127,7 +129,10 @@ def create_release_package(
 
         # 1. Backend
         dest_backend = staging_dir / "backend"
-        copy_backend_files(repo_root / "backend", dest_backend)
+        backend_dir = repo_root / "CraftLab-backend"
+        if not backend_dir.exists():
+            backend_dir = repo_root / "backend"
+        copy_backend_files(backend_dir, dest_backend)
 
         # 2. Frontend dist
         dest_frontend = staging_dir / "frontend_dist"

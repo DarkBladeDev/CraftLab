@@ -47,9 +47,13 @@ if ($Mode -eq "stop") {
 # 2. Clean-slate Data Reset (if -CleanData requested)
 if ($CleanData) {
     Write-Host "[*] Resetting runtime environment and database to pristine state..." -ForegroundColor Yellow
-    $DbPath = "$RootDir\..\backend\mcp.db"
+    $DbPath = "$RootDir\..\data\mcp.db"
     if (Test-Path $DbPath) {
         Remove-Item -Path $DbPath -Force -ErrorAction SilentlyContinue
+    }
+    $OldDbPath = "$RootDir\..\CraftLab-backend\mcp.db"
+    if (Test-Path $OldDbPath) {
+        Remove-Item -Path $OldDbPath -Force -ErrorAction SilentlyContinue
     }
     
     $PacksDist = "$RootDir\..\data\packs\dist"
@@ -62,9 +66,10 @@ if ($CleanData) {
     }
 
     # Re-initialize clean tables
-    $BackendPython = "$RootDir\..\backend\.venv\Scripts\python.exe"
+    $BackendDir = if (Test-Path "$RootDir\..\CraftLab-backend") { "$RootDir\..\CraftLab-backend" } else { "$RootDir\..\backend" }
+    $BackendPython = "$BackendDir\.venv\Scripts\python.exe"
     if (Test-Path $BackendPython) {
-        Push-Location "$RootDir\..\backend"
+        Push-Location $BackendDir
         try {
             & $BackendPython -c "import asyncio; from app.core.database import init_db; asyncio.run(init_db())"
         } finally {
@@ -197,19 +202,21 @@ if ($Mode -eq "build-jar") {
 
 # 4. Check Backend setup
 Write-Host "`n[2/4] Verifying Backend Environment..." -ForegroundColor Cyan
-$BackendVenv = "$RootDir\..\backend\.venv\Scripts\python.exe"
+$BackendDir = if (Test-Path "$RootDir\..\CraftLab-backend") { "$RootDir\..\CraftLab-backend" } else { "$RootDir\..\backend" }
+$BackendVenv = "$BackendDir\.venv\Scripts\python.exe"
 if (-not (Test-Path $BackendVenv)) {
     Write-Host "      Creating Python venv..." -ForegroundColor Gray
-    python -m venv "$RootDir\..\backend\.venv"
-    & "$RootDir\..\backend\.venv\Scripts\pip.exe" install -r "$RootDir\backend\requirements.txt" -q
+    python -m venv "$BackendDir\.venv"
+    & "$BackendDir\.venv\Scripts\pip.exe" install -r "$BackendDir\requirements.txt" -q
 }
 Write-Host "      [OK] Backend environment ready." -ForegroundColor Green
 
 # 5. Check Frontend setup
 Write-Host "`n[3/4] Verifying Frontend Environment..." -ForegroundColor Cyan
-if (-not (Test-Path "$RootDir\..\frontend\node_modules")) {
+$FrontendDir = if (Test-Path "$RootDir\..\CraftLab-frontend") { "$RootDir\..\CraftLab-frontend" } else { "$RootDir\..\frontend" }
+if (-not (Test-Path "$FrontendDir\node_modules")) {
     Write-Host "      Installing frontend node_modules..." -ForegroundColor Gray
-    Push-Location "$RootDir\..\frontend"
+    Push-Location $FrontendDir
     npm install --silent
     Pop-Location
 }
@@ -221,7 +228,7 @@ Write-Host "`n[4/4] Starting Local Runtime Services ($Mode mode)..." -Foreground
 # A. Start Backend (if Mode in "all", "web-only")
 if ($Mode -in @("all", "web-only")) {
     Write-Host "      Starting FastAPI Backend & WebSocket Gateway on port 8000..." -ForegroundColor Gray
-    $BackendCmd = "cd '$RootDir\..\backend'; .\.venv\Scripts\python.exe -m uvicorn main:app --reload --port 8000"
+    $BackendCmd = "cd '$BackendDir'; .\.venv\Scripts\python.exe -m uvicorn main:app --reload --port 8000"
     Start-Process powershell -ArgumentList "-NoExit", "-Command", "`$Host.UI.RawUI.WindowTitle='MCP - Backend & Gateway'; $BackendCmd"
     Start-Sleep -Seconds 2
 }
@@ -229,7 +236,7 @@ if ($Mode -in @("all", "web-only")) {
 # B. Start Frontend (if Mode in "all", "web-only")
 if ($Mode -in @("all", "web-only")) {
     Write-Host "      Starting React + Vite Frontend on port 3000..." -ForegroundColor Gray
-    $FrontendCmd = "cd '$RootDir\..\frontend'; npm run dev"
+    $FrontendCmd = "cd '$FrontendDir'; npm run dev"
     Start-Process powershell -ArgumentList "-NoExit", "-Command", "`$Host.UI.RawUI.WindowTitle='MCP - Frontend Web UI'; $FrontendCmd"
     Start-Sleep -Seconds 2
 }

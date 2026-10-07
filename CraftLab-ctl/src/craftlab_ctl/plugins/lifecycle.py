@@ -28,6 +28,8 @@ class LifecyclePlugin(Plugin):
             ])
         home = ctx.paths.home
         candidates.extend([
+            home / "CraftLab-backend" / ".venv" / "Scripts" / "python.exe",
+            home / "CraftLab-backend" / ".venv" / "bin" / "python",
             home / "backend" / ".venv" / "Scripts" / "python.exe",
             home / "backend" / ".venv" / "bin" / "python",
             home / ".venv" / "Scripts" / "python.exe",

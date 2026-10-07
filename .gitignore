@@ -2,10 +2,12 @@ minecraft-content-platform-spec-v1/
 
 # Python
 **/.venv/
+CraftLab-backend/.venv/
 backend/.venv/
 **/__pycache__/
 *.pyc
 *.db
+CraftLab-backend/*.db
 backend/*.db
 
 # Environment & Secrets
@@ -26,7 +28,7 @@ backend/*.db
 **/gradlew.bat
 **/gradle-wrapper.jar
 
-# Local Dev Mock Storage
+# Local Dev Mock Storage & Runtime Artifacts
 **/data/
 scripts/internal/*
 *.log
@@ -34,4 +36,8 @@ scripts/internal/*
 **/run/
 state/
 *.egg-info/
+cache/
+releases/
+current
+current_tmp
 

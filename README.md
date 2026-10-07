@@ -1,23 +1,28 @@
-# Minecraft Content Platform
+# CraftLab (Minecraft Content Platform)
 
-A modern web-based content authoring, versioning, and release-management engine for Paper Minecraft servers.
+A modern web-based content authoring, resource pack pipeline, and fleet release management system for Paper Minecraft servers (1.21.1 – 1.21.11+).
 
 ## Monorepo Layout
 
 ```
 MinecraftResourceManager/
-├── backend/                       # FastAPI Control Plane & WebSocket Gateway
-│   ├── app/                       # Domain models, database, protocol, API
-│   ├── tests/                     # 13 automated unit & E2E integration tests
-│   └── mock_agent.py              # Lightweight simulated Paper 1.21 agent
-├── frontend/                      # React 18 + Vite + Tailwind CSS Web Client
-│   └── src/                       # Fleet monitor, Item editor, Deployment modal
-├── paper-agent/                   # Native Java 21 Paper plugin (Gradle)
-│   ├── src/main/java/             # WebSocket client, Paper 1.21 item adapter, /mcp command
-│   └── build/libs/                # Compiled paper-agent-1.0.0-SNAPSHOT.jar
-├── dev.ps1                        # All-in-one local dev deploy & runtime launcher
-├── openspec/                      # OpenSpec specs and changes
-└── minecraft-content-platform-spec-v1/ # Reference architecture documents
+├── CraftLab-backend/                 # FastAPI REST API & WebSocket Agent Gateway
+│   ├── app/                          # Domain models, database, pack compiler/merger, RBAC
+│   └── tests/                        # Automated unit & E2E integration tests (pytest)
+├── CraftLab-frontend/                # React 18 + Vite + Tailwind CSS Web Studio
+│   └── src/                          # Visual Item Inspector, Block Studio, Pack Manager
+├── CraftLab-ctl/                     # Supervisor Daemon CLI & Control Plane
+│   ├── src/craftlab_ctl/             # craftctl CLI, daemon, plugins, update pipeline
+│   ├── web/                          # Control Panel Web Dashboard (React + Vite SPA)
+│   └── tests/                        # Control system tests & packaging validations
+├── paper-agent/                      # Native Java 21 Paper plugin (Gradle + PacketEvents)
+│   └── src/main/java/                # Real-time WebSocket bridge, item adapter, /mcp commands
+├── scripts/                          # Automation, packaging, and developer runtime scripts
+│   ├── dev.ps1                       # All-in-one local dev deploy & runtime launcher
+│   ├── build_release.py              # Production release packaging & tar.gz distribution
+│   └── seed_dev_auth.py              # Development RBAC credentials seeder
+├── openspec/                         # OpenSpec change management and system specifications
+└── .env.example                      # Environment variables template
 ```
 
 ---
@@ -27,70 +32,81 @@ MinecraftResourceManager/
 To build and start all systems locally in one command:
 
 ```powershell
-.\dev.ps1
+.\scripts\dev.ps1
 ```
 
 This will automatically:
-1. Verify / build the Paper plugin JAR (`paper-agent/build/libs/paper-agent-1.0.0-SNAPSHOT.jar`).
-2. Start the **FastAPI Backend & WebSocket Gateway** on `http://127.0.0.1:8000`.
-3. Start the **React Web UI** on `http://localhost:3000`.
-4. Start the **Paper 1.21 Mock Agent** connected as `local-paper-server`.
+1. Verify or build the Paper plugin JAR (`paper-agent/build/libs/paper-agent-1.0.0-SNAPSHOT.jar`).
+2. Verify Python virtual environment in `CraftLab-backend`.
+3. Start the **FastAPI Backend & WebSocket Gateway** on `http://127.0.0.1:8000`.
+4. Start the **React Web Studio** on `http://localhost:3000`.
 5. Open your browser at `http://localhost:3000`.
 
 ### Other Execution Modes
 
-- **Backend & Frontend only** (for connecting to a real Minecraft server):
+- **Backend & Frontend only**:
   ```powershell
-  .\dev.ps1 -Mode server
+  .\scripts\dev.ps1 -Mode web-only
   ```
-- **Deploy JAR directly to a Paper server `plugins/` directory**:
+- **Deploy JAR directly to a Paper server directory & launch server**:
   ```powershell
-  .\dev.ps1 -PaperPluginsDir "C:\path\to\paper-server\plugins"
+  .\scripts\dev.ps1 -PaperServerDir "C:\path\to\paper-server"
   ```
-- **Stop all dev processes**:
+- **Clean slate data reset**:
   ```powershell
-  .\dev.ps1 -Mode stop
+  .\scripts\dev.ps1 -CleanData
+  ```
+- **Stop running dev processes**:
+  ```powershell
+  .\scripts\dev.ps1 -Mode stop
   ```
 
 ---
 
-## Testing the End-to-End Flow
+## Control System CLI (`craftctl`) & Control Panel
 
-1. Open **[http://localhost:3000](http://localhost:3000)**.
-2. Observe that `local-paper-server` appears as **ONLINE** (green indicator receiving heartbeats).
-3. Fill out the **Item Definition Editor**:
-   - Identifier: `ruby_sword`
-   - Material: `DIAMOND_SWORD`
-   - Display Name: `<red><bold>Ruby Sword</bold></red>`
-   - Lore: `<gray>Forged in ancient magma chambers.</gray>`
-   - Custom Model Data: `10001`
-4. Click **Save Definition**, then click **Create Revision**.
-5. Click **Publish & Deploy** in the top navbar:
-   - Click **Generate Deployment Plan**.
-   - Review operations and click **Approve Plan**.
-   - Click **Deploy to Live Server**.
-6. The agent executes the allowlisted operation over WebSocket, compiles the Paper 1.21 item, saves it to `items.json`, and returns success!
-7. In-game verification command:
-   ```text
-   /mcp give <player> ruby_sword
-   ```
+CraftLab includes `CraftLab-ctl` (`craftctl` CLI and `craftctld` supervisor daemon) to manage runtime services, atomic updates, and health probes:
+
+```powershell
+# Check platform health and status
+craftctl status
+
+# Service lifecycle
+craftctl start
+craftctl stop
+craftctl restart
+
+# Inspect and apply release updates
+craftctl update check
+craftctl update apply --version 0.3.0
+craftctl update rollback
+```
+
+The web control dashboard is served on port `8443` by `craftctld`.
 
 ---
 
 ## Running Automated Tests
 
-* **Backend tests** (13 tests including full WebSocket integration):
+* **Backend tests** (78 tests):
   ```powershell
-  cd backend
-  .\.venv\Scripts\pytest
+  .\CraftLab-backend\.venv\Scripts\pytest CraftLab-backend\tests
+  ```
+* **Control plane & supervisor tests** (49 tests):
+  ```powershell
+  .\CraftLab-backend\.venv\Scripts\pytest CraftLab-ctl\tests
   ```
 * **Paper agent build & tests**:
   ```powershell
   cd paper-agent
-  .\gradlew test
+  .\gradlew.bat test
   ```
-* **Frontend production build**:
+* **Web studio frontend build**:
   ```powershell
-  cd frontend
-  npm run build
+  npm --prefix CraftLab-frontend run build
   ```
+* **Control panel web dashboard build**:
+  ```powershell
+  npm --prefix CraftLab-ctl\web run build
+  ```
+

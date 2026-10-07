@@ -94,8 +94,11 @@ class CtlPaths(BaseModel):
             if cand.exists():
                 return cand
         # Fallback to dev checkout
-        dev_backend = self.home / "backend"
-        return dev_backend if dev_backend.exists() else self.home
+        dev_backend = self.home / "CraftLab-backend"
+        if dev_backend.exists():
+            return dev_backend
+        dev_backend_old = self.home / "backend"
+        return dev_backend_old if dev_backend_old.exists() else self.home
 
     @property
     def app_frontend_dist_dir(self) -> Path:
@@ -105,8 +108,11 @@ class CtlPaths(BaseModel):
             if cand.exists():
                 return cand
         # Fallback to dev checkout
-        dev_dist = self.home / "frontend" / "dist"
-        return dev_dist
+        dev_dist = self.home / "CraftLab-frontend" / "dist"
+        if dev_dist.exists():
+            return dev_dist
+        dev_dist_old = self.home / "frontend" / "dist"
+        return dev_dist_old
 
     def set_active_release(self, version: str) -> None:
         norm = version.lstrip("v")
