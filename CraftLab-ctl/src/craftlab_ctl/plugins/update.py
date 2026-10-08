@@ -127,6 +127,12 @@ class UpdatePlugin(Plugin):
             candidate_sha = archive_path.parent / f"{archive_path.name}.sha256"
             if candidate_sha.exists():
                 sha256_path = candidate_sha
+            if ctx.paths.wheels_dir:
+                ctx.paths.wheels_dir.mkdir(parents=True, exist_ok=True)
+                for whl in archive_path.parent.glob("*.whl"):
+                    target_whl = ctx.paths.wheels_dir / whl.name
+                    if not target_whl.exists():
+                        shutil.copy2(whl, target_whl)
         else:
             await ctx.step("download_assets")
             client = GitHubReleasesClient(repo=github_repo)
@@ -138,11 +144,14 @@ class UpdatePlugin(Plugin):
 
             tar_asset = None
             sha_asset = None
+            wheel_assets = []
             for asset in rel_info.assets:
                 if asset.name.endswith(".tar.gz"):
                     tar_asset = asset
                 elif asset.name.endswith(".sha256"):
                     sha_asset = asset
+                elif asset.name.endswith(".whl"):
+                    wheel_assets.append(asset)
 
             if not tar_asset:
                 return OperationResult.fail(error=f"No .tar.gz archive asset found in release '{version}'")
@@ -155,6 +164,13 @@ class UpdatePlugin(Plugin):
             if sha_asset:
                 sha256_path = dl_dir / sha_asset.name
                 await client.download_file(sha_asset.browser_download_url, sha256_path)
+
+            if wheel_assets and ctx.paths.wheels_dir:
+                ctx.paths.wheels_dir.mkdir(parents=True, exist_ok=True)
+                for w_asset in wheel_assets:
+                    target_whl = ctx.paths.wheels_dir / w_asset.name
+                    if not target_whl.exists():
+                        await client.download_file(w_asset.browser_download_url, target_whl)
 
         await ctx.step("verify_checksum")
         if sha256_path and sha256_path.exists():

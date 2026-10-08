@@ -178,6 +178,24 @@ def create_release_package(
 
         print(f"[+] Successfully built {tar_filename} (SHA256: {archive_sha[:16]}...)")
         print(f"[+] Checksum written to {sha_file}")
+
+        # 7. Build CraftLab-ctl wheel for companion installation
+        ctl_dir = repo_root / "CraftLab-ctl"
+        if ctl_dir.exists() and (ctl_dir / "pyproject.toml").exists():
+            print("[*] Building companion craftlab-ctl wheel...")
+            try:
+                subprocess.run(
+                    [sys.executable, "-m", "pip", "wheel", "-w", str(output_dir), "--no-deps", str(ctl_dir)],
+                    check=True,
+                    capture_output=True,
+                )
+                wheels_cache = repo_root / "cache" / "wheels"
+                if wheels_cache.exists():
+                    for whl in output_dir.glob("craftlab_ctl*.whl"):
+                        shutil.copy2(whl, wheels_cache / whl.name)
+            except Exception as e:
+                print(f"[!] Warning: failed to build craftlab-ctl wheel: {e}")
+
         return tar_path
 
 

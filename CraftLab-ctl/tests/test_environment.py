@@ -66,7 +66,9 @@ def test_provision_release_environment_offline(tmp_path: Path):
         assert res_py == fake_py
         assert mock_run.called
         # Check that --no-index and --find-links with wheels_dir were used
-        args = mock_run.call_args[0][0]
+        pip_calls = [call[0][0] for call in mock_run.call_args_list if "pip" in call[0][0]]
+        assert len(pip_calls) > 0
+        args = pip_calls[0]
         assert "--no-index" in args
         assert "--find-links" in args
         assert str(paths.wheels_dir) in args

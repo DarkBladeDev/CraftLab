@@ -77,6 +77,10 @@ class LifecyclePlugin(Plugin):
             "CRAFTLAB_HOST": host,
             "CRAFTLAB_PORT": str(port),
         }
+        ctl_src = ctx.paths.home / "CraftLab-ctl" / "src"
+        if ctl_src.exists():
+            existing_pp = os.environ.get("PYTHONPATH", "")
+            env["PYTHONPATH"] = f"{str(ctl_src)}{os.pathsep}{existing_pp}" if existing_pp else str(ctl_src)
 
         await ctx.step("spawn_process")
         pid = supervisor.start_process(

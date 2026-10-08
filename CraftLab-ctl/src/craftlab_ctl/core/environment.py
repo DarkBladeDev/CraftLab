@@ -122,4 +122,80 @@ def provision_release_environment(
                 timeout=timeout,
             )
 
+    _ensure_craftlab_ctl(paths, py_exec, offline_only=offline_only, timeout=timeout)
+
     return py_exec
+
+
+def _ensure_craftlab_ctl(
+    paths: CtlPaths,
+    py_exec: Path,
+    offline_only: bool = False,
+    timeout: float = 120.0,
+) -> None:
+    # 1. Check if craftlab_ctl is already importable
+    check_res = subprocess.run(
+        [str(py_exec), "-c", "import craftlab_ctl"],
+        capture_output=True,
+    )
+    if check_res.returncode == 0:
+        return
+
+    # 2. Try installing from wheels_dir
+    if paths.wheels_dir and paths.wheels_dir.exists():
+        res = subprocess.run(
+            [
+                str(py_exec),
+                "-m",
+                "pip",
+                "install",
+                "--no-index",
+                "--find-links",
+                str(paths.wheels_dir),
+                "craftlab-ctl",
+            ],
+            capture_output=True,
+            timeout=timeout,
+        )
+        if res.returncode == 0:
+            return
+
+    # 3. If source CraftLab-ctl exists (dev / monorepo), build and install
+    src_ctl = paths.home / "CraftLab-ctl"
+    if src_ctl.exists() and not offline_only:
+        if paths.wheels_dir and paths.wheels_dir.exists():
+            subprocess.run(
+                [
+                    str(py_exec),
+                    "-m",
+                    "pip",
+                    "wheel",
+                    "-w",
+                    str(paths.wheels_dir),
+                    "--no-deps",
+                    str(src_ctl),
+                ],
+                capture_output=True,
+                timeout=timeout,
+            )
+            res = subprocess.run(
+                [
+                    str(py_exec),
+                    "-m",
+                    "pip",
+                    "install",
+                    "--find-links",
+                    str(paths.wheels_dir),
+                    "craftlab-ctl",
+                ],
+                capture_output=True,
+                timeout=timeout,
+            )
+            if res.returncode == 0:
+                return
+
+        subprocess.run(
+            [str(py_exec), "-m", "pip", "install", "-e", str(src_ctl)],
+            capture_output=True,
+            timeout=timeout,
+        )

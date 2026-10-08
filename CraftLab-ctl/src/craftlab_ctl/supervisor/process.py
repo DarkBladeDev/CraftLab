@@ -90,7 +90,8 @@ class ProcessSupervisor:
         }
 
         if sys.platform == "win32":
-            kwargs["creationflags"] = subprocess.CREATE_NEW_PROCESS_GROUP
+            detached = getattr(subprocess, "DETACHED_PROCESS", 0x00000008)
+            kwargs["creationflags"] = subprocess.CREATE_NEW_PROCESS_GROUP | detached
         else:
             kwargs["preexec_fn"] = os.setsid
 
