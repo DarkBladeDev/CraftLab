@@ -2,6 +2,7 @@ import tempfile
 from pathlib import Path
 import pytest
 from craftlab_ctl.core.paths import get_paths
+from craftlab_ctl.core.models import CheckStatus
 from craftlab_ctl.sdk import Context
 from craftlab_ctl.plugins.lifecycle import LifecyclePlugin
 from craftlab_ctl.plugins.core import CorePlugin
@@ -36,6 +37,13 @@ async def test_core_plugin_doctor():
         assert "env.directories" in check_ids
         assert "env.python" in check_ids
         assert "backend.config" in check_ids
+
+        # Test ctl.web_engine with release bundle
+        web_dist = paths.home / "current" / "ctl_web_dist"
+        web_dist.mkdir(parents=True)
+        (web_dist / "index.html").write_text("<html></html>")
+        web_check = plugin.check_web_engine(ctx)
+        assert web_check.status == CheckStatus.PASS
 
 
 @pytest.mark.asyncio

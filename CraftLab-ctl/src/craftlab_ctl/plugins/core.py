@@ -101,9 +101,18 @@ class CorePlugin(Plugin):
 
     @check("ctl.web_engine")
     def check_web_engine(self, ctx: Context) -> CheckResult:
-        dist_dir = ctx.paths.home / "CraftLab-ctl" / "web" / "dist"
-        has_spa = dist_dir.exists() and (dist_dir / "index.html").exists()
-        spa_msg = "Web Admin Dashboard SPA bundle ready" if has_spa else "Web Admin Dashboard SPA bundle not built (run 'npm run build' in CraftLab-ctl/web)"
+        candidates = []
+        if ctx.paths.active_release_dir:
+            candidates.append(ctx.paths.active_release_dir / "ctl_web_dist")
+        candidates.append(ctx.paths.home / "current" / "ctl_web_dist")
+        candidates.append(ctx.paths.home / "CraftLab-ctl" / "web" / "dist")
+
+        has_spa = any(c.exists() and (c / "index.html").exists() for c in candidates)
+        spa_msg = (
+            "Web Admin Dashboard SPA bundle ready"
+            if has_spa
+            else "Web Admin Dashboard SPA bundle not built (run 'npm run build' in CraftLab-ctl/web)"
+        )
         return CheckResult(
             check_id="ctl.web_engine",
             status=CheckStatus.PASS if has_spa else CheckStatus.WARN,
