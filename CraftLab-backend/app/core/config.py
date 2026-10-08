@@ -44,11 +44,35 @@ def resolve_home(env_home: Optional[str] = None) -> Path:
         return Path(env_home).resolve()
     if os.getenv("CRAFTLAB_HOME"):
         return Path(os.getenv("CRAFTLAB_HOME")).resolve()
+
     current_file = Path(__file__).resolve()
-    # config.py is at backend/app/core/config.py
-    # parents: [core, app, backend, repo_root]
-    repo_root = current_file.parents[3]
-    return repo_root
+
+    # 1. Source checkout in monorepo
+    for parent in current_file.parents:
+        if (parent / "CraftLab-backend").exists() and (parent / "CraftLab-ctl").exists():
+            return parent
+        if (parent / ".git").exists() and (parent / "CraftLab-backend").exists():
+            return parent
+
+    # 2. Release directory (<home>/releases/<version>/backend/app/core/config.py)
+    for parent in current_file.parents:
+        if parent.name == "releases":
+            return parent.parent
+        if (parent / "releases").is_dir() and (parent / "config").is_dir():
+            return parent
+
+    # 3. Current working directory if markers exist
+    cwd = Path.cwd().resolve()
+    for marker in ("config", "releases", "data", "ctl", "craftlab.toml", ".env"):
+        if (cwd / marker).exists():
+            return cwd
+
+    # 4. Standard Linux installation paths
+    for std_dir in (Path("/opt/craftlab"), Path("/var/lib/craftlab")):
+        if std_dir.exists():
+            return std_dir
+
+    return current_file.parents[3]
 
 
 def load_settings(home: Optional[Path] = None, config_file: Optional[Path] = None) -> Settings:

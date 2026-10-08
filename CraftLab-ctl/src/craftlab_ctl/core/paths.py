@@ -162,10 +162,37 @@ def resolve_home(env_home: Optional[str] = None) -> Path:
         return Path(env_home).resolve()
     if os.getenv("CRAFTLAB_HOME"):
         return Path(os.getenv("CRAFTLAB_HOME")).resolve()
+
     current_file = Path(__file__).resolve()
-    # current_file: CraftLab-ctl/src/craftlab_ctl/core/paths.py -> parents: [core, craftlab_ctl, src, CraftLab-ctl, repo_root]
-    repo_root = current_file.parents[4]
-    return repo_root
+
+    # 1. Source checkout in monorepo
+    for parent in current_file.parents:
+        if (parent / "CraftLab-ctl").exists() and (parent / "CraftLab-backend").exists():
+            return parent
+        if (parent / ".git").exists() and (parent / "CraftLab-ctl").exists():
+            return parent
+
+    # 2. Virtual environment installation under <home>/ctl/.venv or similar
+    for parent in current_file.parents:
+        if parent.name in ("ctl", ".venv", "venv") and (parent.parent / "releases").is_dir():
+            return parent.parent
+        if parent.name == "ctl" and parent.parent.name == "craftlab":
+            return parent.parent
+        if (parent / "releases").is_dir() and (parent / "config").is_dir():
+            return parent
+
+    # 3. Current working directory if markers exist
+    cwd = Path.cwd().resolve()
+    for marker in ("config", "releases", "data", "ctl", "craftlab.toml", ".env"):
+        if (cwd / marker).exists():
+            return cwd
+
+    # 4. Standard Linux installation paths
+    for std_dir in (Path("/opt/craftlab"), Path("/var/lib/craftlab")):
+        if std_dir.exists():
+            return std_dir
+
+    return cwd
 
 
 def get_paths(home: Optional[Path] = None) -> CtlPaths:
