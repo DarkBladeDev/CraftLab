@@ -1,0 +1,106 @@
+id: craftlab
+name: CraftLab
+description: Modern web-based Minecraft content authoring, resource pack pipeline, and fleet release management system for Paper 1.21+.
+
+# Supported platforms
+platforms:
+  - paper
+  - purpur
+
+# Minecraft compatibility
+minecraft:
+  minimum: "1.21.1"
+  supported:
+    - "1.21.1"
+    - "1.21.2"
+    - "1.21.3"
+    - "1.21.4"
+  tested: "1.21.1"
+
+# Java runtime compatibility
+java:
+  minimum: 21
+  recommended: 21
+
+# Folia compatibility
+folia:
+  supported: false
+  status: unsupported
+  notes: "Utiliza el scheduler estándar de Paper Bukkit y conexiones WebSocket concurrentes."
+
+# Plugin dependencies
+dependencies:
+  - id: packetevents
+    name: PacketEvents
+    type: required
+    url: "https://github.com/retrooper/packetevents"
+  - id: oraxen
+    name: Oraxen
+    type: optional
+    url: "https://github.com/oraxen/oraxen"
+
+# External links
+links:
+  github: "https://github.com/DarkBladeDev/CraftLab"
+  releases: "https://github.com/DarkBladeDev/CraftLab/releases"
+  issues: "https://github.com/DarkBladeDev/CraftLab/issues"
+
+# Documentation engine metadata
+documentation:
+  defaultLocale: es
+  locales:
+    - es
+    - en
+  repoPath: docs
+
+# Published versions (Version history)
+versions:
+  # -------------------------------------------------------------
+  # CURRENT VERSION (LATEST) -> Always the first entry [0]
+  # -------------------------------------------------------------
+  - version: "0.3.3"
+    releaseDate: "2026-10-08"
+    reference: "v0.3.3"
+    downloadUrl: "https://github.com/DarkBladeDev/CraftLab/releases/tag/v0.3.3"
+    changelog: "Recognize release ctl_web_dist in doctor check and bump craftlab-ctl to v0.3.3."
+    minecraft:
+      - "1.21.1"
+      - "1.21.x"
+
+  # -------------------------------------------------------------
+  # ARCHIVED / HISTORICAL VERSIONS (Without docs in older tags)
+  # -------------------------------------------------------------
+  - version: "0.3.2"
+    releaseDate: "2026-10-08"
+    reference: "v0.3.2"
+    hasDocs: false
+    downloadUrl: "https://github.com/DarkBladeDev/CraftLab/releases/tag/v0.3.2"
+    changelog: "Dynamic backend port and host resolution via CRAFTLAB_PORT and CRAFTLAB_HOST."
+
+  - version: "0.3.1"
+    releaseDate: "2026-10-07"
+    reference: "v0.3.1"
+    hasDocs: false
+    downloadUrl: "https://github.com/DarkBladeDev/CraftLab/releases/tag/v0.3.1"
+    changelog: "Release startup fixes, hermetic packaging, and craftlab-ctl companion wheel provisioning."
+
+  - version: "0.3.0"
+    releaseDate: "2026-10-07"
+    reference: "v0.3.0"
+    hasDocs: false
+    downloadUrl: "https://github.com/DarkBladeDev/CraftLab/releases/tag/v0.3.0"
+    changelog: "Update CLI and web dashboard controls for UpdatePlugin, and monorepo structure realignment."
+
+  - version: "0.2.0"
+    releaseDate: "2026-10-07"
+    reference: "v0.2.0"
+    hasDocs: false
+    downloadUrl: "https://github.com/DarkBladeDev/CraftLab/releases/tag/v0.2.0"
+    changelog: "Production release packaging automation and atomic updates with wheel cache."
+
+  - version: "0.1.0"
+    releaseDate: "2026-10-07"
+    reference: "v0.1.0"
+    hasDocs: false
+    downloadUrl: "https://github.com/DarkBladeDev/CraftLab/releases/tag/v0.1.0"
+    changelog: "Initial release: control system foundation, remote admin control plane, and RBAC authentication."

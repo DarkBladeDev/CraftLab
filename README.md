@@ -15,7 +15,7 @@ MinecraftResourceManager/
 │   ├── src/craftlab_ctl/             # craftctl CLI, daemon, plugins, update pipeline
 │   ├── web/                          # Control Panel Web Dashboard (React + Vite SPA)
 │   └── tests/                        # Control system tests & packaging validations
-├── paper-agent/                      # Native Java 21 Paper plugin (Gradle + PacketEvents)
+├── CraftLab-plugin/                  # Native Java 21 Paper plugin (Gradle + PacketEvents)
 │   └── src/main/java/                # Real-time WebSocket bridge, item adapter, /mcp commands
 ├── scripts/                          # Automation, packaging, and developer runtime scripts
 │   ├── dev.ps1                       # All-in-one local dev deploy & runtime launcher
@@ -36,7 +36,7 @@ To build and start all systems locally in one command:
 ```
 
 This will automatically:
-1. Verify or build the Paper plugin JAR (`paper-agent/build/libs/paper-agent-1.0.0-SNAPSHOT.jar`).
+1. Verify or build the Paper plugin JAR (`CraftLab-plugin/build/libs/CraftLab-plugin-1.0.0-SNAPSHOT.jar`).
 2. Verify Python virtual environment in `CraftLab-backend`.
 3. Start the **FastAPI Backend & WebSocket Gateway** on `http://127.0.0.1:8000`.
 4. Start the **React Web Studio** on `http://localhost:3000`.
@@ -96,9 +96,9 @@ The web control dashboard is served on port `8443` by `craftctld`.
   ```powershell
   .\CraftLab-backend\.venv\Scripts\pytest CraftLab-ctl\tests
   ```
-* **Paper agent build & tests**:
+* **Paper plugin build & tests**:
   ```powershell
-  cd paper-agent
+  cd CraftLab-plugin
   .\gradlew.bat test
   ```
 * **Web studio frontend build**:

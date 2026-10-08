@@ -71,9 +71,9 @@ jobs:
           npm run build
           cd ..
 
-      - name: Build Paper Agent JAR (paper-agent)
+      - name: Build CraftLab Plugin JAR (CraftLab-plugin)
         run: |
-          cd paper-agent
+          cd CraftLab-plugin
           chmod +x gradlew
           ./gradlew build -x test --no-daemon
           cd ..
@@ -95,9 +95,9 @@ jobs:
       - name: Stage Release Assets & Generate Checksums
         run: |
           VERSION="${{ steps.version.outputs.release_version }}"
-          AGENT_JAR=$(ls paper-agent/build/libs/paper-agent-*.jar | head -n 1)
-          if [ -f "$AGENT_JAR" ]; then
-            cp "$AGENT_JAR" "dist/releases/paper-agent-${VERSION}.jar"
+          PLUGIN_JAR=$(ls CraftLab-plugin/build/libs/CraftLab-plugin-*.jar | head -n 1)
+          if [ -f "$PLUGIN_JAR" ]; then
+            cp "$PLUGIN_JAR" "dist/releases/craftlab-plugin-${VERSION}.jar"
           fi
 
           cd dist/releases

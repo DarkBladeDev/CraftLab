@@ -5,7 +5,7 @@
     Builds, configures and starts all platform systems locally:
     - Backend: FastAPI + WebSocket Gateway on http://127.0.0.1:8000
     - Frontend: React + Vite Web UI on http://localhost:3000
-    - Paper Agent: Builds paper-agent-1.0.0-SNAPSHOT.jar, deploys to live Paper server,
+    - CraftLab Plugin: Builds CraftLab-plugin-1.0.0-SNAPSHOT.jar, deploys to live Paper server,
       and starts the Paper 1.21 server in an interactive terminal.
 .EXAMPLE
     .\dev.ps1
@@ -99,17 +99,17 @@ if ($CleanData) {
     Write-Host "    [OK] Pristine database and pack cache reset complete." -ForegroundColor Green
 }
 
-# 3. Build & Deploy Paper Agent JAR
-Write-Host "[1/4] Verifying Paper 1.21 Plugin Agent..." -ForegroundColor Cyan
-$JarPath = "$RootDir\..\paper-agent\build\libs\paper-agent-1.0.0-SNAPSHOT.jar"
+# 3. Build & Deploy CraftLab Plugin JAR
+Write-Host "[1/4] Verifying CraftLab Plugin..." -ForegroundColor Cyan
+$JarPath = "$RootDir\..\CraftLab-plugin\build\libs\CraftLab-plugin-1.0.0-SNAPSHOT.jar"
 
-Push-Location "$RootDir\..\paper-agent"
+Push-Location "$RootDir\..\CraftLab-plugin"
 try {
     if (-not (Test-Path $JarPath)) {
-        Write-Host "      Building Paper Agent JAR with Gradle..." -ForegroundColor Gray
+        Write-Host "      Building CraftLab Plugin JAR with Gradle..." -ForegroundColor Gray
         .\gradlew.bat build -q
     }
-    Write-Host "      [OK] JAR ready: paper-agent\build\libs\paper-agent-1.0.0-SNAPSHOT.jar" -ForegroundColor Green
+    Write-Host "      [OK] JAR ready: CraftLab-plugin\build\libs\CraftLab-plugin-1.0.0-SNAPSHOT.jar" -ForegroundColor Green
 } finally {
     Pop-Location
 }
@@ -280,7 +280,7 @@ if ($ServerReadyToLaunch) {
 } else {
     Write-Host "  * Target Server Status : Awaiting Paper server connection" -ForegroundColor Yellow
 }
-Write-Host "  * Compiled Plugin JAR  : paper-agent\build\libs\paper-agent-1.0.0-SNAPSHOT.jar" -ForegroundColor White
+Write-Host "  * Compiled Plugin JAR  : CraftLab-plugin\build\libs\CraftLab-plugin-1.0.0-SNAPSHOT.jar" -ForegroundColor White
 Write-Host ""
 Write-Host "To stop dev processes later, run: .\dev.ps1 -Mode stop" -ForegroundColor Yellow
 Write-Host ""
