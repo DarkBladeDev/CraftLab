@@ -100,7 +100,16 @@ class LifecyclePlugin(Plugin):
         async with httpx.AsyncClient(timeout=1.0) as client:
             while time.time() - start_time < timeout:
                 if not supervisor.is_running():
-                    last_error = "Process terminated unexpectedly during startup"
+                    err_details = ""
+                    if log_err.exists():
+                        try:
+                            content = log_err.read_text(encoding="utf-8", errors="replace").strip()
+                            if content:
+                                lines = [l for l in content.splitlines() if l.strip()]
+                                err_details = "\n  " + "\n  ".join(lines[-15:])
+                        except Exception:
+                            pass
+                    last_error = f"Process terminated unexpectedly during startup.{err_details}"
                     break
                 try:
                     resp = await client.get(ready_url)

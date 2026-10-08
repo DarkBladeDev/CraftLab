@@ -81,6 +81,17 @@ def copy_backend_files(src_backend: Path, dest_backend: Path) -> None:
             dirs_exist_ok=True,
         )
 
+    # Vendor craftlab_ctl package directly into backend so release is hermetic
+    src_ctl = src_backend.parent / "CraftLab-ctl" / "src" / "craftlab_ctl"
+    if src_ctl.exists():
+        dest_ctl = dest_backend / "craftlab_ctl"
+        shutil.copytree(
+            src_ctl,
+            dest_ctl,
+            ignore=shutil.ignore_patterns("__pycache__", "*.pyc", "*.pyo"),
+            dirs_exist_ok=True,
+        )
+
 
 def build_release_manifest(
     version: str,

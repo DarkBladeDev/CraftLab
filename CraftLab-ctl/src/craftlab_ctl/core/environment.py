@@ -141,7 +141,7 @@ def _ensure_craftlab_ctl(
     if check_res.returncode == 0:
         return
 
-    # 2. Try installing from wheels_dir
+    # 2. Try installing from wheels_dir with --no-deps
     if paths.wheels_dir and paths.wheels_dir.exists():
         res = subprocess.run(
             [
@@ -149,6 +149,7 @@ def _ensure_craftlab_ctl(
                 "-m",
                 "pip",
                 "install",
+                "--no-deps",
                 "--no-index",
                 "--find-links",
                 str(paths.wheels_dir),
@@ -159,6 +160,25 @@ def _ensure_craftlab_ctl(
         )
         if res.returncode == 0:
             return
+
+        # Direct wheel extraction fallback if pip fails
+        whls = list(paths.wheels_dir.glob("craftlab_ctl*.whl"))
+        if whls:
+            try:
+                import zipfile
+                sp_res = subprocess.run(
+                    [str(py_exec), "-c", "import site; print(site.getsitepackages()[0])"],
+                    capture_output=True,
+                    text=True,
+                )
+                if sp_res.returncode == 0:
+                    sp_dir = Path(sp_res.stdout.strip())
+                    if sp_dir.exists():
+                        with zipfile.ZipFile(whls[0], "r") as z:
+                            z.extractall(sp_dir)
+                        return
+            except Exception:
+                pass
 
     # 3. If source CraftLab-ctl exists (dev / monorepo), build and install
     src_ctl = paths.home / "CraftLab-ctl"
@@ -184,6 +204,7 @@ def _ensure_craftlab_ctl(
                     "-m",
                     "pip",
                     "install",
+                    "--no-deps",
                     "--find-links",
                     str(paths.wheels_dir),
                     "craftlab-ctl",
@@ -195,7 +216,7 @@ def _ensure_craftlab_ctl(
                 return
 
         subprocess.run(
-            [str(py_exec), "-m", "pip", "install", "-e", str(src_ctl)],
+            [str(py_exec), "-m", "pip", "install", "--no-deps", "-e", str(src_ctl)],
             capture_output=True,
             timeout=timeout,
         )
