@@ -44,11 +44,14 @@ class LifecyclePlugin(Plugin):
     async def start(
         self,
         ctx: Context,
-        host: str = "127.0.0.1",
-        port: int = 8000,
+        host: Optional[str] = None,
+        port: Optional[int] = None,
         timeout: int = 15,
     ) -> OperationResult:
         """Start the CraftLab backend service and await readiness."""
+        resolved_host = host or os.getenv("CRAFTLAB_HOST", "127.0.0.1")
+        resolved_port = port if port is not None else int(os.getenv("CRAFTLAB_PORT", "8000"))
+
         supervisor = self._get_supervisor(ctx)
         await ctx.step("check_existing")
         if supervisor.is_running():
@@ -65,17 +68,17 @@ class LifecyclePlugin(Plugin):
             "uvicorn",
             "main:app",
             "--host",
-            host,
+            resolved_host,
             "--port",
-            str(port),
+            str(resolved_port),
         ]
         log_out = ctx.paths.logs_dir / "backend.log"
         log_err = ctx.paths.logs_dir / "backend_err.log"
 
         env = {
             "CRAFTLAB_HOME": str(ctx.paths.home),
-            "CRAFTLAB_HOST": host,
-            "CRAFTLAB_PORT": str(port),
+            "CRAFTLAB_HOST": resolved_host,
+            "CRAFTLAB_PORT": str(resolved_port),
         }
         ctl_src = ctx.paths.home / "CraftLab-ctl" / "src"
         if ctl_src.exists():
@@ -92,7 +95,7 @@ class LifecyclePlugin(Plugin):
         )
 
         await ctx.step("await_readiness")
-        ready_url = f"http://{host}:{port}/ready"
+        ready_url = f"http://{resolved_host}:{resolved_port}/ready"
         start_time = time.time()
         is_ready = False
         last_error = ""
@@ -130,7 +133,7 @@ class LifecyclePlugin(Plugin):
         return OperationResult.ok(
             message=f"Backend started successfully (PID {pid})",
             pid=pid,
-            url=f"http://{host}:{port}",
+            url=f"http://{resolved_host}:{resolved_port}",
         )
 
     @command(mutates=True, danger=DangerLevel.DISRUPTIVE)
@@ -151,8 +154,8 @@ class LifecyclePlugin(Plugin):
     async def restart(
         self,
         ctx: Context,
-        host: str = "127.0.0.1",
-        port: int = 8000,
+        host: Optional[str] = None,
+        port: Optional[int] = None,
         timeout: int = 15,
     ) -> OperationResult:
         """Restart the CraftLab backend service."""
@@ -163,10 +166,13 @@ class LifecyclePlugin(Plugin):
     async def status(
         self,
         ctx: Context,
-        host: str = "127.0.0.1",
-        port: int = 8000,
+        host: Optional[str] = None,
+        port: Optional[int] = None,
     ) -> OperationResult:
         """Check the status and health of the CraftLab backend service."""
+        resolved_host = host or os.getenv("CRAFTLAB_HOST", "127.0.0.1")
+        resolved_port = port if port is not None else int(os.getenv("CRAFTLAB_PORT", "8000"))
+
         supervisor = self._get_supervisor(ctx)
         proc_status = supervisor.get_status()
         if proc_status.get("status") != "running":
@@ -176,7 +182,7 @@ class LifecyclePlugin(Plugin):
         probe_data = {}
         try:
             async with httpx.AsyncClient(timeout=1.0) as client:
-                resp = await client.get(f"http://{host}:{port}/health")
+                resp = await client.get(f"http://{resolved_host}:{resolved_port}/health")
                 if resp.status_code == 200:
                     probe_status = "healthy"
                     probe_data = resp.json()

@@ -126,3 +126,9 @@ async def websocket_agent_endpoint(websocket: WebSocket):
     finally:
         if connected_target_id:
             await gateway_manager.unregister_session(connected_target_id, AsyncSessionLocal)
+
+
+if __name__ == "__main__":
+    import uvicorn
+    uvicorn.run("main:app", host=settings.server.host, port=settings.server.port, reload=True)
+

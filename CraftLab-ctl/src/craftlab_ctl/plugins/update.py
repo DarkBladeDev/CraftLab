@@ -226,8 +226,8 @@ class UpdatePlugin(Plugin):
         ctx: Context,
         version: str,
         timeout: int = 15,
-        host: str = "127.0.0.1",
-        port: int = 8000,
+        host: Optional[str] = None,
+        port: Optional[int] = None,
     ) -> OperationResult:
         """Apply an already-prepared release atomically with automated rollback."""
         norm_v = version.lstrip("v")
@@ -299,8 +299,8 @@ class UpdatePlugin(Plugin):
         ctx: Context,
         target_version: Optional[str] = None,
         timeout: int = 15,
-        host: str = "127.0.0.1",
-        port: int = 8000,
+        host: Optional[str] = None,
+        port: Optional[int] = None,
     ) -> OperationResult:
         """Roll back to a previous installed release version."""
         installed = ctx.paths.get_installed_releases()

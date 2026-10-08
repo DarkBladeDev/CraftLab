@@ -15,6 +15,8 @@ from craftlab_ctl.plugins.core import CorePlugin
 from craftlab_ctl.plugins.update import UpdatePlugin
 from craftlab_ctl.sdk import Context, PluginRegistry
 
+_paths = get_paths()
+
 
 def get_client() -> LocalControlClient:
     paths = get_paths()
@@ -197,15 +199,20 @@ def cli(ctx, server, token):
 
 
 @cli.command()
-@click.option("--host", default="127.0.0.1", help="Host interface to bind")
-@click.option("--port", default=8000, type=int, help="Port to listen on")
+@click.option("--host", envvar="CRAFTLAB_HOST", default=None, help="Host interface to bind")
+@click.option("--port", envvar="CRAFTLAB_PORT", default=None, type=int, help="Port to listen on")
 @click.option("--timeout", default=15, type=int, help="Readiness timeout in seconds")
 @click.pass_context
-def start(ctx, host: str, port: int, timeout: int):
+def start(ctx, host: Optional[str], port: Optional[int], timeout: int):
     """Start the CraftLab backend service."""
     server = ctx.obj.get("server")
     token = ctx.obj.get("token")
-    sys.exit(asyncio.run(run_client_command("start", {"host": host, "port": port, "timeout": timeout}, server=server, token=token)))
+    params: Dict[str, Any] = {"timeout": timeout}
+    if host is not None:
+        params["host"] = host
+    if port is not None:
+        params["port"] = port
+    sys.exit(asyncio.run(run_client_command("start", params, server=server, token=token)))
 
 
 @cli.command()
@@ -219,26 +226,36 @@ def stop(ctx, timeout: int):
 
 
 @cli.command()
-@click.option("--host", default="127.0.0.1", help="Host interface to bind")
-@click.option("--port", default=8000, type=int, help="Port to listen on")
+@click.option("--host", envvar="CRAFTLAB_HOST", default=None, help="Host interface to bind")
+@click.option("--port", envvar="CRAFTLAB_PORT", default=None, type=int, help="Port to listen on")
 @click.option("--timeout", default=15, type=int, help="Readiness timeout in seconds")
 @click.pass_context
-def restart(ctx, host: str, port: int, timeout: int):
+def restart(ctx, host: Optional[str], port: Optional[int], timeout: int):
     """Restart the CraftLab backend service."""
     server = ctx.obj.get("server")
     token = ctx.obj.get("token")
-    sys.exit(asyncio.run(run_client_command("restart", {"host": host, "port": port, "timeout": timeout}, server=server, token=token)))
+    params: Dict[str, Any] = {"timeout": timeout}
+    if host is not None:
+        params["host"] = host
+    if port is not None:
+        params["port"] = port
+    sys.exit(asyncio.run(run_client_command("restart", params, server=server, token=token)))
 
 
 @cli.command()
-@click.option("--host", default="127.0.0.1", help="Host interface to query")
-@click.option("--port", default=8000, type=int, help="Port to query")
+@click.option("--host", envvar="CRAFTLAB_HOST", default=None, help="Host interface to query")
+@click.option("--port", envvar="CRAFTLAB_PORT", default=None, type=int, help="Port to query")
 @click.pass_context
-def status(ctx, host: str, port: int):
+def status(ctx, host: Optional[str], port: Optional[int]):
     """Inspect backend service status and health."""
     server = ctx.obj.get("server")
     token = ctx.obj.get("token")
-    sys.exit(asyncio.run(run_client_command("status", {"host": host, "port": port}, server=server, token=token)))
+    params: Dict[str, Any] = {}
+    if host is not None:
+        params["host"] = host
+    if port is not None:
+        params["port"] = port
+    sys.exit(asyncio.run(run_client_command("status", params, server=server, token=token)))
 
 
 @cli.command()
@@ -414,16 +431,21 @@ def update_prepare(ctx, version: str, repo: str, local_file: Optional[str]):
 @click.argument("version")
 @click.option("--yes", "-y", is_flag=True, help="Skip confirmation prompt")
 @click.option("--timeout", default=15, type=int, help="Readiness timeout in seconds")
-@click.option("--host", default="127.0.0.1", help="Host interface to bind")
-@click.option("--port", default=8000, type=int, help="Port to listen on")
+@click.option("--host", envvar="CRAFTLAB_HOST", default=None, help="Host interface to bind")
+@click.option("--port", envvar="CRAFTLAB_PORT", default=None, type=int, help="Port to listen on")
 @click.pass_context
-def update_apply(ctx, version: str, yes: bool, timeout: int, host: str, port: int):
+def update_apply(ctx, version: str, yes: bool, timeout: int, host: Optional[str], port: Optional[int]):
     """Atomically activate prepared release with automated rollback."""
     server = ctx.obj.get("server") if ctx.obj else None
     token = ctx.obj.get("token") if ctx.obj else None
     if not yes:
         click.confirm(f"Applying release '{version}' will restart backend service. Proceed?", abort=True)
-    sys.exit(asyncio.run(run_client_command("apply", {"version": version, "timeout": timeout, "host": host, "port": port}, server=server, token=token)))
+    params: Dict[str, Any] = {"version": version, "timeout": timeout}
+    if host is not None:
+        params["host"] = host
+    if port is not None:
+        params["port"] = port
+    sys.exit(asyncio.run(run_client_command("apply", params, server=server, token=token)))
 
 
 @update.command(name="run")
@@ -432,10 +454,10 @@ def update_apply(ctx, version: str, yes: bool, timeout: int, host: str, port: in
 @click.option("--file", "local_file", default=None, help="Local release archive")
 @click.option("--yes", "-y", is_flag=True, help="Skip confirmation prompt")
 @click.option("--timeout", default=15, type=int, help="Readiness timeout in seconds")
-@click.option("--host", default="127.0.0.1", help="Host interface to bind")
-@click.option("--port", default=8000, type=int, help="Port to listen on")
+@click.option("--host", envvar="CRAFTLAB_HOST", default=None, help="Host interface to bind")
+@click.option("--port", envvar="CRAFTLAB_PORT", default=None, type=int, help="Port to listen on")
 @click.pass_context
-def update_run(ctx, version: str, repo: str, local_file: Optional[str], yes: bool, timeout: int, host: str, port: int):
+def update_run(ctx, version: str, repo: str, local_file: Optional[str], yes: bool, timeout: int, host: Optional[str], port: Optional[int]):
     """Update CraftLab to <version> (runs prepare and apply in sequence)."""
     server = ctx.obj.get("server") if ctx.obj else None
     token = ctx.obj.get("token") if ctx.obj else None
@@ -452,9 +474,14 @@ def update_run(ctx, version: str, repo: str, local_file: Optional[str], yes: boo
         click.secho("[error] Preparation failed. Aborting update.", fg="red")
         sys.exit(prep_code)
     click.secho(f"\n[*] Phase 2/2: Applying release '{version}'...", fg="cyan", bold=True)
+    apply_params: Dict[str, Any] = {"version": version, "timeout": timeout}
+    if host is not None:
+        apply_params["host"] = host
+    if port is not None:
+        apply_params["port"] = port
     apply_code = asyncio.run(run_client_command(
         "apply",
-        {"version": version, "timeout": timeout, "host": host, "port": port},
+        apply_params,
         server=server,
         token=token,
     ))
@@ -465,17 +492,22 @@ def update_run(ctx, version: str, repo: str, local_file: Optional[str], yes: boo
 @click.argument("version", required=False, default=None)
 @click.option("--yes", "-y", is_flag=True, help="Skip confirmation prompt")
 @click.option("--timeout", default=15, type=int, help="Readiness timeout in seconds")
-@click.option("--host", default="127.0.0.1", help="Host interface to bind")
-@click.option("--port", default=8000, type=int, help="Port to listen on")
+@click.option("--host", envvar="CRAFTLAB_HOST", default=None, help="Host interface to bind")
+@click.option("--port", envvar="CRAFTLAB_PORT", default=None, type=int, help="Port to listen on")
 @click.pass_context
-def rollback(ctx, version: Optional[str], yes: bool, timeout: int, host: str, port: int):
+def rollback(ctx, version: Optional[str], yes: bool, timeout: int, host: Optional[str], port: Optional[int]):
     """Roll back to a previously installed release version."""
     server = ctx.obj.get("server") if ctx.obj else None
     token = ctx.obj.get("token") if ctx.obj else None
     target_desc = f"release '{version}'" if version else "previous installed release"
     if not yes:
         click.confirm(f"Rollback to {target_desc} will restart backend service. Proceed?", abort=True)
-    sys.exit(asyncio.run(run_client_command("rollback", {"target_version": version, "timeout": timeout, "host": host, "port": port}, server=server, token=token)))
+    params: Dict[str, Any] = {"target_version": version, "timeout": timeout}
+    if host is not None:
+        params["host"] = host
+    if port is not None:
+        params["port"] = port
+    sys.exit(asyncio.run(run_client_command("rollback", params, server=server, token=token)))
 
 
 @cli.command()

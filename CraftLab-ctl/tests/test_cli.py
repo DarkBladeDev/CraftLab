@@ -75,3 +75,17 @@ def test_cli_remote_flags_error_handling():
     assert result.exit_code == 1
     assert "Remote execution error" in result.output
 
+
+def test_cli_start_and_status_options():
+    runner = CliRunner()
+    res_start = runner.invoke(cli, ["start", "--help"])
+    assert res_start.exit_code == 0
+    assert "--port" in res_start.output
+    assert "--host" in res_start.output
+
+    res_status = runner.invoke(cli, ["status", "--help"])
+    assert res_status.exit_code == 0
+    assert "--port" in res_status.output
+    assert "--host" in res_status.output
+
+

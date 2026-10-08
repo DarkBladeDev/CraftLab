@@ -30,11 +30,31 @@ param(
 $ErrorActionPreference = "Stop"
 $RootDir = $PSScriptRoot
 
+# Load environment variables from .env if present
+$EnvFilePath = Join-Path "$RootDir\.." ".env"
+if (Test-Path $EnvFilePath) {
+    Get-Content $EnvFilePath | ForEach-Object {
+        $line = $_.Trim()
+        if ($line -and -not $line.StartsWith("#") -and $line.Contains("=")) {
+            $parts = $line.Split("=", 2)
+            $key = $parts[0].Trim()
+            $val = $parts[1].Trim()
+            if (-not [System.Environment]::GetEnvironmentVariable($key)) {
+                [System.Environment]::SetEnvironmentVariable($key, $val, "Process")
+            }
+        }
+    }
+}
+
+$BackendHost = if ($env:CRAFTLAB_HOST) { $env:CRAFTLAB_HOST } else { "127.0.0.1" }
+$BackendPort = if ($env:CRAFTLAB_PORT) { $env:CRAFTLAB_PORT } else { "8000" }
+
 Write-Host ""
 Write-Host "==========================================================" -ForegroundColor Cyan
 Write-Host "   MINECRAFT CONTENT PLATFORM - LOCAL DEV DEPLOY RUNNER   " -ForegroundColor Cyan
 Write-Host "==========================================================" -ForegroundColor Cyan
 Write-Host ""
+
 
 # 1. Stop mode
 if ($Mode -eq "stop") {
@@ -227,8 +247,8 @@ Write-Host "`n[4/4] Starting Local Runtime Services ($Mode mode)..." -Foreground
 
 # A. Start Backend (if Mode in "all", "web-only")
 if ($Mode -in @("all", "web-only")) {
-    Write-Host "      Starting FastAPI Backend & WebSocket Gateway on port 8000..." -ForegroundColor Gray
-    $BackendCmd = "cd '$BackendDir'; .\.venv\Scripts\python.exe -m uvicorn main:app --reload --port 8000"
+    Write-Host "      Starting FastAPI Backend & WebSocket Gateway on $($BackendHost):$($BackendPort)..." -ForegroundColor Gray
+    $BackendCmd = "cd '$BackendDir'; .\.venv\Scripts\python.exe -m uvicorn main:app --reload --host $BackendHost --port $BackendPort"
     Start-Process powershell -ArgumentList "-NoExit", "-Command", "`$Host.UI.RawUI.WindowTitle='MCP - Backend & Gateway'; $BackendCmd"
     Start-Sleep -Seconds 2
 }
@@ -253,8 +273,8 @@ Write-Host "             ALL SYSTEMS RUNNING LOCALLY!                 " -Foregro
 Write-Host "==========================================================" -ForegroundColor Green
 Write-Host ""
 Write-Host "  * Web Editor Dashboard : http://localhost:3000" -ForegroundColor White
-Write-Host "  * REST API & Docs      : http://127.0.0.1:8000/docs" -ForegroundColor White
-Write-Host "  * Agent Gateway (WS)   : ws://127.0.0.1:8000/ws/agent" -ForegroundColor White
+Write-Host "  * REST API & Docs      : http://$($BackendHost):$($BackendPort)/docs" -ForegroundColor White
+Write-Host "  * Agent Gateway (WS)   : ws://$($BackendHost):$($BackendPort)/ws/agent" -ForegroundColor White
 if ($ServerReadyToLaunch) {
     Write-Host "  * Paper Server Console : Running in 'MCP - Paper 1.21 Server' window" -ForegroundColor Green
 } else {
