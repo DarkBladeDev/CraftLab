@@ -4,6 +4,8 @@ import shutil
 import uuid
 import zipfile
 import hashlib
+import logging
+import traceback
 from pathlib import Path
 from typing import Optional, List, Dict, Any
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form, Request, Response
@@ -571,7 +573,6 @@ async def build_resource_pack(
             legacy_file = studio_layer_dir / "assets" / "minecraft" / "models" / "item" / f"{mat.lower()}.json"
             legacy_file.parent.mkdir(parents=True, exist_ok=True)
             legacy_model_data = SemanticMerger.build_legacy_item_model(mat, mappings)
-            import json
             legacy_file.write_text(json.dumps(legacy_model_data, indent=2), encoding="utf-8")
 
             # 2. Modern overlay definition: overlay_v1_21_2/assets/minecraft/items/{mat.lower()}.json
@@ -701,7 +702,6 @@ async def build_resource_pack(
                 )
                 await gateway_manager.send_to_target(request_data.target_id, ready_envelope)
             except Exception as e:
-                import logging
                 logging.getLogger("mcp.packs").error(f"Failed to notify agent: {e}")
 
         return {
@@ -714,7 +714,6 @@ async def build_resource_pack(
             "build_summary": compiled_record.build_summary
         }
     except Exception as e:
-        import traceback
         err_msg = traceback.format_exc()
         try:
             Path("build_error.log").write_text(err_msg, encoding="utf-8")

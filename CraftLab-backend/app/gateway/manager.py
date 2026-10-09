@@ -1,12 +1,16 @@
 import asyncio
 import json
 import logging
+import base64
+import zipfile
+from pathlib import Path
 from datetime import datetime, timezone
 from typing import Dict, Optional, Any
 from fastapi import WebSocket
 from sqlalchemy import select
 from app.protocol.envelope import MessageEnvelope, utcnow_iso
 from app.models.entities import TargetModel
+from app.core.config import settings
 
 logger = logging.getLogger("mcp.gateway")
 
@@ -188,13 +192,10 @@ class AgentSessionManager:
 
         # 2c. Resource Pack Source Sync Event
         elif env.messageType == "event" and env.payload.get("type") == "resource_pack:source_sync":
-            import base64
-            from pathlib import Path
             from app.domain.pack_sources import PackRepository
             plugin = env.payload.get("plugin", "oraxen")
             sha1 = env.payload.get("sha1")
             zip_b64 = env.payload.get("zipBase64")
-            from app.core.config import settings
             source_id = f"src-agent-{target_id}-{plugin}"
             storage_path = str(settings.paths.packs_dir / "sources" / source_id / "contents")
 
@@ -205,7 +206,6 @@ class AgentSessionManager:
                     dest_dir.mkdir(parents=True, exist_ok=True)
                     zip_path = dest_dir.parent / "agent_synced.zip"
                     zip_path.write_bytes(data)
-                    import zipfile
                     with zipfile.ZipFile(zip_path, "r") as zf:
                         zf.extractall(dest_dir)
                 except Exception as e:

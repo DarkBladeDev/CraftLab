@@ -1,6 +1,7 @@
 import os
 import zipfile
 import hashlib
+import json
 from pathlib import Path
 from typing import Tuple, Dict, Any
 
@@ -109,7 +110,6 @@ class DeterministicPackCompiler:
         description: str = "Universal Multi-Version Resource Pack (1.21.1 - 1.21.11)"
     ) -> Path:
         """Writes multi-version pack.mcmeta into target_dir."""
-        import json
         mcmeta_path = target_dir / "pack.mcmeta"
         content = cls.generate_multiversion_mcmeta(pack_format=pack_format, description=description)
         mcmeta_path.write_text(json.dumps(content, indent=2), encoding="utf-8")

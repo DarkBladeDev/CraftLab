@@ -268,3 +268,45 @@ async def test_packs_api_workspace_config_and_source_update():
         r_del = await client.delete(f"/api/v1/packs/sources/{src_id}")
         assert r_del.status_code == 200
 
+
+@pytest.mark.asyncio
+async def test_packs_api_build_with_item_model_no_cmd():
+    """Verify pack building succeeds when items only use item_model and custom_model_data is None."""
+    await init_db()
+
+    async with AsyncSessionLocal() as session:
+        await session.execute(delete(ItemModel).where(ItemModel.id == "item_model_only_sword"))
+        await session.execute(delete(TargetModel).where(TargetModel.id == "target-model-only-test"))
+        await session.commit()
+
+        target = TargetModel(
+            id="target-model-only-test",
+            name="Test Modern Server",
+            secret="test-secret"
+        )
+        session.add(target)
+
+        item = ItemModel(
+            id="item_model_only_sword",
+            material="DIAMOND_SWORD",
+            display_name="Modern Model Sword",
+            custom_model_data=None,
+            item_model="custom:weapons/katana"
+        )
+        session.add(item)
+        await session.commit()
+
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        build_payload = {
+            "target_id": "target-model-only-test",
+            "pack_format": 46,
+            "description": "Modern Item Model Only Pack",
+            "force": True
+        }
+        resp_build = await client.post("/api/v1/packs/build", json=build_payload)
+        assert resp_build.status_code == 200
+        build_data = resp_build.json()
+        assert "sha1_hash" in build_data
+        assert build_data["file_size"] > 0
+
