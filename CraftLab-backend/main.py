@@ -14,7 +14,7 @@ from app.api.blocks import router as blocks_router
 from app.api.targets import router as targets_router
 from app.api.deployments import router as deployments_router
 from app.api.catalogs import router as catalogs_router
-from app.api.packs import router as packs_router
+from app.api.packs import router as packs_router, public_router as public_packs_router
 from app.api.auth import router as auth_router
 from app.core.auth import require_roles
 from app.gateway.manager import gateway_manager
@@ -107,6 +107,7 @@ app.include_router(targets_router, dependencies=content_auth)
 app.include_router(deployments_router, dependencies=content_auth)
 app.include_router(catalogs_router, dependencies=content_auth)
 app.include_router(packs_router, dependencies=content_auth)
+app.include_router(public_packs_router)
 
 
 @app.websocket("/ws/agent")

@@ -30,6 +30,7 @@ from app.domain.workspace import (
 )
 
 router = APIRouter(prefix="/api/v1/packs", tags=["packs"])
+public_router = APIRouter(prefix="/api/v1/packs", tags=["packs"])
 
 from app.core.config import settings
 
@@ -564,7 +565,7 @@ async def build_resource_pack(
         shutil.rmtree(stage_dir, ignore_errors=True)
 
 
-@router.get("/{target_id}/download")
+@public_router.get("/{target_id}/download")
 async def download_resource_pack(
     target_id: str,
     request: Request,
@@ -594,7 +595,7 @@ async def download_resource_pack(
     )
 
 
-@router.get("/{target_id}/latest")
+@public_router.get("/{target_id}/latest")
 async def get_latest_pack_info(
     target_id: str,
     db: AsyncSession = Depends(get_db)

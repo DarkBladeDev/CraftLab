@@ -90,3 +90,27 @@ async def test_backend_viewer_role_forbidden():
         # Viewer role gets 403 on content endpoints (creator/admin required)
         res = await client.get("/api/v1/packs/sources")
         assert res.status_code == 403
+
+
+@pytest.mark.asyncio
+async def test_public_pack_endpoints_unauthenticated():
+    """Verify that resource pack download and latest endpoints are publicly accessible without auth for Minecraft clients."""
+    await init_db()
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        # Protected endpoint returns 401 when unauthenticated
+        res_prot = await client.get("/api/v1/packs/sources")
+        assert res_prot.status_code == 401
+        assert res_prot.json() == {"detail": "Authentication required"}
+
+        # Public download endpoint must NOT return 401 (returns 200 with zip when pack exists)
+        res_dl = await client.get("/api/v1/packs/dev-server/download")
+        assert res_dl.status_code == 200
+        assert "application/zip" in res_dl.headers.get("content-type", "")
+
+        # Public latest endpoint must NOT return 401 (returns 200 or 404 depending on records, never 401)
+        res_latest = await client.get("/api/v1/packs/dev-server/latest")
+        assert res_latest.status_code in (200, 404)
+        if res_latest.status_code == 404:
+            assert res_latest.json() != {"detail": "Authentication required"}
+
