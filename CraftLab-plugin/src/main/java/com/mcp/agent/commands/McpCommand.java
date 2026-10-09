@@ -20,6 +20,7 @@ import java.util.Collections;
 import java.util.List;
 
 public class McpCommand implements CommandExecutor, TabCompleter {
+    private final com.mcp.agent.core.McpAgentPlugin plugin;
     private final ItemStorage storage;
     private final ItemAdapter adapter;
     private final AgentWebSocketClient wsClient;
@@ -27,14 +28,19 @@ public class McpCommand implements CommandExecutor, TabCompleter {
     private final com.mcp.agent.props.PropManager propManager;
 
     public McpCommand(ItemStorage storage, ItemAdapter adapter, AgentWebSocketClient wsClient) {
-        this(storage, adapter, wsClient, null, null);
+        this(null, storage, adapter, wsClient, null, null);
     }
 
     public McpCommand(ItemStorage storage, ItemAdapter adapter, AgentWebSocketClient wsClient, com.mcp.agent.pack.ResourcePackManager packManager) {
-        this(storage, adapter, wsClient, packManager, null);
+        this(null, storage, adapter, wsClient, packManager, null);
     }
 
     public McpCommand(ItemStorage storage, ItemAdapter adapter, AgentWebSocketClient wsClient, com.mcp.agent.pack.ResourcePackManager packManager, com.mcp.agent.props.PropManager propManager) {
+        this(null, storage, adapter, wsClient, packManager, propManager);
+    }
+
+    public McpCommand(com.mcp.agent.core.McpAgentPlugin plugin, ItemStorage storage, ItemAdapter adapter, AgentWebSocketClient wsClient, com.mcp.agent.pack.ResourcePackManager packManager, com.mcp.agent.props.PropManager propManager) {
+        this.plugin = plugin;
         this.storage = storage;
         this.adapter = adapter;
         this.wsClient = wsClient;
@@ -52,27 +58,49 @@ public class McpCommand implements CommandExecutor, TabCompleter {
         String sub = args[0].toLowerCase();
 
         if ("status".equals(sub)) {
-            boolean connected = wsClient != null && wsClient.isConnected();
+            AgentWebSocketClient activeWs = plugin != null ? plugin.getWsClient() : wsClient;
+            boolean connected = activeWs != null && activeWs.isConnected();
             NamedTextColor statusColor = connected ? NamedTextColor.GREEN : NamedTextColor.RED;
             sender.sendMessage(Component.text("--- MCP Agent Status ---", NamedTextColor.GOLD));
             sender.sendMessage(Component.text("Gateway: ", NamedTextColor.GRAY)
                     .append(Component.text(connected ? "Connected" : "Disconnected", statusColor)));
+            if (activeWs != null) {
+                sender.sendMessage(Component.text("Target ID: ", NamedTextColor.GRAY)
+                        .append(Component.text(activeWs.getTargetId(), NamedTextColor.YELLOW)));
+                sender.sendMessage(Component.text("Gateway URL: ", NamedTextColor.GRAY)
+                        .append(Component.text(activeWs.getGatewayUri().toString(), NamedTextColor.AQUA)));
+            }
+            ItemStorage activeStorage = (plugin != null && plugin.getItemStorage() != null) ? plugin.getItemStorage() : storage;
+            com.mcp.agent.props.PropManager activeProps = (plugin != null && plugin.getPropManager() != null) ? plugin.getPropManager() : propManager;
+            int itemsCount = activeStorage != null ? activeStorage.getAllItems().size() : 0;
             sender.sendMessage(Component.text("Registered Items: ", NamedTextColor.GRAY)
-                    .append(Component.text(storage.getAllItems().size(), NamedTextColor.AQUA)));
-            if (propManager != null) {
+                    .append(Component.text(itemsCount, NamedTextColor.AQUA)));
+            if (activeProps != null) {
                 sender.sendMessage(Component.text("Registered Blocks/Props: ", NamedTextColor.GRAY)
-                        .append(Component.text(propManager.getDefinitions().size(), NamedTextColor.LIGHT_PURPLE)));
+                        .append(Component.text(activeProps.getDefinitions().size(), NamedTextColor.LIGHT_PURPLE)));
             }
             return true;
         }
 
         if ("reload".equals(sub)) {
-            storage.loadAll();
-            if (propManager != null) {
-                propManager.loadAll();
+            if (plugin != null) {
+                plugin.reloadPlugin();
+            } else {
+                if (storage != null) {
+                    storage.loadAll();
+                }
+                if (propManager != null) {
+                    propManager.loadAll();
+                }
+                if (wsClient != null) {
+                    wsClient.reconnect();
+                }
             }
-            int propsCount = propManager != null ? propManager.getDefinitions().size() : 0;
-            sender.sendMessage(Component.text("[MCP] Local storage reloaded. " + storage.getAllItems().size() + " items, " + propsCount + " blocks/props active.", NamedTextColor.GREEN));
+            ItemStorage activeStorage = (plugin != null && plugin.getItemStorage() != null) ? plugin.getItemStorage() : storage;
+            com.mcp.agent.props.PropManager activeProps = (plugin != null && plugin.getPropManager() != null) ? plugin.getPropManager() : propManager;
+            int itemsCount = activeStorage != null ? activeStorage.getAllItems().size() : 0;
+            int propsCount = activeProps != null ? activeProps.getDefinitions().size() : 0;
+            sender.sendMessage(Component.text("[MCP] Configuration and local storage reloaded. " + itemsCount + " items, " + propsCount + " blocks/props active.", NamedTextColor.GREEN));
             return true;
         }
 

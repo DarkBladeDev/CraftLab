@@ -13,6 +13,7 @@ public class McpAgentPlugin extends JavaPlugin {
     private ItemAdapter itemAdapter;
     private AgentWebSocketClient wsClient;
     private com.mcp.agent.props.PropManager propManager;
+    private com.mcp.agent.pack.ResourcePackManager resourcePackManager;
 
     @Override
     public void onEnable() {
@@ -27,8 +28,8 @@ public class McpAgentPlugin extends JavaPlugin {
         this.itemAdapter = new Paper121ItemAdapter();
 
         // 3. Resource Pack Manager & Listener
-        com.mcp.agent.pack.ResourcePackManager resourcePackManager = new com.mcp.agent.pack.ResourcePackManager(getLogger());
-        getServer().getPluginManager().registerEvents(new com.mcp.agent.pack.ResourcePackJoinListener(resourcePackManager), this);
+        this.resourcePackManager = new com.mcp.agent.pack.ResourcePackManager(getLogger());
+        getServer().getPluginManager().registerEvents(new com.mcp.agent.pack.ResourcePackJoinListener(this.resourcePackManager), this);
 
         // 3b. Props Engine (Virtual Displays via PacketEvents)
         java.io.File propsDataDir = new java.io.File(getDataFolder(), "data");
@@ -41,6 +42,8 @@ public class McpAgentPlugin extends JavaPlugin {
         String gatewayUrl = getConfig().getString("gateway.url", "ws://127.0.0.1:8000/ws/agent");
         String targetId = getConfig().getString("gateway.targetId", "local-paper-server");
         String secret = getConfig().getString("gateway.secret", "dev-secret");
+        int reconnectIntervalSeconds = getConfig().getInt("gateway.reconnectIntervalSeconds", 5);
+        int heartbeatIntervalSeconds = getConfig().getInt("gateway.heartbeatIntervalSeconds", 15);
 
         java.io.File oraxenRoot = new java.io.File(getDataFolder().getParentFile(), "Oraxen");
         java.io.File oraxenItemsFolder = new java.io.File(oraxenRoot, "items");
@@ -48,11 +51,12 @@ public class McpAgentPlugin extends JavaPlugin {
         com.mcp.agent.adapters.oraxen.OraxenItemExporter oraxenExporter = new com.mcp.agent.adapters.oraxen.OraxenItemExporter(oraxenItemsFolder, getLogger());
         com.mcp.agent.adapters.oraxen.OraxenPackScanner oraxenPackScanner = new com.mcp.agent.adapters.oraxen.OraxenPackScanner(oraxenRoot, getLogger());
 
-        this.wsClient = new AgentWebSocketClient(gatewayUrl, targetId, secret, itemStorage, oraxenHook, oraxenExporter, resourcePackManager, oraxenPackScanner, this.propManager, getLogger());
+        this.wsClient = new AgentWebSocketClient(gatewayUrl, targetId, secret, reconnectIntervalSeconds, heartbeatIntervalSeconds,
+                itemStorage, oraxenHook, oraxenExporter, this.resourcePackManager, oraxenPackScanner, this.propManager, getLogger());
         this.wsClient.start();
 
         // 5. Command
-        McpCommand commandHandler = new McpCommand(itemStorage, itemAdapter, wsClient, resourcePackManager, this.propManager);
+        McpCommand commandHandler = new McpCommand(this, itemStorage, itemAdapter, wsClient, this.resourcePackManager, this.propManager);
         PluginCommand cmd = getCommand("mcp");
         if (cmd != null) {
             cmd.setExecutor(commandHandler);
@@ -60,6 +64,32 @@ public class McpAgentPlugin extends JavaPlugin {
         }
 
         getLogger().info("MCP Agent enabled successfully!");
+    }
+
+    public void reloadPlugin() {
+        getLogger().info("Reloading MCP Agent configuration and resources...");
+        reloadConfig();
+
+        String gatewayUrl = getConfig().getString("gateway.url", "ws://127.0.0.1:8000/ws/agent");
+        String targetId = getConfig().getString("gateway.targetId", "local-paper-server");
+        String secret = getConfig().getString("gateway.secret", "dev-secret");
+        int reconnectIntervalSeconds = getConfig().getInt("gateway.reconnectIntervalSeconds", 5);
+        int heartbeatIntervalSeconds = getConfig().getInt("gateway.heartbeatIntervalSeconds", 15);
+
+        if (this.itemStorage != null) {
+            this.itemStorage.loadAll();
+        }
+
+        if (this.propManager != null) {
+            this.propManager.loadAll();
+        }
+
+        if (this.wsClient != null) {
+            this.wsClient.updateConfiguration(gatewayUrl, targetId, secret, reconnectIntervalSeconds, heartbeatIntervalSeconds);
+            this.wsClient.reconnect();
+        }
+
+        getLogger().info("MCP Agent configuration and resources reloaded successfully.");
     }
 
     @Override
@@ -85,5 +115,9 @@ public class McpAgentPlugin extends JavaPlugin {
 
     public com.mcp.agent.props.PropManager getPropManager() {
         return propManager;
+    }
+
+    public com.mcp.agent.pack.ResourcePackManager getResourcePackManager() {
+        return resourcePackManager;
     }
 }

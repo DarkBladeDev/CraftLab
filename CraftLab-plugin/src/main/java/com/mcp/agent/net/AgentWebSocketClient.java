@@ -15,9 +15,11 @@ import java.util.concurrent.*;
 import java.util.logging.Logger;
 
 public class AgentWebSocketClient implements WebSocket.Listener {
-    private final URI gatewayUri;
-    private final String targetId;
-    private final String secret;
+    private volatile URI gatewayUri;
+    private volatile String targetId;
+    private volatile String secret;
+    private volatile int reconnectIntervalSeconds = 5;
+    private volatile int heartbeatIntervalSeconds = 15;
     private final ItemStorage storage;
     private final com.mcp.agent.adapters.oraxen.OraxenCatalogHook oraxenHook;
     private final com.mcp.agent.adapters.oraxen.OraxenItemExporter oraxenExporter;
@@ -31,6 +33,7 @@ public class AgentWebSocketClient implements WebSocket.Listener {
     private final HttpClient httpClient = HttpClient.newHttpClient();
     private WebSocket webSocket;
     private ScheduledFuture<?> heartbeatTask;
+    private ScheduledFuture<?> reconnectTask;
     private volatile boolean running = false;
     private final StringBuilder messageBuffer = new StringBuilder();
 
@@ -61,9 +64,23 @@ public class AgentWebSocketClient implements WebSocket.Listener {
                                 com.mcp.agent.adapters.oraxen.OraxenPackScanner oraxenPackScanner,
                                 com.mcp.agent.props.PropManager propManager,
                                 Logger logger) {
-        this.gatewayUri = URI.create(gatewayUrl);
-        this.targetId = targetId;
-        this.secret = secret;
+        this(gatewayUrl, targetId, secret, 5, 15, storage, oraxenHook, oraxenExporter, resourcePackManager, oraxenPackScanner, propManager, logger);
+    }
+
+    public AgentWebSocketClient(String gatewayUrl, String targetId, String secret,
+                                int reconnectIntervalSeconds, int heartbeatIntervalSeconds,
+                                ItemStorage storage,
+                                com.mcp.agent.adapters.oraxen.OraxenCatalogHook oraxenHook,
+                                com.mcp.agent.adapters.oraxen.OraxenItemExporter oraxenExporter,
+                                com.mcp.agent.pack.ResourcePackManager resourcePackManager,
+                                com.mcp.agent.adapters.oraxen.OraxenPackScanner oraxenPackScanner,
+                                com.mcp.agent.props.PropManager propManager,
+                                Logger logger) {
+        this.gatewayUri = URI.create(gatewayUrl != null ? gatewayUrl : "ws://127.0.0.1:8000/ws/agent");
+        this.targetId = targetId != null ? targetId : "local-paper-server";
+        this.secret = secret != null ? secret : "dev-secret";
+        this.reconnectIntervalSeconds = reconnectIntervalSeconds > 0 ? reconnectIntervalSeconds : 5;
+        this.heartbeatIntervalSeconds = heartbeatIntervalSeconds > 0 ? heartbeatIntervalSeconds : 15;
         this.storage = storage;
         this.oraxenHook = oraxenHook;
         this.oraxenExporter = oraxenExporter;
@@ -71,6 +88,73 @@ public class AgentWebSocketClient implements WebSocket.Listener {
         this.oraxenPackScanner = oraxenPackScanner;
         this.propManager = propManager;
         this.logger = logger;
+    }
+
+    public synchronized void updateConfiguration(String gatewayUrl, String targetId, String secret, int reconnectIntervalSeconds, int heartbeatIntervalSeconds) {
+        try {
+            if (gatewayUrl != null && !gatewayUrl.isBlank()) {
+                this.gatewayUri = URI.create(gatewayUrl);
+            }
+        } catch (Exception e) {
+            logger.severe("Invalid gateway URL '" + gatewayUrl + "': " + e.getMessage());
+        }
+        if (targetId != null && !targetId.isBlank()) {
+            this.targetId = targetId;
+        }
+        if (secret != null) {
+            this.secret = secret;
+        }
+        if (reconnectIntervalSeconds > 0) {
+            this.reconnectIntervalSeconds = reconnectIntervalSeconds;
+        }
+        if (heartbeatIntervalSeconds > 0) {
+            this.heartbeatIntervalSeconds = heartbeatIntervalSeconds;
+        }
+    }
+
+    public synchronized void reconnect() {
+        if (!running) {
+            start();
+            return;
+        }
+        if (heartbeatTask != null) {
+            heartbeatTask.cancel(true);
+            heartbeatTask = null;
+        }
+        if (reconnectTask != null) {
+            reconnectTask.cancel(true);
+            reconnectTask = null;
+        }
+        if (webSocket != null) {
+            WebSocket oldWs = webSocket;
+            webSocket = null;
+            try {
+                oldWs.sendClose(WebSocket.NORMAL_CLOSURE, "Reload requested");
+            } catch (Exception ignored) {
+            }
+        }
+        messageBuffer.setLength(0);
+        connect();
+    }
+
+    public URI getGatewayUri() {
+        return gatewayUri;
+    }
+
+    public String getTargetId() {
+        return targetId;
+    }
+
+    public String getSecret() {
+        return secret;
+    }
+
+    public int getReconnectIntervalSeconds() {
+        return reconnectIntervalSeconds;
+    }
+
+    public int getHeartbeatIntervalSeconds() {
+        return heartbeatIntervalSeconds;
     }
 
     public synchronized void start() {
@@ -83,9 +167,19 @@ public class AgentWebSocketClient implements WebSocket.Listener {
         running = false;
         if (heartbeatTask != null) {
             heartbeatTask.cancel(true);
+            heartbeatTask = null;
+        }
+        if (reconnectTask != null) {
+            reconnectTask.cancel(true);
+            reconnectTask = null;
         }
         if (webSocket != null) {
-            webSocket.sendClose(WebSocket.NORMAL_CLOSURE, "Plugin disabled");
+            WebSocket oldWs = webSocket;
+            webSocket = null;
+            try {
+                oldWs.sendClose(WebSocket.NORMAL_CLOSURE, "Plugin disabled");
+            } catch (Exception ignored) {
+            }
         }
         scheduler.shutdownNow();
     }
@@ -94,26 +188,34 @@ public class AgentWebSocketClient implements WebSocket.Listener {
         return webSocket != null && !webSocket.isInputClosed() && !webSocket.isOutputClosed();
     }
 
-    private void connect() {
+    private synchronized void connect() {
         if (!running) return;
+        if (reconnectTask != null) {
+            reconnectTask.cancel(false);
+            reconnectTask = null;
+        }
         logger.info("Connecting to MCP Gateway: " + gatewayUri);
         httpClient.newWebSocketBuilder()
                 .connectTimeout(java.time.Duration.ofSeconds(5))
                 .buildAsync(gatewayUri, this)
                 .whenComplete((ws, throwable) -> {
                     if (throwable != null) {
-                        logger.warning("Failed to connect to gateway: " + throwable.getMessage() + ". Retrying in 5s...");
+                        logger.warning("Failed to connect to gateway: " + throwable.getMessage() + ". Retrying in " + reconnectIntervalSeconds + "s...");
                         scheduleReconnect();
                     }
                 });
     }
 
-    private void scheduleReconnect() {
+    private synchronized void scheduleReconnect() {
         if (!running) return;
         if (heartbeatTask != null) {
             heartbeatTask.cancel(true);
+            heartbeatTask = null;
         }
-        scheduler.schedule(this::connect, 5, TimeUnit.SECONDS);
+        if (reconnectTask != null && !reconnectTask.isDone()) {
+            return;
+        }
+        reconnectTask = scheduler.schedule(this::connect, reconnectIntervalSeconds, TimeUnit.SECONDS);
     }
 
     @Override
@@ -205,7 +307,7 @@ public class AgentWebSocketClient implements WebSocket.Listener {
 
                 webSocket.sendText(gson.toJson(envelope), true);
             }
-        }, 15, 15, TimeUnit.SECONDS);
+        }, heartbeatIntervalSeconds, heartbeatIntervalSeconds, TimeUnit.SECONDS);
     }
 
     @Override
@@ -348,6 +450,10 @@ public class AgentWebSocketClient implements WebSocket.Listener {
 
     @Override
     public CompletionStage<?> onClose(WebSocket webSocket, int statusCode, String reason) {
+        if (webSocket != this.webSocket) {
+            return null;
+        }
+        this.webSocket = null;
         logger.warning("Gateway WebSocket closed (" + statusCode + "): " + reason);
         scheduleReconnect();
         return null;
@@ -355,6 +461,9 @@ public class AgentWebSocketClient implements WebSocket.Listener {
 
     @Override
     public void onError(WebSocket webSocket, Throwable error) {
+        if (webSocket != this.webSocket) {
+            return;
+        }
         logger.warning("Gateway WebSocket error: " + error.getMessage());
         scheduleReconnect();
     }
