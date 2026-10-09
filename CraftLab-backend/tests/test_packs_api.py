@@ -200,3 +200,71 @@ async def test_packs_api_custom_item_model_and_blocks_build():
                 for ov in white_wool["overrides"]
             )
 
+
+@pytest.mark.asyncio
+async def test_packs_api_workspace_config_and_source_update():
+    await init_db()
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        # 1. Test GET /workspace/config
+        r_get = await client.get("/api/v1/packs/workspace/config")
+        assert r_get.status_code == 200
+        cfg = r_get.json()
+        assert "description" in cfg
+        assert "pack_format" in cfg
+
+        # 2. Test PUT /workspace/config
+        r_put = await client.put(
+            "/api/v1/packs/workspace/config",
+            json={
+                "description": "Updated Test Workspace Pack",
+                "pack_format": 46,
+                "min_inclusive": 34,
+                "max_inclusive": 65
+            }
+        )
+        assert r_put.status_code == 200
+        put_cfg = r_put.json()
+        assert put_cfg["description"] == "Updated Test Workspace Pack"
+        assert put_cfg["pack_format"] == 46
+
+        # Verify GET returns updated values
+        r_verify = await client.get("/api/v1/packs/workspace/config")
+        assert r_verify.status_code == 200
+        assert r_verify.json()["description"] == "Updated Test Workspace Pack"
+
+        # 3. Test PATCH /sources/{source_id}
+        zip_buf = io.BytesIO()
+        with zipfile.ZipFile(zip_buf, "w", zipfile.ZIP_DEFLATED) as zf:
+            zf.writestr("pack.mcmeta", json.dumps({"pack": {"pack_format": 34, "description": "Patch Test"}}))
+        zip_bytes = zip_buf.getvalue()
+
+        resp_upload = await client.post(
+            "/api/v1/packs/sources/upload",
+            files={"file": ("patch_test.zip", zip_bytes, "application/zip")},
+            data={"name": "Initial Source Name", "layer_priority": "10"}
+        )
+        assert resp_upload.status_code == 200
+        src_id = resp_upload.json()["id"]
+
+        r_patch = await client.patch(
+            f"/api/v1/packs/sources/{src_id}",
+            json={"name": "Renamed Source Name", "layer_priority": 50}
+        )
+        assert r_patch.status_code == 200
+        patch_res = r_patch.json()
+        assert patch_res["name"] == "Renamed Source Name"
+        assert patch_res["layer_priority"] == 50
+
+        # Verify in list
+        r_list = await client.get("/api/v1/packs/sources")
+        assert r_list.status_code == 200
+        found = next((s for s in r_list.json() if s["id"] == src_id), None)
+        assert found is not None
+        assert found["name"] == "Renamed Source Name"
+        assert found["layer_priority"] == 50
+
+        # Clean up
+        r_del = await client.delete(f"/api/v1/packs/sources/{src_id}")
+        assert r_del.status_code == 200
+

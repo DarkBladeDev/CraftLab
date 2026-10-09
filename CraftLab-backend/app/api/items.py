@@ -107,8 +107,12 @@ async def list_revisions(db: AsyncSession = Depends(get_db)):
 async def create_revision_from_current(db: AsyncSession = Depends(get_db)):
     result = await db.execute(select(ItemModel))
     items = result.scalars().all()
-    if not items:
-        raise HTTPException(status_code=400, detail="Cannot create revision with 0 items")
+
+    b_result = await db.execute(select(BlockModel))
+    blocks = b_result.scalars().all()
+
+    if not items and not blocks:
+        raise HTTPException(status_code=400, detail="Cannot create revision with 0 items and 0 blocks")
 
     domain_items = [
         ItemDefinition(
@@ -132,14 +136,13 @@ async def create_revision_from_current(db: AsyncSession = Depends(get_db)):
     rev_count = count_res.scalar() or 0
     next_number = rev_count + 1
 
-    b_result = await db.execute(select(BlockModel))
-    blocks = b_result.scalars().all()
     domain_blocks = [
         BlockDefinition(
             id=b.id,
             display_name=b.display_name,
             mode=b.mode or "display_prop",
             item_model=b.item_model,
+            block_model=getattr(b, "block_model", None) or b.item_model,
             scale=b.scale or [1.0, 1.0, 1.0],
             translation=b.translation or [0.0, 0.0, 0.0],
             hitbox_type=b.hitbox_type or "solid",
@@ -153,7 +156,6 @@ async def create_revision_from_current(db: AsyncSession = Depends(get_db)):
         )
         for b in blocks
     ]
-
     snapshot = create_revision_snapshot(domain_items, next_number, domain_blocks)
     rev_model = RevisionModel(
         id=snapshot["id"],

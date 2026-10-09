@@ -12,6 +12,7 @@ public class PropDefinition {
     private String displayName;
     private String mode = "display_prop";
     private String itemModel;
+    private String blockModel;
     private List<Float> scale = Arrays.asList(1.0f, 1.0f, 1.0f);
     private List<Float> translation = Arrays.asList(0.0f, 0.0f, 0.0f);
     private String hitboxType = "solid";
@@ -27,10 +28,15 @@ public class PropDefinition {
     }
 
     public PropDefinition(String id, String displayName, String itemModel) {
+        this(id, displayName, itemModel, itemModel);
+    }
+
+    public PropDefinition(String id, String displayName, String itemModel, String blockModel) {
         this();
         this.id = id;
         this.displayName = displayName;
         this.itemModel = itemModel;
+        this.blockModel = blockModel;
     }
 
     public String getId() {
@@ -63,6 +69,14 @@ public class PropDefinition {
 
     public void setItemModel(String itemModel) {
         this.itemModel = itemModel;
+    }
+
+    public String getBlockModel() {
+        return (blockModel != null && !blockModel.isEmpty()) ? blockModel : itemModel;
+    }
+
+    public void setBlockModel(String blockModel) {
+        this.blockModel = blockModel;
     }
 
     public List<Float> getScale() {
@@ -146,6 +160,9 @@ public class PropDefinition {
         if (obj.has("mode")) def.setMode(obj.get("mode").getAsString());
         if (obj.has("item_model") && !obj.get("item_model").isJsonNull()) def.setItemModel(obj.get("item_model").getAsString());
         else if (obj.has("itemModel") && !obj.get("itemModel").isJsonNull()) def.setItemModel(obj.get("itemModel").getAsString());
+
+        if (obj.has("block_model") && !obj.get("block_model").isJsonNull()) def.setBlockModel(obj.get("block_model").getAsString());
+        else if (obj.has("blockModel") && !obj.get("blockModel").isJsonNull()) def.setBlockModel(obj.get("blockModel").getAsString());
 
         Gson gson = new Gson();
         if (obj.has("scale") && obj.get("scale").isJsonArray()) {

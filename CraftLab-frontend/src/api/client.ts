@@ -79,6 +79,7 @@ export interface Block {
   display_name: string
   mode: 'display_prop' | 'noteblock'
   item_model?: string | null
+  block_model?: string | null
   scale: [number, number, number] | number[]
   translation: [number, number, number] | number[]
   hitbox_type: 'solid' | 'passable'
@@ -326,6 +327,48 @@ export async function deletePackSource(sourceId: string): Promise<any> {
   return res.json()
 }
 
+export async function updatePackSource(
+  sourceId: string,
+  data: { name?: string; layer_priority?: number; is_active?: boolean }
+): Promise<any> {
+  const res = await fetch(`/api/v1/packs/sources/${sourceId}`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(data),
+  })
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}))
+    throw new Error(err.detail || `Failed to update pack source (${res.status})`)
+  }
+  return res.json()
+}
+
+export interface WorkspaceConfig {
+  description: string
+  pack_format: number
+  min_inclusive: number
+  max_inclusive: number
+}
+
+export async function fetchWorkspaceConfig(): Promise<WorkspaceConfig> {
+  const res = await fetch(`${API_BASE}/v1/packs/workspace/config`)
+  if (!res.ok) throw new Error(`Failed to fetch workspace config (${res.status})`)
+  return res.json()
+}
+
+export async function updateWorkspaceConfig(cfg: WorkspaceConfig): Promise<WorkspaceConfig> {
+  const res = await fetch(`${API_BASE}/v1/packs/workspace/config`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(cfg),
+  })
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}))
+    throw new Error(err.detail || `Failed to update workspace config (${res.status})`)
+  }
+  return res.json()
+}
+
 export async function runPackPreflight(targetId?: string): Promise<PreflightReport> {
   const params = new URLSearchParams()
   if (targetId) params.append('target_id', targetId)
@@ -501,6 +544,22 @@ export async function deleteWorkspaceFile(path: string): Promise<{ success: bool
   if (!res.ok) {
     const err = await res.json().catch(() => ({}))
     throw new Error(err.detail || `Failed to delete file (${res.status})`)
+  }
+  return res.json()
+}
+
+export async function renameWorkspacePath(
+  oldPath: string,
+  newPath: string
+): Promise<{ success: boolean; old_path: string; new_path: string }> {
+  const res = await fetch(`${API_BASE}/v1/packs/workspace/rename`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ old_path: oldPath, new_path: newPath }),
+  })
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}))
+    throw new Error(err.detail || `Failed to rename path (${res.status})`)
   }
   return res.json()
 }

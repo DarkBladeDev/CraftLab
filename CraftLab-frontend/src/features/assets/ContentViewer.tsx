@@ -30,6 +30,7 @@ export const ContentViewer: React.FC<ContentViewerProps> = ({
   // Image Viewer State
   const [zoomLevel, setZoomLevel] = useState<number>(4)
   const [showGrid, setShowGrid] = useState<boolean>(false)
+  const [imgDimensions, setImgDimensions] = useState<{ width: number; height: number } | null>(null)
 
   // JSON / Text Editor State
   const [textContent, setTextContent] = useState<string>('')
@@ -46,6 +47,7 @@ export const ContentViewer: React.FC<ContentViewerProps> = ({
 
   // Fetch text/json content when node changes
   useEffect(() => {
+    setImgDimensions(null)
     if (!selectedNode || selectedNode.type === 'directory') {
       setTextContent('')
       setOriginalContent('')
@@ -242,7 +244,7 @@ export const ContentViewer: React.FC<ContentViewerProps> = ({
         {isImage && (
           <div className="w-full h-full min-h-[300px] flex items-center justify-center p-6 bg-[#0a0a0d] overflow-auto">
             <div
-              className="relative rounded-lg shadow-2xl p-2 border border-white/10"
+              className="relative rounded-lg shadow-2xl border border-white/10 overflow-hidden flex items-center justify-center shrink-0"
               style={{
                 backgroundImage: `
                   linear-gradient(45deg, #181820 25%, transparent 25%), 
@@ -258,13 +260,20 @@ export const ContentViewer: React.FC<ContentViewerProps> = ({
               <img
                 src={rawUrl}
                 alt={selectedNode.name}
+                onLoad={(e) => {
+                  const target = e.currentTarget
+                  if (target.naturalWidth && target.naturalHeight) {
+                    setImgDimensions({ width: target.naturalWidth, height: target.naturalHeight })
+                  }
+                }}
                 style={{
                   imageRendering: 'pixelated',
-                  transform: `scale(${zoomLevel})`,
-                  transformOrigin: 'center center',
-                  margin: `${(zoomLevel - 1) * 20}px`,
+                  width: imgDimensions ? `${imgDimensions.width * zoomLevel}px` : `${zoomLevel * 16}px`,
+                  height: imgDimensions ? `${imgDimensions.height * zoomLevel}px` : `${zoomLevel * 16}px`,
+                  display: 'block',
+                  maxWidth: 'none',
                 }}
-                className={`transition-transform duration-100 ${
+                className={`transition-all duration-75 ${
                   showGrid ? 'outline outline-1 outline-emerald-500/40' : ''
                 }`}
               />

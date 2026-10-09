@@ -3,7 +3,7 @@ plugins {
 }
 
 group = "com.mcp"
-version = "1.0.0-SNAPSHOT"
+version = "0.5.0"
 
 repositories {
     mavenCentral()

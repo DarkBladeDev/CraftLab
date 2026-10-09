@@ -17,12 +17,14 @@ import {
   Trash2,
   AlertCircle,
   X,
+  Edit2,
 } from 'lucide-react'
 import {
   WorkspaceFileNode,
   createWorkspaceDirectory,
   uploadWorkspaceFile,
   deleteWorkspaceFile,
+  renameWorkspacePath,
 } from '../../api/client'
 
 interface ResourceExplorerProps {
@@ -58,6 +60,12 @@ export const ResourceExplorer: React.FC<ResourceExplorerProps> = ({
   const [newFolderName, setNewFolderName] = useState('')
   const [folderError, setFolderError] = useState<string | null>(null)
   const [creatingFolder, setCreatingFolder] = useState(false)
+
+  const [isRenameOpen, setIsRenameOpen] = useState(false)
+  const [renameTargetNode, setRenameTargetNode] = useState<WorkspaceFileNode | null>(null)
+  const [renameNewName, setRenameNewName] = useState('')
+  const [renameError, setRenameError] = useState<string | null>(null)
+  const [renaming, setRenaming] = useState(false)
 
   const [isUploadOpen, setIsUploadOpen] = useState(false)
   const [uploadTargetDir, setUploadTargetDir] = useState('assets/minecraft/textures/item')
@@ -182,6 +190,47 @@ export const ResourceExplorer: React.FC<ResourceExplorerProps> = ({
     }
   }
 
+  const handleStartRename = (e: React.MouseEvent, node: WorkspaceFileNode) => {
+    e.stopPropagation()
+    setRenameTargetNode(node)
+    setRenameNewName(node.name)
+    setRenameError(null)
+    setIsRenameOpen(true)
+  }
+
+  const handleRename = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!renameTargetNode) return
+    setRenameError(null)
+    const newName = renameNewName.trim().toLowerCase()
+    if (!newName) {
+      setRenameError('Name cannot be empty')
+      return
+    }
+
+    const parentDir = renameTargetNode.path.includes('/')
+      ? renameTargetNode.path.substring(0, renameTargetNode.path.lastIndexOf('/'))
+      : ''
+    const newPath = parentDir ? `${parentDir}/${newName}` : newName
+
+    if (newPath === renameTargetNode.path) {
+      setIsRenameOpen(false)
+      return
+    }
+
+    setRenaming(true)
+    try {
+      await renameWorkspacePath(renameTargetNode.path, newPath)
+      setIsRenameOpen(false)
+      setRenameTargetNode(null)
+      onRefresh()
+    } catch (err: any) {
+      setRenameError(err.message || 'Failed to rename')
+    } finally {
+      setRenaming(false)
+    }
+  }
+
   const handleDelete = async (e: React.MouseEvent, node: WorkspaceFileNode) => {
     e.stopPropagation()
     const label = node.type === 'directory' ? `folder '${node.name}' and all its contents` : `file '${node.name}'`
@@ -273,13 +322,22 @@ export const ResourceExplorer: React.FC<ResourceExplorerProps> = ({
 
           <div className="opacity-0 group-hover:opacity-100 flex items-center space-x-1 shrink-0">
             {node.path && (
-              <button
-                onClick={(e) => handleDelete(e, node)}
-                title="Delete"
-                className="p-1 hover:bg-red-500/20 hover:text-red-400 rounded text-gray-500 transition"
-              >
-                <Trash2 className="w-3 h-3" />
-              </button>
+              <>
+                <button
+                  onClick={(e) => handleStartRename(e, node)}
+                  title={node.type === 'directory' ? 'Rename folder' : 'Rename file'}
+                  className="p-1 hover:bg-blue-500/20 hover:text-blue-400 rounded text-gray-500 transition"
+                >
+                  <Edit2 className="w-3 h-3" />
+                </button>
+                <button
+                  onClick={(e) => handleDelete(e, node)}
+                  title={node.type === 'directory' ? 'Delete folder and contents' : 'Delete file'}
+                  className="p-1 hover:bg-red-500/20 hover:text-red-400 rounded text-gray-500 transition"
+                >
+                  <Trash2 className="w-3 h-3" />
+                </button>
+              </>
             )}
           </div>
         </div>
@@ -523,6 +581,77 @@ export const ResourceExplorer: React.FC<ResourceExplorerProps> = ({
                   className="px-4 py-1.5 rounded-lg text-xs font-semibold bg-emerald-600 hover:bg-emerald-500 text-white"
                 >
                   {uploading ? 'Uploading...' : 'Upload'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Rename Modal */}
+      {isRenameOpen && renameTargetNode && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-fade-in">
+          <div className="bg-[#141418] border border-[#2b2b38] rounded-2xl w-full max-w-sm shadow-2xl overflow-hidden p-5 space-y-4">
+            <div className="flex items-center justify-between pb-2 border-b border-[#23232b]">
+              <div className="flex items-center space-x-2">
+                <Edit2 className="w-4 h-4 text-blue-400" />
+                <h3 className="text-sm font-bold text-gray-100">
+                  Rename {renameTargetNode.type === 'directory' ? 'Folder' : 'File'}
+                </h3>
+              </div>
+              <button
+                onClick={() => setIsRenameOpen(false)}
+                className="text-gray-500 hover:text-gray-300 transition"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <form onSubmit={handleRename} className="space-y-3.5">
+              <div>
+                <label className="block text-[11px] text-gray-400 mb-1">Current Path</label>
+                <div className="px-3 py-2 bg-[#0e0e11] border border-[#23232b] rounded-lg text-xs font-mono text-gray-400 truncate">
+                  {renameTargetNode.path}
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-[11px] text-gray-400 mb-1">New Name</label>
+                <input
+                  type="text"
+                  required
+                  value={renameNewName}
+                  onChange={(e) => setRenameNewName(e.target.value)}
+                  placeholder="new_name"
+                  className="w-full px-3 py-2 bg-[#0e0e11] border border-[#23232b] rounded-lg text-xs text-gray-200 font-mono focus:border-blue-500 outline-none"
+                  autoFocus
+                />
+                <p className="text-[10px] text-gray-500 mt-1">
+                  Lowercase letters, digits, _, -, or . only.
+                </p>
+              </div>
+
+              {renameError && (
+                <div className="p-2 rounded bg-red-950/30 border border-red-500/30 text-red-400 text-xs flex items-center space-x-1.5">
+                  <AlertCircle className="w-3.5 h-3.5 shrink-0" />
+                  <span>{renameError}</span>
+                </div>
+              )}
+
+              <div className="flex justify-end space-x-2 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setIsRenameOpen(false)}
+                  className="px-3 py-1.5 rounded-lg text-xs font-semibold text-gray-400 hover:text-gray-200"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={renaming || !renameNewName.trim()}
+                  className="px-4 py-1.5 rounded-lg text-xs font-semibold bg-blue-600 hover:bg-blue-500 text-white"
+                >
+                  {renaming ? 'Renaming...' : 'Rename'}
                 </button>
               </div>
             </form>

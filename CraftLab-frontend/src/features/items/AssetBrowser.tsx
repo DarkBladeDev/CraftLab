@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { Search, RefreshCw, GitFork, Package, Shield, Sparkles, Layers } from 'lucide-react'
+import { Search, RefreshCw, GitFork, Package, Shield, Sparkles, Layers, ChevronDown, ChevronUp } from 'lucide-react'
 import {
   Target,
   Item,
@@ -17,6 +17,7 @@ interface AssetBrowserProps {
 }
 
 export function AssetBrowser({ targets, platformItems, onForkItem }: AssetBrowserProps) {
+  const [isCollapsed, setIsCollapsed] = useState(false)
   const [activeTab, setActiveTab] = useState<'vanilla' | 'platform' | 'oraxen'>('vanilla')
   const [search, setSearch] = useState('')
   const [selectedCategory, setSelectedCategory] = useState('all')
@@ -102,53 +103,81 @@ export function AssetBrowser({ targets, platformItems, onForkItem }: AssetBrowse
   )
 
   return (
-    <div className="bg-[#141418] border border-[#27272e] rounded-xl p-5 shadow-xl mb-6">
+    <div className={`bg-[#141418] border border-[#27272e] rounded-xl shadow-xl mb-6 transition-all ${isCollapsed ? 'p-4' : 'p-5'}`}>
       {/* Top Header & Navigation Tabs */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between pb-4 mb-4 border-b border-[#24242c] gap-3">
-        <div className="flex items-center space-x-2">
-          <Package className="w-5 h-5 text-amber-400" />
-          <h2 className="text-base font-semibold text-gray-100">Multi-Source Asset Browser</h2>
+      <div className={`flex flex-col md:flex-row md:items-center justify-between gap-3 ${isCollapsed ? '' : 'pb-4 mb-4 border-b border-[#24242c]'}`}>
+        <div className="flex items-center justify-between w-full md:w-auto">
+          <div className="flex items-center space-x-2">
+            <Package className="w-5 h-5 text-amber-400" />
+            <h2 className="text-base font-semibold text-gray-100">Multi-Source Asset Browser</h2>
+          </div>
+          <button
+            type="button"
+            onClick={() => setIsCollapsed(!isCollapsed)}
+            className="md:hidden flex items-center space-x-1 px-2.5 py-1 text-xs bg-[#1a1a20] hover:bg-[#252530] text-gray-300 rounded-lg border border-[#2d2d38] transition"
+            title={isCollapsed ? 'Expand Asset Browser' : 'Collapse Asset Browser'}
+          >
+            {isCollapsed ? <ChevronDown className="w-4 h-4" /> : <ChevronUp className="w-4 h-4" />}
+            <span>{isCollapsed ? 'Expand' : 'Collapse'}</span>
+          </button>
         </div>
 
-        {/* Catalog Navigation Tabs */}
-        <div className="flex items-center space-x-1.5 bg-[#1a1a20] p-1 rounded-lg border border-[#2d2d38]">
-          <button
-            onClick={() => setActiveTab('vanilla')}
-            className={`flex items-center space-x-1.5 px-3 py-1.5 text-xs rounded-md transition ${
-              activeTab === 'vanilla'
-                ? 'bg-amber-500/20 text-amber-300 font-medium'
-                : 'text-gray-400 hover:text-gray-200'
-            }`}
-          >
-            <Shield className="w-3.5 h-3.5 text-blue-400" />
-            <span>Vanilla 1.21 ({vanillaItems.length})</span>
-          </button>
+        {/* Catalog Navigation Tabs & Collapse Toggle */}
+        <div className="flex items-center space-x-2">
+          {!isCollapsed && (
+            <div className="flex items-center space-x-1.5 bg-[#1a1a20] p-1 rounded-lg border border-[#2d2d38]">
+              <button
+                onClick={() => setActiveTab('vanilla')}
+                className={`flex items-center space-x-1.5 px-3 py-1.5 text-xs rounded-md transition ${
+                  activeTab === 'vanilla'
+                    ? 'bg-amber-500/20 text-amber-300 font-medium'
+                    : 'text-gray-400 hover:text-gray-200'
+                }`}
+              >
+                <Shield className="w-3.5 h-3.5 text-blue-400" />
+                <span>Vanilla ({vanillaItems.length})</span>
+              </button>
+
+              <button
+                onClick={() => setActiveTab('platform')}
+                className={`flex items-center space-x-1.5 px-3 py-1.5 text-xs rounded-md transition ${
+                  activeTab === 'platform'
+                    ? 'bg-emerald-500/20 text-emerald-300 font-medium'
+                    : 'text-gray-400 hover:text-gray-200'
+                }`}
+              >
+                <Layers className="w-3.5 h-3.5 text-emerald-400" />
+                <span>Platform Drafts ({platformItems.length})</span>
+              </button>
+
+              <button
+                onClick={() => setActiveTab('oraxen')}
+                className={`flex items-center space-x-1.5 px-3 py-1.5 text-xs rounded-md transition ${
+                  activeTab === 'oraxen'
+                    ? 'bg-purple-500/20 text-purple-300 font-medium'
+                    : 'text-gray-400 hover:text-gray-200'
+                }`}
+              >
+                <Sparkles className="w-3.5 h-3.5 text-purple-400" />
+                <span>Oraxen Discovered ({discoveredItems.length})</span>
+              </button>
+            </div>
+          )}
 
           <button
-            onClick={() => setActiveTab('platform')}
-            className={`flex items-center space-x-1.5 px-3 py-1.5 text-xs rounded-md transition ${
-              activeTab === 'platform'
-                ? 'bg-emerald-500/20 text-emerald-300 font-medium'
-                : 'text-gray-400 hover:text-gray-200'
-            }`}
+            type="button"
+            onClick={() => setIsCollapsed(!isCollapsed)}
+            className="hidden md:flex items-center space-x-1 px-2.5 py-1.5 text-xs bg-[#1a1a20] hover:bg-[#252530] text-gray-300 hover:text-white rounded-lg border border-[#2d2d38] transition"
+            title={isCollapsed ? 'Expand Asset Browser' : 'Collapse Asset Browser'}
           >
-            <Layers className="w-3.5 h-3.5 text-emerald-400" />
-            <span>Platform Drafts ({platformItems.length})</span>
-          </button>
-
-          <button
-            onClick={() => setActiveTab('oraxen')}
-            className={`flex items-center space-x-1.5 px-3 py-1.5 text-xs rounded-md transition ${
-              activeTab === 'oraxen'
-                ? 'bg-purple-500/20 text-purple-300 font-medium'
-                : 'text-gray-400 hover:text-gray-200'
-            }`}
-          >
-            <Sparkles className="w-3.5 h-3.5 text-purple-400" />
-            <span>Oraxen Discovered ({discoveredItems.length})</span>
+            {isCollapsed ? <ChevronDown className="w-4 h-4" /> : <ChevronUp className="w-4 h-4" />}
+            <span>{isCollapsed ? 'Expand' : 'Collapse'}</span>
           </button>
         </div>
       </div>
+
+      {!isCollapsed && (
+        <>
 
       {/* Search & Filter Toolbar */}
       <div className="flex flex-col sm:flex-row items-center justify-between gap-3 mb-4">
@@ -350,6 +379,8 @@ export function AssetBrowser({ targets, platformItems, onForkItem }: AssetBrowse
             ))
           ))}
       </div>
+        </>
+      )}
     </div>
   )
 }

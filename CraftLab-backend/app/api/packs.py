@@ -67,6 +67,24 @@ class CreateWorkspaceDirRequest(BaseModel):
     path: str
 
 
+class RenameWorkspacePathRequest(BaseModel):
+    old_path: str
+    new_path: str
+
+
+class WorkspaceConfigSchema(BaseModel):
+    description: str = "CraftLab Workspace Pack"
+    pack_format: int = 34
+    min_inclusive: int = 34
+    max_inclusive: int = 65
+
+
+class UpdatePackSourceRequest(BaseModel):
+    name: Optional[str] = None
+    layer_priority: Optional[int] = None
+    is_active: Optional[bool] = None
+
+
 @router.get("/sources")
 async def list_sources(
     target_id: Optional[str] = None,
@@ -139,6 +157,35 @@ async def upload_source_zip(
         "layer_priority": record.layer_priority,
         "sha1_hash": record.sha1_hash,
         "storage_path": record.storage_path
+    }
+
+
+@router.patch("/sources/{source_id}")
+async def update_source_endpoint(
+    source_id: str,
+    req: UpdatePackSourceRequest,
+    db: AsyncSession = Depends(get_db)
+):
+    source = await PackRepository.get_source(db, source_id)
+    if not source:
+        raise HTTPException(status_code=404, detail=f"Pack source '{source_id}' not found")
+
+    if req.name is not None and req.name.strip():
+        source.name = req.name.strip()
+    if req.layer_priority is not None:
+        source.layer_priority = req.layer_priority
+    if req.is_active is not None:
+        source.is_active = req.is_active
+
+    await db.commit()
+    await db.refresh(source)
+    return {
+        "id": source.id,
+        "name": source.name,
+        "layer_priority": source.layer_priority,
+        "is_active": source.is_active,
+        "source_type": source.source_type,
+        "plugin": source.plugin,
     }
 
 
@@ -237,6 +284,48 @@ async def create_workspace_directory_endpoint(req: CreateWorkspaceDirRequest):
     return {"success": True, "path": clean_path}
 
 
+@router.post("/workspace/rename")
+async def rename_workspace_path_endpoint(req: RenameWorkspacePathRequest):
+    workspace_dir = ensure_workspace_initialized()
+    clean_old = req.old_path.replace("\\", "/").strip("/")
+    clean_new = req.new_path.replace("\\", "/").strip("/")
+    if not clean_old or not clean_new:
+        raise HTTPException(status_code=400, detail="Paths cannot be empty")
+    if clean_old == clean_new:
+        return {"success": True, "old_path": clean_old, "new_path": clean_new}
+
+    segments = clean_new.split("/")
+    for i, seg in enumerate(segments):
+        if i == len(segments) - 1 and "." in seg:
+            stem = seg.split(".", 1)[0]
+            if not validate_minecraft_identifier(stem):
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"Invalid file stem '{stem}'. Must be lowercase and match ^[a-z0-9_.-]+$"
+                )
+        else:
+            if not validate_minecraft_identifier(seg):
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"Invalid path segment '{seg}'. Must be lowercase and match ^[a-z0-9_.-]+$"
+                )
+
+    try:
+        old_target = safe_resolve_workspace_path(workspace_dir, clean_old)
+        new_target = safe_resolve_workspace_path(workspace_dir, clean_new)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+    if not old_target.exists():
+        raise HTTPException(status_code=404, detail=f"Source path '{clean_old}' not found")
+    if new_target.exists():
+        raise HTTPException(status_code=409, detail=f"Destination path '{clean_new}' already exists")
+
+    new_target.parent.mkdir(parents=True, exist_ok=True)
+    shutil.move(str(old_target), str(new_target))
+    return {"success": True, "old_path": clean_old, "new_path": clean_new}
+
+
 @router.post("/workspace/upload")
 async def upload_workspace_file_endpoint(
     file: UploadFile = File(...),
@@ -312,6 +401,77 @@ async def get_workspace_metadata_endpoint(path: str):
         raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/workspace/config")
+async def get_workspace_config_endpoint():
+    workspace_dir = ensure_workspace_initialized()
+    mcmeta_path = workspace_dir / "pack.mcmeta"
+    if not mcmeta_path.exists():
+        return {
+            "description": "CraftLab Workspace Pack",
+            "pack_format": 34,
+            "min_inclusive": 34,
+            "max_inclusive": 65,
+        }
+
+    try:
+        data = json.loads(mcmeta_path.read_text(encoding="utf-8"))
+        pack = data.get("pack", {})
+        supported = pack.get("supported_formats", {})
+        if isinstance(supported, dict):
+            min_inc = supported.get("min_inclusive", pack.get("min_format", 34))
+            max_inc = supported.get("max_inclusive", pack.get("max_format", 65))
+        elif isinstance(supported, list) and len(supported) == 2:
+            min_inc, max_inc = supported[0], supported[1]
+        else:
+            min_inc = pack.get("min_format", pack.get("pack_format", 34))
+            max_inc = pack.get("max_format", pack.get("pack_format", 65))
+
+        desc = pack.get("description", "CraftLab Workspace Pack")
+        if isinstance(desc, dict):
+            desc = desc.get("text", "")
+
+        return {
+            "description": str(desc),
+            "pack_format": int(pack.get("pack_format", 34)),
+            "min_inclusive": int(min_inc),
+            "max_inclusive": int(max_inc),
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to read pack.mcmeta: {str(e)}")
+
+
+@router.put("/workspace/config")
+async def update_workspace_config_endpoint(req: WorkspaceConfigSchema):
+    workspace_dir = ensure_workspace_initialized()
+    mcmeta_path = workspace_dir / "pack.mcmeta"
+    data = {}
+    if mcmeta_path.exists():
+        try:
+            data = json.loads(mcmeta_path.read_text(encoding="utf-8"))
+        except Exception:
+            data = {}
+
+    if "pack" not in data or not isinstance(data["pack"], dict):
+        data["pack"] = {}
+
+    data["pack"]["description"] = req.description
+    data["pack"]["pack_format"] = req.pack_format
+    data["pack"]["min_format"] = req.min_inclusive
+    data["pack"]["max_format"] = req.max_inclusive
+    data["pack"]["supported_formats"] = {
+        "min_inclusive": req.min_inclusive,
+        "max_inclusive": req.max_inclusive,
+    }
+
+    mcmeta_path.write_text(json.dumps(data, indent=2), encoding="utf-8")
+    return {
+        "description": req.description,
+        "pack_format": req.pack_format,
+        "min_inclusive": req.min_inclusive,
+        "max_inclusive": req.max_inclusive,
+    }
 
 
 @router.post("/preflight", response_model=PreflightReport)

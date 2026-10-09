@@ -89,3 +89,32 @@ def test_multi_block_hitbox_sorting():
     )
     canonical = block.to_canonical_dict()
     assert canonical["hitbox_offsets"] == [[0, 0, 0], [0, 0, 1]]
+
+
+def test_dual_model_block_definition():
+    block = BlockDefinition(
+        id="grand_sofa",
+        display_name="Grand Sofa",
+        item_model="studio:items/grand_sofa",
+        block_model="studio:props/grand_sofa_3d",
+        interaction_type="lay",
+        seat_height=0.3
+    )
+    assert block.item_model == "studio:items/grand_sofa"
+    assert block.block_model == "studio:props/grand_sofa_3d"
+    assert block.interaction_type == "lay"
+    canonical = block.to_canonical_dict()
+    assert canonical["item_model"] == "studio:items/grand_sofa"
+    assert canonical["block_model"] == "studio:props/grand_sofa_3d"
+    assert canonical["interaction_type"] == "lay"
+
+
+def test_block_model_fallback_to_item_model():
+    block = BlockDefinition(
+        id="simple_chair",
+        display_name="Simple Chair",
+        item_model="studio:furniture/chair"
+    )
+    assert block.block_model == "studio:furniture/chair"
+    canonical = block.to_canonical_dict()
+    assert canonical["block_model"] == "studio:furniture/chair"

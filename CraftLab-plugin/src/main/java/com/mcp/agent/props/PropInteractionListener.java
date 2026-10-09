@@ -1,5 +1,10 @@
 package com.mcp.agent.props;
 
+import com.github.retrooper.packetevents.PacketEvents;
+import com.github.retrooper.packetevents.protocol.entity.data.EntityData;
+import com.github.retrooper.packetevents.protocol.entity.data.EntityDataTypes;
+import com.github.retrooper.packetevents.protocol.entity.pose.EntityPose;
+import com.github.retrooper.packetevents.wrapper.play.server.WrapperPlayServerEntityMetadata;
 import org.bukkit.Location;
 import org.bukkit.Material;
 import org.bukkit.Sound;
@@ -19,7 +24,10 @@ import org.bukkit.event.player.PlayerQuitEvent;
 import org.bukkit.inventory.EquipmentSlot;
 import org.bukkit.plugin.Plugin;
 
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.logging.Logger;
@@ -29,6 +37,7 @@ public class PropInteractionListener implements Listener {
     private final PropManager propManager;
     private final Logger logger;
     private final Map<UUID, ArmorStand> activeSeats = new ConcurrentHashMap<>();
+    private final Set<UUID> layingPlayers = ConcurrentHashMap.newKeySet();
 
     public PropInteractionListener(Plugin plugin, PropManager propManager, Logger logger) {
         this.plugin = plugin;
@@ -53,7 +62,12 @@ public class PropInteractionListener implements Listener {
         if (instance == null) return;
 
         PropDefinition def = propManager.getDefinition(instance.getPropId());
-        if (def == null || !"seat".equalsIgnoreCase(def.getInteractionType())) return;
+        if (def == null) return;
+
+        String interType = def.getInteractionType();
+        boolean isSeat = "seat".equalsIgnoreCase(interType);
+        boolean isLay = "lay".equalsIgnoreCase(interType);
+        if (!isSeat && !isLay) return;
 
         event.setCancelled(true);
 
@@ -80,8 +94,18 @@ public class PropInteractionListener implements Listener {
         seat.addPassenger(player);
         activeSeats.put(player.getUniqueId(), seat);
 
+        if (isLay) {
+            layingPlayers.add(player.getUniqueId());
+            sendPlayerPose(player, EntityPose.SLEEPING);
+            org.bukkit.Bukkit.getScheduler().runTaskLater(plugin, () -> {
+                if (layingPlayers.contains(player.getUniqueId())) {
+                    sendPlayerPose(player, EntityPose.SLEEPING);
+                }
+            }, 1L);
+        }
+
         clicked.getWorld().playSound(seatLoc, Sound.BLOCK_WOOD_STEP, 0.8f, 1.2f);
-        logger.info("Player " + player.getName() + " sat on prop " + instance.getPropId());
+        logger.info("Player " + player.getName() + " interacted (" + interType + ") with prop " + instance.getPropId());
     }
 
     @EventHandler(priority = EventPriority.MONITOR)
@@ -92,10 +116,31 @@ public class PropInteractionListener implements Listener {
         ArmorStand seat = activeSeats.remove(player.getUniqueId());
         if (seat != null) {
             seat.remove();
+            if (layingPlayers.remove(player.getUniqueId())) {
+                sendPlayerPose(player, EntityPose.STANDING);
+            }
             // Teleport slightly up/forward to avoid clipping
             Location loc = player.getLocation().add(0, 0.35, 0);
             player.teleport(loc);
             player.playSound(loc, Sound.BLOCK_WOOD_STEP, 0.8f, 0.9f);
+        }
+    }
+
+    private void sendPlayerPose(Player player, EntityPose pose) {
+        try {
+            List<EntityData<?>> metadata = new ArrayList<>();
+            // Index 6 in Minecraft 1.20+ is Entity Pose
+            metadata.add(new EntityData<>(6, EntityDataTypes.ENTITY_POSE, pose));
+            WrapperPlayServerEntityMetadata packet = new WrapperPlayServerEntityMetadata(player.getEntityId(), metadata);
+            PacketEvents.getAPI().getPlayerManager().sendPacket(player, packet);
+            for (Player viewer : player.getWorld().getPlayers()) {
+                if (viewer.equals(player)) continue;
+                if (viewer.getLocation().distanceSquared(player.getLocation()) <= (PropManager.TRACKING_RANGE * PropManager.TRACKING_RANGE)) {
+                    PacketEvents.getAPI().getPlayerManager().sendPacket(viewer, packet);
+                }
+            }
+        } catch (Throwable t) {
+            logger.fine("Failed to send player pose packet: " + t.getMessage());
         }
     }
 
@@ -126,6 +171,9 @@ public class PropInteractionListener implements Listener {
         ArmorStand seat = activeSeats.remove(player.getUniqueId());
         if (seat != null) {
             seat.remove();
+        }
+        if (layingPlayers.remove(player.getUniqueId())) {
+            sendPlayerPose(player, EntityPose.STANDING);
         }
         propManager.onPlayerQuit(player);
     }

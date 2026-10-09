@@ -31,6 +31,10 @@ async def init_db():
                     connection.execute(text("ALTER TABLE items ADD COLUMN components JSON DEFAULT '{}'"))
                 if "item_model" not in columns:
                     connection.execute(text("ALTER TABLE items ADD COLUMN item_model VARCHAR DEFAULT NULL"))
+            if "blocks" in inspector.get_table_names():
+                block_columns = [col["name"] for col in inspector.get_columns("blocks")]
+                if "block_model" not in block_columns:
+                    connection.execute(text("ALTER TABLE blocks ADD COLUMN block_model VARCHAR DEFAULT NULL"))
             if "revisions" in inspector.get_table_names():
                 rev_columns = [col["name"] for col in inspector.get_columns("revisions")]
                 if "blocks_snapshot" not in rev_columns:

@@ -1,3 +1,5 @@
+import json
+from pathlib import Path
 from typing import Optional, List, Dict, Any
 
 VANILLA_CATEGORIES = [
@@ -109,27 +111,65 @@ VANILLA_ITEMS: List[Dict[str, Any]] = [
 ]
 
 
+import json
+from pathlib import Path
+
+_CACHED_VANILLA_ITEMS: Optional[List[Dict[str, Any]]] = None
+
+def _load_vanilla_items() -> List[Dict[str, Any]]:
+    global _CACHED_VANILLA_ITEMS
+    if _CACHED_VANILLA_ITEMS is not None:
+        return _CACHED_VANILLA_ITEMS
+
+    # First check tracked backend assets: app/assets/vanilla_items_1.21.json
+    assets_path = Path(__file__).resolve().parent.parent / "assets" / "vanilla_items_1.21.json"
+    if assets_path.exists():
+        try:
+            data = json.loads(assets_path.read_text(encoding="utf-8"))
+            if data and isinstance(data, list):
+                _CACHED_VANILLA_ITEMS = data
+                return _CACHED_VANILLA_ITEMS
+        except Exception:
+            pass
+
+    # Secondary check: data directory
+    json_path = Path(__file__).resolve().parents[2] / "data" / "vanilla_items_1.21.json"
+    if json_path.exists():
+        try:
+            data = json.loads(json_path.read_text(encoding="utf-8"))
+            if data and isinstance(data, list):
+                _CACHED_VANILLA_ITEMS = data
+                return _CACHED_VANILLA_ITEMS
+        except Exception:
+            pass
+
+    _CACHED_VANILLA_ITEMS = VANILLA_ITEMS
+    return _CACHED_VANILLA_ITEMS
+
+
 class VanillaCatalogService:
     @staticmethod
     def get_categories() -> List[str]:
-        return VANILLA_CATEGORIES
+        items = _load_vanilla_items()
+        cats = sorted(list(set(item.get("category") for item in items if item.get("category"))))
+        return cats if cats else VANILLA_CATEGORIES
 
     @staticmethod
     def search(
         category: Optional[str] = None,
         search: Optional[str] = None
     ) -> List[Dict[str, Any]]:
-        results = VANILLA_ITEMS
+        results = _load_vanilla_items()
 
         if category and category.lower() != "all":
             cat_norm = category.strip().lower()
-            results = [item for item in results if item["category"] == cat_norm]
+            results = [item for item in results if item.get("category") == cat_norm]
 
         if search:
             query = search.strip().lower()
             results = [
                 item for item in results
-                if query in item["id"].lower() or query in item["name"].lower()
+                if query in item["id"].lower() or query in item.get("name", "").lower()
             ]
 
         return results

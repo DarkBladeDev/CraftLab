@@ -12,6 +12,9 @@ import {
   Trash2,
   Hash,
   ExternalLink,
+  Edit2,
+  Settings,
+  X,
 } from 'lucide-react'
 import {
   PackSource,
@@ -20,6 +23,10 @@ import {
   fetchPackSources,
   uploadPackSource,
   deletePackSource,
+  updatePackSource,
+  fetchWorkspaceConfig,
+  updateWorkspaceConfig,
+  WorkspaceConfig,
   runPackPreflight,
   buildResourcePack,
   fetchLatestPack,
@@ -53,6 +60,17 @@ export const ResourcePackManagerView: React.FC<ResourcePackManagerViewProps> = (
   const [uploadPriority, setUploadPriority] = useState(15)
   const [uploadFile, setUploadFile] = useState<File | null>(null)
   const [uploading, setUploading] = useState(false)
+
+  // Workspace Config Modal state
+  const [isWorkspaceConfigOpen, setIsWorkspaceConfigOpen] = useState(false)
+  const [workspaceConfig, setWorkspaceConfig] = useState<WorkspaceConfig | null>(null)
+  const [savingWsConfig, setSavingWsConfig] = useState(false)
+
+  // Edit Source Modal state
+  const [editingSource, setEditingSource] = useState<PackSource | null>(null)
+  const [editSourceName, setEditSourceName] = useState('')
+  const [editSourcePriority, setEditSourcePriority] = useState<number>(10)
+  const [savingSource, setSavingSource] = useState(false)
 
   const loadData = async () => {
     setLoading(true)
@@ -165,6 +183,57 @@ export const ResourcePackManagerView: React.FC<ResourcePackManagerViewProps> = (
       await loadData()
     } catch (err: any) {
       console.error(err)
+    }
+  }
+
+  const handleOpenWorkspaceConfig = async () => {
+    try {
+      const cfg = await fetchWorkspaceConfig()
+      setWorkspaceConfig(cfg)
+      setIsWorkspaceConfigOpen(true)
+    } catch (err: any) {
+      alert(`Failed to load workspace config: ${err.message}`)
+    }
+  }
+
+  const handleSaveWorkspaceConfig = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!workspaceConfig) return
+    setSavingWsConfig(true)
+    try {
+      await updateWorkspaceConfig(workspaceConfig)
+      setIsWorkspaceConfigOpen(false)
+      setStatusMessage({ type: 'success', text: 'Workspace pack configuration updated.' })
+      await loadData()
+    } catch (err: any) {
+      alert(`Failed to update workspace config: ${err.message}`)
+    } finally {
+      setSavingWsConfig(false)
+    }
+  }
+
+  const handleOpenEditSource = (src: PackSource) => {
+    setEditingSource(src)
+    setEditSourceName(src.name)
+    setEditSourcePriority(src.layer_priority)
+  }
+
+  const handleSaveEditSource = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!editingSource) return
+    setSavingSource(true)
+    try {
+      await updatePackSource(editingSource.id, {
+        name: editSourceName,
+        layer_priority: editSourcePriority,
+      })
+      setEditingSource(null)
+      setStatusMessage({ type: 'success', text: `Source '${editSourceName}' updated.` })
+      await loadData()
+    } catch (err: any) {
+      alert(`Failed to update source: ${err.message}`)
+    } finally {
+      setSavingSource(false)
     }
   }
 
@@ -396,7 +465,16 @@ export const ResourcePackManagerView: React.FC<ResourcePackManagerViewProps> = (
                 </td>
                 <td className="py-3 px-3 text-gray-400">Dual Projected (1.21.1 CMD + 1.21.2+ Overlay)</td>
                 <td className="py-3 px-3 font-mono text-gray-500">Live Workspace</td>
-                <td className="py-3 px-3 text-right text-gray-500 italic text-[11px]">Master Layer</td>
+                <td className="py-3 px-3 text-right">
+                  <button
+                    onClick={handleOpenWorkspaceConfig}
+                    className="p-1 px-2 rounded-lg bg-purple-500/10 hover:bg-purple-500/20 text-purple-300 border border-purple-500/20 transition inline-flex items-center space-x-1"
+                    title="Configure Workspace Pack Manifest"
+                  >
+                    <Settings className="w-3.5 h-3.5" />
+                    <span className="text-[11px] font-medium">Config</span>
+                  </button>
+                </td>
               </tr>
 
               {/* Registered External Sources */}
@@ -424,15 +502,22 @@ export const ResourcePackManagerView: React.FC<ResourcePackManagerViewProps> = (
                     {src.sha1_hash ? `${src.sha1_hash.slice(0, 8)}...` : 'N/A'}
                   </td>
                   <td className="py-3 px-3 text-right">
-                    {src.source_type === 'upload' && (
+                    <div className="flex items-center justify-end space-x-1">
+                      <button
+                        onClick={() => handleOpenEditSource(src)}
+                        className="p-1 rounded text-gray-400 hover:text-blue-400 hover:bg-blue-500/10 transition"
+                        title="Edit Pack Source"
+                      >
+                        <Edit2 className="w-3.5 h-3.5" />
+                      </button>
                       <button
                         onClick={() => handleDeleteSource(src.id)}
-                        className="p-1 rounded text-gray-500 hover:text-red-400 transition"
+                        className="p-1 rounded text-gray-500 hover:text-red-400 hover:bg-red-500/10 transition"
                         title="Delete Source"
                       >
                         <Trash2 className="w-3.5 h-3.5" />
                       </button>
-                    )}
+                    </div>
                   </td>
                 </tr>
               ))}
@@ -500,6 +585,170 @@ export const ResourcePackManagerView: React.FC<ResourcePackManagerViewProps> = (
                   className="px-4 py-2 rounded-xl bg-purple-600 hover:bg-purple-500 text-white font-semibold transition"
                 >
                   {uploading ? 'Extracting...' : 'Upload & Register'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Workspace Config Modal */}
+      {isWorkspaceConfigOpen && workspaceConfig && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-fade-in">
+          <div className="bg-[#141418] border border-[#2b2b38] rounded-2xl w-full max-w-md shadow-2xl overflow-hidden p-6 space-y-4">
+            <div className="flex items-center justify-between pb-2 border-b border-[#23232b]">
+              <h3 className="text-sm font-bold text-gray-100 flex items-center space-x-2">
+                <Settings className="w-4 h-4 text-purple-400" />
+                <span>Workspace Pack Configuration</span>
+              </h3>
+              <button
+                onClick={() => setIsWorkspaceConfigOpen(false)}
+                className="text-gray-500 hover:text-gray-300 transition"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <form onSubmit={handleSaveWorkspaceConfig} className="space-y-4">
+              <div>
+                <label className="block text-xs font-medium text-gray-300 mb-1">Pack Description</label>
+                <input
+                  type="text"
+                  required
+                  value={workspaceConfig.description}
+                  onChange={(e) => setWorkspaceConfig({ ...workspaceConfig, description: e.target.value })}
+                  className="w-full px-3 py-2 bg-[#0e0e11] border border-[#23232b] rounded-lg text-xs text-gray-200 focus:border-purple-500 outline-none"
+                />
+              </div>
+
+              <div className="grid grid-cols-3 gap-3">
+                <div>
+                  <label className="block text-xs font-medium text-gray-300 mb-1">Base Format</label>
+                  <input
+                    type="number"
+                    required
+                    value={workspaceConfig.pack_format}
+                    onChange={(e) =>
+                      setWorkspaceConfig({ ...workspaceConfig, pack_format: parseInt(e.target.value) || 34 })
+                    }
+                    className="w-full px-3 py-2 bg-[#0e0e11] border border-[#23232b] rounded-lg text-xs font-mono text-gray-200 focus:border-purple-500 outline-none"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-medium text-gray-300 mb-1">Min Format</label>
+                  <input
+                    type="number"
+                    required
+                    value={workspaceConfig.min_inclusive}
+                    onChange={(e) =>
+                      setWorkspaceConfig({ ...workspaceConfig, min_inclusive: parseInt(e.target.value) || 34 })
+                    }
+                    className="w-full px-3 py-2 bg-[#0e0e11] border border-[#23232b] rounded-lg text-xs font-mono text-gray-200 focus:border-purple-500 outline-none"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-medium text-gray-300 mb-1">Max Format</label>
+                  <input
+                    type="number"
+                    required
+                    value={workspaceConfig.max_inclusive}
+                    onChange={(e) =>
+                      setWorkspaceConfig({ ...workspaceConfig, max_inclusive: parseInt(e.target.value) || 65 })
+                    }
+                    className="w-full px-3 py-2 bg-[#0e0e11] border border-[#23232b] rounded-lg text-xs font-mono text-gray-200 focus:border-purple-500 outline-none"
+                  />
+                </div>
+              </div>
+
+              <p className="text-[11px] text-gray-500">
+                Format 34 corresponds to Minecraft 1.21.1. Formats 42–65 correspond to 1.21.2–1.21.11 overlays.
+              </p>
+
+              <div className="flex justify-end space-x-2 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setIsWorkspaceConfigOpen(false)}
+                  className="px-3.5 py-2 rounded-xl bg-[#22222a] hover:bg-[#2b2b36] text-gray-300 font-medium transition text-xs"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={savingWsConfig}
+                  className="px-4 py-2 rounded-xl bg-purple-600 hover:bg-purple-500 text-white font-semibold transition text-xs"
+                >
+                  {savingWsConfig ? 'Saving...' : 'Save Configuration'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Edit Source Modal */}
+      {editingSource && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-fade-in">
+          <div className="bg-[#141418] border border-[#2b2b38] rounded-2xl w-full max-w-md shadow-2xl overflow-hidden p-6 space-y-4">
+            <div className="flex items-center justify-between pb-2 border-b border-[#23232b]">
+              <h3 className="text-sm font-bold text-gray-100 flex items-center space-x-2">
+                <Edit2 className="w-4 h-4 text-blue-400" />
+                <span>Edit Pack Source Layer</span>
+              </h3>
+              <button
+                onClick={() => setEditingSource(null)}
+                className="text-gray-500 hover:text-gray-300 transition"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <form onSubmit={handleSaveEditSource} className="space-y-4">
+              <div>
+                <label className="block text-xs font-medium text-gray-300 mb-1">Source Name</label>
+                <input
+                  type="text"
+                  required
+                  value={editSourceName}
+                  onChange={(e) => setEditSourceName(e.target.value)}
+                  className="w-full px-3 py-2 bg-[#0e0e11] border border-[#23232b] rounded-lg text-xs text-gray-200 focus:border-blue-500 outline-none"
+                />
+              </div>
+
+              <div>
+                <div className="flex justify-between text-xs font-medium text-gray-300 mb-1">
+                  <span>Layer Precedence Priority (1 – 99)</span>
+                  <span className="text-blue-400 font-mono font-bold">{editSourcePriority}</span>
+                </div>
+                <input
+                  type="number"
+                  min="1"
+                  max="99"
+                  required
+                  value={editSourcePriority}
+                  onChange={(e) => setEditSourcePriority(parseInt(e.target.value) || 10)}
+                  className="w-full px-3 py-2 bg-[#0e0e11] border border-[#23232b] rounded-lg text-xs font-mono text-gray-200 focus:border-blue-500 outline-none"
+                />
+                <p className="text-[11px] text-gray-500 mt-1">
+                  Higher priority layers overwrite lower priority layers when conflicting assets or models occur.
+                </p>
+              </div>
+
+              <div className="flex justify-end space-x-2 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setEditingSource(null)}
+                  className="px-3.5 py-2 rounded-xl bg-[#22222a] hover:bg-[#2b2b36] text-gray-300 font-medium transition text-xs"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={savingSource}
+                  className="px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-semibold transition text-xs"
+                >
+                  {savingSource ? 'Saving...' : 'Save Changes'}
                 </button>
               </div>
             </form>

@@ -1,9 +1,6 @@
-# Block Studio
+# Spec Delta
 
-## Purpose
-The Block Studio capability provides visual authoring, 3D transform tuning, collision grid definition, and interaction mechanics for custom blocks and furniture props.
-
-## Requirements
+## MODIFIED Requirements
 
 ### Requirement: Visual Block and Prop Authoring
 The system SHALL provide a dedicated visual studio interface allowing users to inspect, create, and edit custom block and prop definitions with real-time property validation, supporting distinct Block Model Identifiers (`block_model`) for placed world displays and Item Model Identifiers (`item_model`) for inventory/hand representations, and SHALL allow creating snapshot revisions when only blocks and props exist.
@@ -23,13 +20,6 @@ The system SHALL provide a dedicated visual studio interface allowing users to i
 #### Scenario: Creating revision snapshot without items
 - **WHEN** a project contains one or more valid block definitions but 0 items and the user requests a revision snapshot
 - **THEN** the system creates a valid canonical revision snapshot containing the block definitions without raising a validation error
-
-### Requirement: 3D Transform and Model Calibration
-The system SHALL support configuring 3D display transformations including scale vectors [x, y, z] and anchor translation offsets [x, y, z] for `display_prop` entities.
-
-#### Scenario: Customizing transform scale and translation
-- **WHEN** a user adjusts the scale factors and translation offsets of a display prop
-- **THEN** the system updates the block definition and validates that the scale factors are non-negative and translation coordinates are within valid bounds
 
 ### Requirement: Multi-Block Hitbox and Collision Configuration
 The system SHALL support defining relative grid coordinates for collision hitboxes (`solid` barrier blocks or `passable` structures) occupied by the prop, and SHALL conditionally disable hardness and tool type requirements when the hitbox is configured as a solid barrier.
@@ -56,10 +46,3 @@ The system SHALL support configuring interactive behaviors for blocks and props,
 #### Scenario: Enabling lie down interaction
 - **WHEN** a user marks a prop with `interaction_type: "lay"` and configures an offset
 - **THEN** the definition records the laying capability, causing the runtime agent to mount and pose the interacting player in a sleeping position on right-click
-
-### Requirement: Drop Item Binding
-The system SHALL support binding a block definition to an existing `ItemDefinition` that will be dropped into the world when the block or prop is broken.
-
-#### Scenario: Setting custom drop item
-- **WHEN** a user selects an existing item identifier from the project catalog as the block's `drop_item_id`
-- **THEN** the system validates that the referenced item exists and links it as the block's drop reward

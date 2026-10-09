@@ -260,8 +260,9 @@ public class PropManager {
                     SpigotConversionUtil.fromBukkitItemStack(displayItem);
 
             // Directly inject ITEM_MODEL into PacketEvents ItemStack if specified
-            if (def != null && def.getItemModel() != null && !def.getItemModel().isEmpty()) {
-                String model = def.getItemModel().trim().toLowerCase();
+            String activeModel = def != null ? def.getBlockModel() : null;
+            if (activeModel != null && !activeModel.isEmpty()) {
+                String model = activeModel.trim().toLowerCase();
                 String ns = "minecraft";
                 String path = model;
                 if (model.contains(":")) {
@@ -339,7 +340,8 @@ public class PropManager {
     }
 
     private ItemStack createDisplayItemStack(PropDefinition def) {
-        Material mat = (def != null && def.getItemModel() != null && !def.getItemModel().isEmpty())
+        String activeModel = (def != null) ? def.getBlockModel() : null;
+        Material mat = (activeModel != null && !activeModel.isEmpty())
                 ? Material.WHITE_WOOL
                 : Material.PAPER;
         if (def != null && def.getDropItemId() != null && itemStorage != null) {
@@ -358,8 +360,8 @@ public class PropManager {
             if (def != null && def.getDisplayName() != null) {
                 meta.setDisplayName(def.getDisplayName());
             }
-            if (def != null && def.getItemModel() != null && !def.getItemModel().isEmpty()) {
-                com.mcp.agent.adapters.Paper121ItemAdapter.applyItemModel(meta, def.getItemModel());
+            if (activeModel != null && !activeModel.isEmpty()) {
+                com.mcp.agent.adapters.Paper121ItemAdapter.applyItemModel(meta, activeModel);
             }
             item.setItemMeta(meta);
         }

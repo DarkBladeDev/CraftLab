@@ -90,3 +90,48 @@ async def test_openapi_includes_blocks():
         assert res.status_code == 200
         schema = res.json()
         assert "/api/v1/blocks" in schema["paths"]
+
+
+@pytest.mark.asyncio
+async def test_dual_model_and_blocks_only_revision():
+    await reset_db()
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        # Create block with separate block_model and item_model, and interaction_type="lay"
+        block_payload = {
+            "id": "luxury_bed",
+            "display_name": "<white>Luxury Bed</white>",
+            "mode": "display_prop",
+            "item_model": "studio:items/luxury_bed",
+            "block_model": "studio:props/luxury_bed_model",
+            "scale": [1.0, 1.0, 1.0],
+            "translation": [0.0, 0.0, 0.0],
+            "hitbox_type": "solid",
+            "hitbox_offsets": [[0, 0, 0], [1, 0, 0]],
+            "interaction_type": "lay",
+            "seat_height": 0.35,
+            "hardness": 1.0,
+            "tool_type": "AXE"
+        }
+        res = await client.post("/api/v1/blocks", json=block_payload)
+        assert res.status_code == 200
+        data = res.json()
+        assert data["block_model"] == "studio:props/luxury_bed_model"
+        assert data["item_model"] == "studio:items/luxury_bed"
+        assert data["interaction_type"] == "lay"
+
+        # Fetch block
+        get_res = await client.get("/api/v1/blocks/luxury_bed")
+        assert get_res.status_code == 200
+        get_data = get_res.json()
+        assert get_data["block_model"] == "studio:props/luxury_bed_model"
+        assert get_data["item_model"] == "studio:items/luxury_bed"
+        assert get_data["interaction_type"] == "lay"
+
+        # Verify revision creation succeeds with 0 items and 1 block (Task 3.6)
+        rev_res = await client.post("/api/revisions")
+        assert rev_res.status_code == 200
+        rev_data = rev_res.json()
+        assert rev_data["items_count"] == 0
+        assert rev_data["blocks_count"] == 1
+        assert "revision_hash" in rev_data

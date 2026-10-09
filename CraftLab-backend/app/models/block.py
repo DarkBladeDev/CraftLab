@@ -14,6 +14,7 @@ class BlockModel(Base):
     display_name = Column(String, nullable=False)
     mode = Column(String, default="display_prop", nullable=False)
     item_model = Column(String, nullable=True)
+    block_model = Column(String, nullable=True)
     scale = Column(JSON, default=lambda: [1.0, 1.0, 1.0])
     translation = Column(JSON, default=lambda: [0.0, 0.0, 0.0])
     hitbox_type = Column(String, default="solid", nullable=False)

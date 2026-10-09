@@ -9,6 +9,8 @@ import {
   Sliders,
   Shield,
   Check,
+  AlertCircle,
+  Bed,
 } from 'lucide-react'
 import {
   Block,
@@ -25,6 +27,7 @@ const DEFAULT_BLOCK: Block = {
   display_name: '',
   mode: 'display_prop',
   item_model: 'studio:furniture/custom_prop',
+  block_model: 'studio:furniture/custom_prop',
   scale: [1.0, 1.0, 1.0],
   translation: [0.0, 0.0, 0.0],
   hitbox_type: 'solid',
@@ -100,7 +103,12 @@ export function BlockStudio({ onRevisionCreated }: { onRevisionCreated?: () => v
     }
 
     try {
-      const saved = await saveBlock(selectedBlock)
+      const payload: Block = {
+        ...selectedBlock,
+        block_model: selectedBlock.block_model?.trim() || selectedBlock.item_model?.trim() || null,
+        item_model: selectedBlock.item_model?.trim() || selectedBlock.block_model?.trim() || null,
+      }
+      const saved = await saveBlock(payload)
       setStatusMessage(`Saved block "${saved.id}" successfully!`)
       await loadData()
       setSelectedBlock(saved)
@@ -194,6 +202,8 @@ export function BlockStudio({ onRevisionCreated }: { onRevisionCreated?: () => v
                     <div className="w-8 h-8 rounded-lg bg-[#0e0e11] border border-[#23232b] flex items-center justify-center flex-shrink-0 text-emerald-400">
                       {block.interaction_type === 'seat' ? (
                         <Armchair className="w-4 h-4" />
+                      ) : block.interaction_type === 'lay' ? (
+                        <Bed className="w-4 h-4 text-purple-400" />
                       ) : (
                         <Box className="w-4 h-4" />
                       )}
@@ -336,17 +346,38 @@ export function BlockStudio({ onRevisionCreated }: { onRevisionCreated?: () => v
               <span>Model & 3D Display Transformations</span>
             </h3>
 
-            <div>
-              <label className="block text-xs font-medium text-gray-300 mb-1">
-                Item Model Identifier (1.21.2+ / RP Model)
-              </label>
-              <input
-                type="text"
-                value={selectedBlock.item_model || ''}
-                onChange={(e) => setSelectedBlock({ ...selectedBlock, item_model: e.target.value })}
-                placeholder="studio:furniture/oak_chair"
-                className="w-full px-3 py-2 bg-[#0e0e11] border border-[#23232b] rounded-lg text-xs text-gray-200 font-mono focus:border-emerald-500 outline-none"
-              />
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <label className="block text-xs font-medium text-gray-300 mb-1">
+                  Block Model Identifier (Placed 3D Display)
+                </label>
+                <input
+                  type="text"
+                  value={selectedBlock.block_model ?? selectedBlock.item_model ?? ''}
+                  onChange={(e) => setSelectedBlock({ ...selectedBlock, block_model: e.target.value })}
+                  placeholder="studio:furniture/oak_chair_display"
+                  className="w-full px-3 py-2 bg-[#0e0e11] border border-[#23232b] rounded-lg text-xs text-gray-200 font-mono focus:border-emerald-500 outline-none"
+                />
+                <p className="text-[11px] text-gray-500 mt-1">
+                  Model displayed by the PacketEvents ItemDisplay entity in the world.
+                </p>
+              </div>
+
+              <div>
+                <label className="block text-xs font-medium text-gray-300 mb-1">
+                  Item Model Identifier (Handheld / Inventory)
+                </label>
+                <input
+                  type="text"
+                  value={selectedBlock.item_model ?? ''}
+                  onChange={(e) => setSelectedBlock({ ...selectedBlock, item_model: e.target.value })}
+                  placeholder="studio:furniture/oak_chair"
+                  className="w-full px-3 py-2 bg-[#0e0e11] border border-[#23232b] rounded-lg text-xs text-gray-200 font-mono focus:border-emerald-500 outline-none"
+                />
+                <p className="text-[11px] text-gray-500 mt-1">
+                  Model shown in player hands, hotbar, and dropped item stacks.
+                </p>
+              </div>
             </div>
 
             {/* Scale Sliders */}
@@ -424,18 +455,20 @@ export function BlockStudio({ onRevisionCreated }: { onRevisionCreated?: () => v
                   type="number"
                   step="0.1"
                   min="0.1"
+                  disabled={selectedBlock.hitbox_type === 'solid'}
                   value={selectedBlock.hardness}
                   onChange={(e) => setSelectedBlock({ ...selectedBlock, hardness: parseFloat(e.target.value) || 1.0 })}
-                  className="w-full px-3 py-2 bg-[#0e0e11] border border-[#23232b] rounded-lg text-xs text-gray-200 focus:border-emerald-500 outline-none"
+                  className="w-full px-3 py-2 bg-[#0e0e11] border border-[#23232b] rounded-lg text-xs text-gray-200 focus:border-emerald-500 outline-none disabled:opacity-40 disabled:cursor-not-allowed"
                 />
               </div>
 
               <div>
                 <label className="block text-xs font-medium text-gray-300 mb-1">Optimal Tool</label>
                 <select
+                  disabled={selectedBlock.hitbox_type === 'solid'}
                   value={selectedBlock.tool_type}
                   onChange={(e) => setSelectedBlock({ ...selectedBlock, tool_type: e.target.value })}
-                  className="w-full px-3 py-2 bg-[#0e0e11] border border-[#23232b] rounded-lg text-xs text-gray-200 focus:border-emerald-500 outline-none"
+                  className="w-full px-3 py-2 bg-[#0e0e11] border border-[#23232b] rounded-lg text-xs text-gray-200 focus:border-emerald-500 outline-none disabled:opacity-40 disabled:cursor-not-allowed"
                 >
                   <option value="AXE">Axe (Wood/Furniture)</option>
                   <option value="PICKAXE">Pickaxe (Stone/Metal)</option>
@@ -445,6 +478,13 @@ export function BlockStudio({ onRevisionCreated }: { onRevisionCreated?: () => v
                 </select>
               </div>
             </div>
+
+            {selectedBlock.hitbox_type === 'solid' && (
+              <div className="p-3 rounded-lg bg-amber-500/10 border border-amber-500/20 text-xs text-amber-300 flex items-center space-x-2">
+                <AlertCircle className="w-4 h-4 flex-shrink-0" />
+                <span>Solid Barrier is unbreakable in survival mode (Hardness & Optimal Tool are disabled).</span>
+              </div>
+            )}
 
             {/* Hitbox Presets */}
             <div className="space-y-2 pt-2 border-t border-[#1e1e26]">
@@ -487,16 +527,17 @@ export function BlockStudio({ onRevisionCreated }: { onRevisionCreated?: () => v
                   className="w-full px-3 py-2 bg-[#0e0e11] border border-[#23232b] rounded-lg text-xs text-gray-200 focus:border-emerald-500 outline-none"
                 >
                   <option value="seat">Seat (Mount player on right-click)</option>
+                  <option value="lay">Lie Down (Lay back in the block on right-click)</option>
                   <option value="none">None (Static Decoration)</option>
                   <option value="container">Storage Container</option>
                   <option value="custom">Custom Plugin Trigger</option>
                 </select>
               </div>
 
-              {selectedBlock.interaction_type === 'seat' && (
+              {(selectedBlock.interaction_type === 'seat' || selectedBlock.interaction_type === 'lay') && (
                 <div>
                   <div className="flex justify-between text-xs font-medium text-gray-300 mb-1">
-                    <span>Seat Height (Y Offset)</span>
+                    <span>{selectedBlock.interaction_type === 'lay' ? 'Lay Height Offset' : 'Seat Height (Y Offset)'}</span>
                     <span className="text-emerald-400 font-bold">{selectedBlock.seat_height.toFixed(2)}m</span>
                   </div>
                   <input
@@ -509,7 +550,9 @@ export function BlockStudio({ onRevisionCreated }: { onRevisionCreated?: () => v
                     className="w-full accent-emerald-500 cursor-pointer"
                   />
                   <p className="text-[11px] text-gray-500 mt-1">
-                    Height above the floor where the player's model sits. Typical chairs: 0.40 - 0.50m.
+                    {selectedBlock.interaction_type === 'lay'
+                      ? 'Height above the floor where the player lies down. Typical beds/couches: 0.30 - 0.45m.'
+                      : "Height above the floor where the player's model sits. Typical chairs: 0.40 - 0.50m."}
                   </p>
                 </div>
               )}

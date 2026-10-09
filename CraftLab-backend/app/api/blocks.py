@@ -16,6 +16,7 @@ def _serialize_block_model(b: BlockModel) -> dict:
         "display_name": b.display_name,
         "mode": b.mode or "display_prop",
         "item_model": b.item_model,
+        "block_model": getattr(b, "block_model", None) or b.item_model,
         "scale": b.scale or [1.0, 1.0, 1.0],
         "translation": b.translation or [0.0, 0.0, 0.0],
         "hitbox_type": b.hitbox_type or "solid",
@@ -57,6 +58,7 @@ async def create_or_update_block(block_in: BlockDefinition, db: AsyncSession = D
         existing.display_name = block_in.display_name
         existing.mode = block_in.mode
         existing.item_model = block_in.item_model
+        existing.block_model = block_in.block_model or block_in.item_model
         existing.scale = block_in.scale
         existing.translation = block_in.translation
         existing.hitbox_type = block_in.hitbox_type
@@ -73,6 +75,7 @@ async def create_or_update_block(block_in: BlockDefinition, db: AsyncSession = D
             display_name=block_in.display_name,
             mode=block_in.mode,
             item_model=block_in.item_model,
+            block_model=block_in.block_model or block_in.item_model,
             scale=block_in.scale,
             translation=block_in.translation,
             hitbox_type=block_in.hitbox_type,
