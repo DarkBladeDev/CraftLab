@@ -77,21 +77,37 @@ public class Paper121ItemAdapter implements ItemAdapter {
         return stack;
     }
 
+    private static final java.util.logging.Logger LOGGER = java.util.logging.Logger.getLogger(Paper121ItemAdapter.class.getName());
+
     public static void applyItemModel(ItemMeta meta, String itemModelStr) {
         if (itemModelStr == null || itemModelStr.trim().isEmpty() || meta == null) {
             return;
         }
         try {
-            org.bukkit.NamespacedKey key = org.bukkit.NamespacedKey.fromString(itemModelStr.trim().toLowerCase());
+            String raw = itemModelStr.trim().toLowerCase();
+            org.bukkit.NamespacedKey key;
+            if (raw.contains(":")) {
+                key = org.bukkit.NamespacedKey.fromString(raw);
+            } else {
+                key = org.bukkit.NamespacedKey.minecraft(raw);
+            }
             if (key != null) {
-                // In Paper 1.21.2+, meta.setItemModel(NamespacedKey) is present
-                java.lang.reflect.Method method = meta.getClass().getMethod("setItemModel", org.bukkit.NamespacedKey.class);
+                // In Paper 1.21.2+, ItemMeta interface declares setItemModel(NamespacedKey).
+                // Reflect on the public ItemMeta interface first to avoid Java 21 IllegalAccessException
+                // when accessing package-private CraftMetaItem implementations.
+                java.lang.reflect.Method method;
+                try {
+                    method = org.bukkit.inventory.meta.ItemMeta.class.getMethod("setItemModel", org.bukkit.NamespacedKey.class);
+                } catch (NoSuchMethodException e) {
+                    method = meta.getClass().getMethod("setItemModel", org.bukkit.NamespacedKey.class);
+                }
+                method.setAccessible(true);
                 method.invoke(meta, key);
             }
         } catch (NoSuchMethodException ignored) {
             // Server runtime is Paper 1.21.0 - 1.21.1 where setItemModel does not exist yet; safe fallback
-        } catch (Exception ignored) {
-            // Reflective error or unsupported mock environment
+        } catch (Exception e) {
+            LOGGER.warning("Failed to reflectively apply item model '" + itemModelStr + "': " + e.getMessage());
         }
     }
 

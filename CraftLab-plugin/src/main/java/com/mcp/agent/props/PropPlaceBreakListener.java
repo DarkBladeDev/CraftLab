@@ -26,7 +26,7 @@ import java.util.UUID;
 import java.util.logging.Logger;
 
 public class PropPlaceBreakListener implements Listener {
-    public static final NamespacedKey PROP_ID_KEY = new NamespacedKey("mcp", "prop_id");
+    public static final NamespacedKey PROP_ID_KEY = NamespacedKey.fromString("mcp:prop_id");
 
     private final Plugin plugin;
     private final PropManager propManager;
@@ -44,6 +44,17 @@ public class PropPlaceBreakListener implements Listener {
         this.itemStorage = itemStorage;
         this.itemAdapter = itemAdapter;
         this.logger = logger;
+    }
+
+    public static boolean isClearForPlacement(Block block) {
+        if (block == null) return false;
+        try {
+            if (block.isReplaceable()) return true;
+        } catch (Throwable ignored) {
+        }
+        Material type = block.getType();
+        if (type == null) return false;
+        return type == Material.AIR || type == Material.CAVE_AIR || type == Material.VOID_AIR || type == Material.STRUCTURE_VOID;
     }
 
     @EventHandler(priority = EventPriority.HIGH, ignoreCancelled = true)
@@ -78,29 +89,42 @@ public class PropPlaceBreakListener implements Listener {
 
         Player player = event.getPlayer();
         BlockFace face = event.getBlockFace();
-        Block targetBlock = clickedBlock.getRelative(face);
-
-        if (!targetBlock.getType().isAir() && targetBlock.getType() != Material.STRUCTURE_VOID) {
-            return;
-        }
-
-        event.setCancelled(true);
+        Block anchorBlock = clickedBlock.getRelative(face);
 
         // 1. Calculate cardinal facing (0, 90, 180, 270)
         float cardinalYaw = PropManager.normalizeToCardinalYaw(player.getLocation().getYaw());
 
-        // 2. Place barrier collision block
-        targetBlock.setType(Material.BARRIER);
+        // 2. Pre-placement clearance check across all rotated hitbox offsets
+        List<int[]> offsets = PropManager.getRotatedOffsets(propDef, cardinalYaw);
+        for (int[] off : offsets) {
+            Block target = anchorBlock.getRelative(off[0], off[1], off[2]);
+            if (!isClearForPlacement(target)) {
+                event.setCancelled(true);
+                player.sendMessage(net.kyori.adventure.text.Component.text("Cannot place prop here: area is obstructed.", net.kyori.adventure.text.format.NamedTextColor.RED));
+                return;
+            }
+        }
 
-        // 3. Register placed prop instance
+        event.setCancelled(true);
+
+        // 3. Place collision blocks (BARRIER for solid or STRUCTURE_VOID for passable) across all rotated offsets
+        Material collisionMat = "passable".equalsIgnoreCase(propDef.getHitboxType())
+                ? Material.STRUCTURE_VOID
+                : Material.BARRIER;
+        for (int[] off : offsets) {
+            Block target = anchorBlock.getRelative(off[0], off[1], off[2]);
+            target.setType(collisionMat);
+        }
+
+        // 4. Register placed prop instance
         UUID instanceId = UUID.randomUUID();
         PropInstance instance = new PropInstance(
                 instanceId,
                 propDef.getId(),
-                targetBlock.getWorld().getName(),
-                targetBlock.getX(),
-                targetBlock.getY(),
-                targetBlock.getZ(),
+                anchorBlock.getWorld().getName(),
+                anchorBlock.getX(),
+                anchorBlock.getY(),
+                anchorBlock.getZ(),
                 cardinalYaw,
                 System.currentTimeMillis()
         );
@@ -108,47 +132,58 @@ public class PropPlaceBreakListener implements Listener {
         propManager.registerPlacedProp(instance);
         propManager.broadcastSpawn(instance);
 
-        // 4. Play placement sound and deduct item
-        targetBlock.getWorld().playSound(targetBlock.getLocation().add(0.5, 0.5, 0.5), Sound.BLOCK_WOOD_PLACE, 1.0f, 1.0f);
+        // 5. Play placement sound and deduct item
+        anchorBlock.getWorld().playSound(anchorBlock.getLocation().add(0.5, 0.5, 0.5), Sound.BLOCK_WOOD_PLACE, 1.0f, 1.0f);
 
         if (player.getGameMode() != GameMode.CREATIVE) {
             item.setAmount(item.getAmount() - 1);
         }
 
-        logger.info("Placed prop " + propDef.getId() + " at " + targetBlock.getLocation() + " with yaw " + cardinalYaw);
+        logger.info("Placed prop " + propDef.getId() + " at " + anchorBlock.getLocation() + " with yaw " + cardinalYaw);
     }
 
     @EventHandler(priority = EventPriority.HIGHEST, ignoreCancelled = true)
     public void onBlockBreak(BlockBreakEvent event) {
         Block block = event.getBlock();
-        if (block.getType() != Material.BARRIER) return;
+        if (block.getType() != Material.BARRIER && block.getType() != Material.STRUCTURE_VOID) return;
 
         String worldName = block.getWorld().getName();
         PropInstance instance = propManager.getInstanceAt(worldName, block.getX(), block.getY(), block.getZ());
         if (instance == null) return;
 
-        // Cancel default barrier breaking
+        // Cancel default block breaking
         event.setCancelled(true);
-        block.setType(Material.AIR);
 
         PropDefinition def = propManager.getDefinition(instance.getPropId());
 
-        // Remove from manager and disk
-        propManager.removePlacedProp(instance.getInstanceId());
+        // 1. Broadcast destroy packet FIRST before removing entity ID mapping from memory
         propManager.broadcastDestroy(instance);
 
-        // Break particles and sound
-        Location center = block.getLocation().add(0.5, 0.5, 0.5);
-        block.getWorld().playSound(center, Sound.BLOCK_WOOD_BREAK, 1.0f, 1.0f);
+        // 2. Revert all occupied collision blocks across the rotated footprint to AIR
+        World world = block.getWorld();
+        List<int[]> occupiedBlocks = propManager.getOccupiedBlocks(instance);
+        for (int[] coords : occupiedBlocks) {
+            Block b = world.getBlockAt(coords[0], coords[1], coords[2]);
+            if (b.getType() == Material.BARRIER || b.getType() == Material.STRUCTURE_VOID) {
+                b.setType(Material.AIR);
+            }
+        }
+
+        // 3. Remove instance from manager and disk
+        propManager.removePlacedProp(instance.getInstanceId());
+
+        // 4. Break particles and sound
+        Location center = new Location(world, instance.getX() + 0.5, instance.getY() + 0.5, instance.getZ() + 0.5);
+        world.playSound(center, Sound.BLOCK_WOOD_BREAK, 1.0f, 1.0f);
         try {
-            block.getWorld().spawnParticle(Particle.BLOCK, center, 15, 0.3, 0.3, 0.3, Material.OAK_PLANKS.createBlockData());
+            world.spawnParticle(Particle.BLOCK, center, 15, 0.3, 0.3, 0.3, Material.OAK_PLANKS.createBlockData());
         } catch (Exception ignored) {
         }
 
-        // Drop item
+        // 5. Drop item
         if (event.getPlayer().getGameMode() != GameMode.CREATIVE) {
             ItemStack dropStack = createPropItemStack(def, instance.getPropId(), itemStorage, itemAdapter);
-            block.getWorld().dropItemNaturally(center, dropStack);
+            world.dropItemNaturally(center, dropStack);
         }
 
         logger.info("Destroyed prop " + instance.getPropId() + " at " + center);
@@ -168,7 +203,16 @@ public class PropPlaceBreakListener implements Listener {
             }
         }
 
-        Material mat = (def != null && def.getItemModel() != null && !def.getItemModel().isEmpty())
+        String activeItemModel = null;
+        if (def != null) {
+            if (def.getItemModel() != null && !def.getItemModel().trim().isEmpty()) {
+                activeItemModel = def.getItemModel().trim();
+            } else if (def.getBlockModel() != null && !def.getBlockModel().trim().isEmpty()) {
+                activeItemModel = def.getBlockModel().trim();
+            }
+        }
+
+        Material mat = (activeItemModel != null && !activeItemModel.isEmpty())
                 ? Material.WHITE_WOOL
                 : Material.PAPER;
         ItemStack item = new ItemStack(mat);
@@ -177,8 +221,8 @@ public class PropPlaceBreakListener implements Listener {
             String name = (def != null && def.getDisplayName() != null) ? def.getDisplayName() : propId;
             meta.setDisplayName(name);
             meta.getPersistentDataContainer().set(PROP_ID_KEY, PersistentDataType.STRING, propId);
-            if (def != null && def.getItemModel() != null && !def.getItemModel().isEmpty()) {
-                Paper121ItemAdapter.applyItemModel(meta, def.getItemModel());
+            if (activeItemModel != null && !activeItemModel.isEmpty()) {
+                Paper121ItemAdapter.applyItemModel(meta, activeItemModel);
             }
             item.setItemMeta(meta);
         }

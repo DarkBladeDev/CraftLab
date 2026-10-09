@@ -51,7 +51,7 @@ public class PropInteractionListener implements Listener {
         if (event.getHand() != EquipmentSlot.HAND) return;
 
         Block clicked = event.getClickedBlock();
-        if (clicked == null || clicked.getType() != Material.BARRIER) return;
+        if (clicked == null || (clicked.getType() != Material.BARRIER && clicked.getType() != Material.STRUCTURE_VOID)) return;
 
         Player player = event.getPlayer();
         if (player.isSneaking()) return;
@@ -71,13 +71,13 @@ public class PropInteractionListener implements Listener {
 
         event.setCancelled(true);
 
-        // Spawn temporary invisible seat entity
-        float seatYOffset = def.getSeatHeight() - 0.2f;
+        // Spawn temporary invisible seat entity centered above the clicked block
+        float seatYOffset = def.getSeatHeight() > 0.0f ? def.getSeatHeight() : 0.5f;
         Location seatLoc = new Location(
                 clicked.getWorld(),
-                instance.getX() + 0.5,
-                instance.getY() + seatYOffset,
-                instance.getZ() + 0.5,
+                clicked.getX() + 0.5,
+                clicked.getY() + seatYOffset,
+                clicked.getZ() + 0.5,
                 instance.getYaw(),
                 0.0f
         );

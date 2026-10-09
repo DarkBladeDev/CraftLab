@@ -44,6 +44,7 @@ public class PropStorage {
                     "display_name TEXT NOT NULL, " +
                     "mode TEXT NOT NULL, " +
                     "item_model TEXT, " +
+                    "block_model TEXT, " +
                     "scale_json TEXT NOT NULL, " +
                     "translation_json TEXT NOT NULL, " +
                     "hitbox_type TEXT NOT NULL, " +
@@ -54,6 +55,16 @@ public class PropStorage {
                     "tool_type TEXT NOT NULL, " +
                     "drop_item_id TEXT" +
                     ")");
+
+            // Migration checks for existing databases
+            try {
+                stmt.execute("ALTER TABLE prop_definitions ADD COLUMN block_model TEXT");
+            } catch (SQLException ignored) {
+            }
+            try {
+                stmt.execute("ALTER TABLE prop_definitions ADD COLUMN seat_height REAL DEFAULT 0.5");
+            } catch (SQLException ignored) {
+            }
 
             stmt.execute("CREATE TABLE IF NOT EXISTS placed_props (" +
                     "instance_id TEXT PRIMARY KEY, " +
@@ -73,23 +84,24 @@ public class PropStorage {
     }
 
     public synchronized void saveDefinition(PropDefinition def) {
-        String sql = "INSERT OR REPLACE INTO prop_definitions (id, display_name, mode, item_model, " +
+        String sql = "INSERT OR REPLACE INTO prop_definitions (id, display_name, mode, item_model, block_model, " +
                 "scale_json, translation_json, hitbox_type, hitbox_offsets_json, interaction_type, " +
-                "seat_height, hardness, tool_type, drop_item_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
+                "seat_height, hardness, tool_type, drop_item_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
         try (Connection conn = getConnection(); PreparedStatement ps = conn.prepareStatement(sql)) {
             ps.setString(1, def.getId());
             ps.setString(2, def.getDisplayName());
             ps.setString(3, def.getMode());
             ps.setString(4, def.getItemModel());
-            ps.setString(5, gson.toJson(def.getScale()));
-            ps.setString(6, gson.toJson(def.getTranslation()));
-            ps.setString(7, def.getHitboxType());
-            ps.setString(8, gson.toJson(def.getHitboxOffsets()));
-            ps.setString(9, def.getInteractionType());
-            ps.setFloat(10, def.getSeatHeight());
-            ps.setFloat(11, def.getHardness());
-            ps.setString(12, def.getToolType());
-            ps.setString(13, def.getDropItemId());
+            ps.setString(5, def.getBlockModel());
+            ps.setString(6, gson.toJson(def.getScale()));
+            ps.setString(7, gson.toJson(def.getTranslation()));
+            ps.setString(8, def.getHitboxType());
+            ps.setString(9, gson.toJson(def.getHitboxOffsets()));
+            ps.setString(10, def.getInteractionType());
+            ps.setFloat(11, def.getSeatHeight());
+            ps.setFloat(12, def.getHardness());
+            ps.setString(13, def.getToolType());
+            ps.setString(14, def.getDropItemId());
             ps.executeUpdate();
         } catch (SQLException e) {
             logger.log(Level.SEVERE, "Failed to save prop definition: " + def.getId(), e);
@@ -131,6 +143,10 @@ public class PropStorage {
         def.setDisplayName(rs.getString("display_name"));
         def.setMode(rs.getString("mode"));
         def.setItemModel(rs.getString("item_model"));
+        try {
+            def.setBlockModel(rs.getString("block_model"));
+        } catch (SQLException ignored) {
+        }
         def.setScale(gson.fromJson(rs.getString("scale_json"), FLOAT_LIST_TYPE));
         def.setTranslation(gson.fromJson(rs.getString("translation_json"), FLOAT_LIST_TYPE));
         def.setHitboxType(rs.getString("hitbox_type"));

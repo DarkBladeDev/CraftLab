@@ -135,3 +135,48 @@ async def test_dual_model_and_blocks_only_revision():
         assert rev_data["items_count"] == 0
         assert rev_data["blocks_count"] == 1
         assert "revision_hash" in rev_data
+
+
+@pytest.mark.asyncio
+async def test_create_block_broadcasts_to_connected_agents():
+    await reset_db()
+    from app.gateway.manager import gateway_manager
+    from unittest.mock import AsyncMock
+    import json
+
+    mock_ws = AsyncMock()
+    await gateway_manager.register_session("test-agent-target", mock_ws)
+
+    try:
+        transport = ASGITransport(app=app)
+        async with AsyncClient(transport=transport, base_url="http://test") as client:
+            block_payload = {
+                "id": "throne_chair",
+                "display_name": "Throne Chair",
+                "mode": "display_prop",
+                "item_model": "studio:item/throne",
+                "block_model": "studio:block/throne",
+                "hitbox_type": "solid",
+                "hitbox_offsets": [[0, 0, 0]],
+                "interaction_type": "seat",
+                "seat_height": 0.65,
+                "hardness": 2.0,
+                "tool_type": "AXE"
+            }
+            res = await client.post("/api/v1/blocks", json=block_payload)
+            assert res.status_code == 200
+
+        # Verify websocket send_text was called
+        assert mock_ws.send_text.called
+        sent_text = mock_ws.send_text.call_args[0][0]
+        envelope = json.loads(sent_text)
+        assert envelope["messageType"] == "request"
+        assert envelope["targetId"] == "test-agent-target"
+        payload = envelope["payload"]
+        assert payload["action"] == "create_or_update_block"
+        assert payload["resourceId"] == "throne_chair"
+        assert payload["block"]["seat_height"] == 0.65
+        assert payload["block"]["block_model"] == "studio:block/throne"
+    finally:
+        gateway_manager._active_sessions.pop("test-agent-target", None)
+

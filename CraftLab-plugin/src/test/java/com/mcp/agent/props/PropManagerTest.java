@@ -105,4 +105,76 @@ public class PropManagerTest {
         assertEquals(23, PropManager.METADATA_INDEX_ITEM_STACK, "Item display stack must be index 23");
         assertEquals(24, PropManager.METADATA_INDEX_ITEM_DISPLAY_CONTEXT, "Item display context must be index 24");
     }
+
+    @Test
+    public void testCardinalOffsetRotation() {
+        // 1x1 Single Block: [0, 0, 0] remains [0, 0, 0] across all yaws
+        for (float yaw : new float[]{0.0f, 90.0f, 180.0f, 270.0f}) {
+            assertArrayEquals(new int[]{0, 0, 0}, PropManager.rotateOffset(0, 0, 0, yaw));
+        }
+
+        // 1x2 High (Pillar): [0, 1, 0] Y axis remains unchanged across all yaws
+        for (float yaw : new float[]{0.0f, 90.0f, 180.0f, 270.0f}) {
+            assertArrayEquals(new int[]{0, 1, 0}, PropManager.rotateOffset(0, 1, 0, yaw));
+        }
+
+        // 2x1 Long (Bench/Bed): [1, 0, 0]
+        assertArrayEquals(new int[]{1, 0, 0}, PropManager.rotateOffset(1, 0, 0, 0.0f), "South: (dx, dy, dz)");
+        assertArrayEquals(new int[]{0, 0, -1}, PropManager.rotateOffset(1, 0, 0, 90.0f), "West: (dz, dy, -dx)");
+        assertArrayEquals(new int[]{-1, 0, 0}, PropManager.rotateOffset(1, 0, 0, 180.0f), "North: (-dx, dy, -dz)");
+        assertArrayEquals(new int[]{0, 0, 1}, PropManager.rotateOffset(1, 0, 0, 270.0f), "East: (-dz, dy, dx)");
+
+        // 2x2 Platform: [1, 0, 1]
+        assertArrayEquals(new int[]{1, 0, 1}, PropManager.rotateOffset(1, 0, 1, 0.0f));
+        assertArrayEquals(new int[]{1, 0, -1}, PropManager.rotateOffset(1, 0, 1, 90.0f));
+        assertArrayEquals(new int[]{-1, 0, -1}, PropManager.rotateOffset(1, 0, 1, 180.0f));
+        assertArrayEquals(new int[]{-1, 0, 1}, PropManager.rotateOffset(1, 0, 1, 270.0f));
+    }
+
+    @Test
+    public void testMultiBlockRegistrationAndQuery(@TempDir File tempDir) {
+        Logger logger = Logger.getLogger("PropManagerMultiBlockTest");
+        PropStorage storage = new PropStorage(tempDir, logger);
+        PropManager manager = new PropManager(storage, logger);
+
+        // Define a 2x1 prop with offsets [0, 0, 0] and [1, 0, 0]
+        PropDefinition bench = new PropDefinition("bench_2x1", "Oak Bench", "studio:item/bench");
+        bench.setHitboxOffsets(java.util.Arrays.asList(new int[]{0, 0, 0}, new int[]{1, 0, 0}));
+        manager.registerDefinition(bench);
+
+        // Place prop facing West (yaw = 90 deg) at (100, 64, 200)
+        // With 90 deg, [1, 0, 0] rotates to [0, 0, -1] -> (100, 64, 199)
+        UUID benchId = UUID.randomUUID();
+        PropInstance instance = new PropInstance(benchId, "bench_2x1", "world", 100, 64, 200, 90.0f, System.currentTimeMillis());
+        manager.registerPlacedProp(instance);
+
+        // Verify entity ID was assigned and is positive
+        int entityId = manager.getEntityId(benchId);
+        assertTrue(entityId > 0, "Entity ID should be assigned");
+
+        // Verify anchor block occupancy and lookup
+        assertTrue(manager.isBlockOccupied("world", 100, 64, 200));
+        assertNotNull(manager.getInstanceAt("world", 100, 64, 200));
+        assertEquals(benchId, manager.getInstanceAt("world", 100, 64, 200).getInstanceId());
+
+        // Verify secondary rotated offset block (100, 64, 199) occupancy and lookup
+        assertTrue(manager.isBlockOccupied("world", 100, 64, 199), "Secondary offset [0, 0, -1] must be marked occupied");
+        assertNotNull(manager.getInstanceAt("world", 100, 64, 199), "Secondary offset must resolve parent instance");
+        assertEquals(benchId, manager.getInstanceAt("world", 100, 64, 199).getInstanceId());
+
+        // Verify occupied coordinates list
+        List<int[]> occupied = manager.getOccupiedBlocks(instance);
+        assertEquals(2, occupied.size());
+        assertArrayEquals(new int[]{100, 64, 200}, occupied.get(0));
+        assertArrayEquals(new int[]{100, 64, 199}, occupied.get(1));
+
+        // Teardown: Remove placed prop
+        manager.removePlacedProp(benchId);
+
+        // Verify both blocks are de-registered
+        assertFalse(manager.isBlockOccupied("world", 100, 64, 200));
+        assertFalse(manager.isBlockOccupied("world", 100, 64, 199));
+        assertNull(manager.getInstanceAt("world", 100, 64, 200));
+        assertNull(manager.getInstanceAt("world", 100, 64, 199));
+    }
 }

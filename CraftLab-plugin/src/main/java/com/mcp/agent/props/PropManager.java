@@ -45,8 +45,13 @@ public class PropManager {
     private final Map<UUID, PropInstance> instancesById = new ConcurrentHashMap<>();
     private final Map<String, Map<Long, List<PropInstance>>> chunkSpatialIndex = new ConcurrentHashMap<>();
     private final Map<UUID, Integer> instanceToEntityId = new ConcurrentHashMap<>();
+    private final Map<String, UUID> blockToInstance = new ConcurrentHashMap<>();
     private final Map<UUID, Set<UUID>> playersViewingProps = new ConcurrentHashMap<>();
     private final AtomicInteger nextEntityId = new AtomicInteger(2_000_000);
+
+    public static String toBlockKey(String world, int x, int y, int z) {
+        return world + ":" + x + ":" + y + ":" + z;
+    }
 
     public PropManager(PropStorage storage, Logger logger) {
         this(storage, null, logger);
@@ -63,6 +68,7 @@ public class PropManager {
         definitions.clear();
         instancesById.clear();
         chunkSpatialIndex.clear();
+        blockToInstance.clear();
 
         definitions.putAll(storage.getAllDefinitions());
         for (PropInstance instance : storage.getAllInstances()) {
@@ -74,6 +80,15 @@ public class PropManager {
     public void registerDefinition(PropDefinition def) {
         definitions.put(def.getId(), def);
         storage.saveDefinition(def);
+        for (PropInstance instance : instancesById.values()) {
+            if (instance.getPropId().equals(def.getId())) {
+                List<int[]> offsets = getRotatedOffsets(def, instance.getYaw());
+                for (int[] off : offsets) {
+                    String key = toBlockKey(instance.getWorld(), instance.getX() + off[0], instance.getY() + off[1], instance.getZ() + off[2]);
+                    blockToInstance.put(key, instance.getInstanceId());
+                }
+            }
+        }
     }
 
     public PropDefinition getDefinition(String id) {
@@ -103,11 +118,46 @@ public class PropManager {
     }
 
     public PropInstance getInstanceAt(String world, int x, int y, int z) {
-        return storage.getInstanceAt(world, x, y, z);
+        String key = toBlockKey(world, x, y, z);
+        UUID instanceId = blockToInstance.get(key);
+        if (instanceId != null) {
+            PropInstance instance = instancesById.get(instanceId);
+            if (instance != null) {
+                return instance;
+            }
+        }
+        PropInstance dbInstance = storage.getInstanceAt(world, x, y, z);
+        if (dbInstance != null) {
+            addInstanceToMemory(dbInstance);
+            return dbInstance;
+        }
+        return null;
     }
 
     public List<PropInstance> getAllInstances() {
         return new ArrayList<>(instancesById.values());
+    }
+
+    public List<int[]> getOccupiedBlocks(PropInstance instance) {
+        PropDefinition def = definitions.get(instance.getPropId());
+        List<int[]> offsets = getRotatedOffsets(def, instance.getYaw());
+        List<int[]> result = new ArrayList<>();
+        for (int[] off : offsets) {
+            result.add(new int[]{
+                    instance.getX() + off[0],
+                    instance.getY() + off[1],
+                    instance.getZ() + off[2]
+            });
+        }
+        return result;
+    }
+
+    public int getEntityId(UUID instanceId) {
+        return instanceToEntityId.getOrDefault(instanceId, -1);
+    }
+
+    public boolean isBlockOccupied(String world, int x, int y, int z) {
+        return blockToInstance.containsKey(toBlockKey(world, x, y, z));
     }
 
     private void addInstanceToMemory(PropInstance instance) {
@@ -119,6 +169,13 @@ public class PropManager {
                 .computeIfAbsent(instance.getWorld(), w -> new ConcurrentHashMap<>())
                 .computeIfAbsent(chunkKey, c -> Collections.synchronizedList(new ArrayList<>()))
                 .add(instance);
+
+        PropDefinition def = definitions.get(instance.getPropId());
+        List<int[]> offsets = getRotatedOffsets(def, instance.getYaw());
+        for (int[] off : offsets) {
+            String key = toBlockKey(instance.getWorld(), instance.getX() + off[0], instance.getY() + off[1], instance.getZ() + off[2]);
+            blockToInstance.put(key, instance.getInstanceId());
+        }
     }
 
     private void removeInstanceFromSpatialIndex(PropInstance instance) {
@@ -129,6 +186,13 @@ public class PropManager {
             if (list != null) {
                 list.remove(instance);
             }
+        }
+
+        PropDefinition def = definitions.get(instance.getPropId());
+        List<int[]> offsets = getRotatedOffsets(def, instance.getYaw());
+        for (int[] off : offsets) {
+            String key = toBlockKey(instance.getWorld(), instance.getX() + off[0], instance.getY() + off[1], instance.getZ() + off[2]);
+            blockToInstance.remove(key);
         }
     }
 
@@ -319,8 +383,18 @@ public class PropManager {
 
         WrapperPlayServerDestroyEntities destroyPacket = new WrapperPlayServerDestroyEntities(entityId);
         for (Player player : org.bukkit.Bukkit.getOnlinePlayers()) {
+            boolean wasViewing = false;
             Set<UUID> viewing = playersViewingProps.get(player.getUniqueId());
             if (viewing != null && viewing.remove(instance.getInstanceId())) {
+                wasViewing = true;
+            }
+            if (player.getWorld().getName().equals(instance.getWorld())) {
+                double distSq = player.getLocation().distanceSquared(new Location(player.getWorld(), instance.getX() + 0.5, instance.getY(), instance.getZ() + 0.5));
+                if (distSq <= (TRACKING_RANGE * TRACKING_RANGE)) {
+                    wasViewing = true;
+                }
+            }
+            if (wasViewing) {
                 sendPacket(player, destroyPacket);
             }
         }
@@ -387,6 +461,36 @@ public class PropManager {
         } else {
             return 0.0f; // SOUTH
         }
+    }
+
+    public static int[] rotateOffset(int dx, int dy, int dz, float yaw) {
+        float normalizedYaw = normalizeToCardinalYaw(yaw);
+        int cardinal = Math.round(normalizedYaw);
+        return switch (cardinal) {
+            case 90 -> new int[]{dz, dy, -dx};
+            case 180 -> new int[]{-dx, dy, -dz};
+            case 270 -> new int[]{-dz, dy, dx};
+            default -> new int[]{dx, dy, dz};
+        };
+    }
+
+    public static int[] rotateOffset(int[] offset, float yaw) {
+        if (offset == null || offset.length < 3) {
+            return new int[]{0, 0, 0};
+        }
+        return rotateOffset(offset[0], offset[1], offset[2], yaw);
+    }
+
+    public static List<int[]> getRotatedOffsets(PropDefinition def, float yaw) {
+        List<int[]> result = new ArrayList<>();
+        if (def == null || def.getHitboxOffsets() == null || def.getHitboxOffsets().isEmpty()) {
+            result.add(new int[]{0, 0, 0});
+            return result;
+        }
+        for (int[] offset : def.getHitboxOffsets()) {
+            result.add(rotateOffset(offset, yaw));
+        }
+        return result;
     }
 
     public static long getChunkKey(int chunkX, int chunkZ) {

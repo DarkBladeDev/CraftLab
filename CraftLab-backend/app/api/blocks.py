@@ -1,3 +1,4 @@
+import uuid
 from typing import List
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -5,6 +6,8 @@ from sqlalchemy import select
 from app.core.database import get_db
 from app.models.entities import BlockModel
 from app.domain.blocks import BlockDefinition
+from app.gateway.manager import gateway_manager
+from app.protocol.envelope import MessageEnvelope
 
 router = APIRouter(prefix="/api/v1/blocks", tags=["blocks"])
 legacy_router = APIRouter(prefix="/api/blocks", tags=["blocks"])
@@ -90,6 +93,34 @@ async def create_or_update_block(block_in: BlockDefinition, db: AsyncSession = D
         db.add(new_block)
 
     await db.commit()
+
+    # Real-time broadcast to connected agents
+    target_block = existing if existing else new_block
+    block_dict = _serialize_block_model(target_block)
+    try:
+        online_targets = gateway_manager.get_online_targets()
+        for target_id in online_targets:
+            op_id = f"op-block-{uuid.uuid4().hex[:8]}"
+            envelope_payload = {
+                "action": "create_or_update_block",
+                "operationId": op_id,
+                "resourceKind": "block",
+                "resourceId": block_in.id,
+                "payload": block_dict,
+                "block": block_dict,
+                "prop": block_dict,
+            }
+            envelope = MessageEnvelope(
+                messageType="request",
+                messageId=f"msg-{uuid.uuid4().hex[:8]}",
+                correlationId=op_id,
+                targetId=target_id,
+                payload=envelope_payload
+            )
+            await gateway_manager.send_to_target(target_id, envelope)
+    except Exception:
+        pass
+
     return block_in.model_dump()
 
 

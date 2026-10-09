@@ -61,4 +61,34 @@ public class Paper121ItemAdapterTest {
         // Does not have setItemModel; must safely complete without throwing exception
         assertDoesNotThrow(() -> adapter.applyItemModel(legacyMeta, "studio:items/celestial_sword"));
     }
+
+    @Test
+    public void testApplyItemModelInfersMinecraftNamespace() {
+        Paper121ItemAdapter adapter = new Paper121ItemAdapter();
+        AtomicReference<NamespacedKey> capturedKey = new AtomicReference<>();
+
+        ModernItemMetaWithItemModel mockMeta = (ModernItemMetaWithItemModel) Proxy.newProxyInstance(
+                getClass().getClassLoader(),
+                new Class<?>[]{ModernItemMetaWithItemModel.class},
+                (proxy, method, args) -> {
+                    if ("setItemModel".equals(method.getName()) && args != null && args.length == 1) {
+                        capturedKey.set((NamespacedKey) args[0]);
+                        return null;
+                    }
+                    return null;
+                }
+        );
+
+        adapter.applyItemModel(mockMeta, "custom_prop");
+        assertNotNull(capturedKey.get());
+        assertEquals("minecraft", capturedKey.get().getNamespace());
+        assertEquals("custom_prop", capturedKey.get().getKey());
+    }
+
+    @Test
+    public void testApplyItemModelNullEmptySafe() {
+        Paper121ItemAdapter adapter = new Paper121ItemAdapter();
+        assertDoesNotThrow(() -> adapter.applyItemModel(null, "studio:items/test"));
+        assertDoesNotThrow(() -> adapter.applyItemModel(null, null));
+    }
 }
