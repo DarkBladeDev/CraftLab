@@ -4,16 +4,25 @@ import time
 import asyncio
 from pathlib import Path
 import pytest
-from craftlab_ctl.core.paths import get_paths
+from craftlab_ctl.core.paths import CtlPaths, get_paths
 from craftlab_ctl.daemon import DaemonService
 from craftlab_ctl.transport import LocalControlClient
 
 
 @pytest.mark.asyncio
-async def test_e2e_ctl_full_lifecycle():
+async def test_e2e_ctl_full_lifecycle(tmp_path: Path):
     # Target port for isolated integration testing
     test_port = 8991
-    paths = get_paths()
+    real_paths = get_paths()
+    paths = CtlPaths(
+        home=real_paths.home,
+        config_dir=real_paths.config_dir,
+        data_dir=real_paths.data_dir,
+        state_dir=real_paths.state_dir,
+        run_dir=tmp_path / "run",
+        logs_dir=tmp_path / "logs",
+        packs_dir=real_paths.packs_dir,
+    )
 
     # Ensure any stray backend PID from previous test runs is stopped
     from craftlab_ctl.supervisor import ProcessSupervisor
