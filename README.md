@@ -19,6 +19,7 @@ MinecraftResourceManager/
 │   └── src/main/java/                # Real-time WebSocket bridge, item adapter, /mcp commands
 ├── scripts/                          # Automation, packaging, and developer runtime scripts
 │   ├── dev.ps1                       # All-in-one local dev deploy & runtime launcher
+│   ├── bump_version.py               # Unified lockstep version bumping across all 8 manifests
 │   ├── build_release.py              # Production release packaging & tar.gz distribution
 │   └── seed_dev_auth.py              # Development RBAC credentials seeder
 ├── openspec/                         # OpenSpec change management and system specifications
@@ -83,6 +84,25 @@ craftctl update rollback
 ```
 
 The web control dashboard is served on port `8443` by `craftctld`.
+
+---
+
+## Release & Version Management
+
+CraftLab follows a unified lockstep versioning model across Backend, Frontend, Paper Plugin, `craftlab-ctl`, and docs metadata. Use `scripts/bump_version.py` for all version operations:
+
+```powershell
+# Diagnostic check for version alignment across all manifests
+python scripts/bump_version.py --check
+
+# Dry-run preview of planned changes
+python scripts/bump_version.py --patch --dry-run
+
+# Atomic bump with release notes and git tag (never pushes remotely)
+python scripts/bump_version.py --patch --changelog "Feature summary" --commit --tag
+```
+
+For AI agents and detailed rules, see the specification at [`.agents/skills/release-versioning/SKILL.md`](.agents/skills/release-versioning/SKILL.md).
 
 ---
 

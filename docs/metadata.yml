@@ -58,6 +58,15 @@ versions:
   # -------------------------------------------------------------
   # CURRENT VERSION (LATEST) -> Always the first entry [0]
   # -------------------------------------------------------------
+  - version: "0.5.2"
+    releaseDate: "2026-10-09"
+    reference: "v0.5.2"
+    downloadUrl: "https://github.com/DarkBladeDev/CraftLab/releases/tag/v0.5.2"
+    changelog: "Paper agent prop mechanics fixes, spatial hitbox clearance, and release bump automation."
+    minecraft:
+      - "1.21.1"
+      - "1.21.x"
+
   - version: "0.3.3"
     releaseDate: "2026-10-08"
     reference: "v0.3.3"
