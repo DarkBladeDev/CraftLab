@@ -89,3 +89,49 @@ def test_create_release_package_mock(tmp_path: Path):
         assert manifest_obj["version"] == "1.5.0"
         assert manifest_obj["git_commit"] == "testcommithash"
         assert "backend/main.py" in manifest_obj["checksums"]
+
+
+def test_create_release_package_with_companion_packages(tmp_path: Path):
+    repo = tmp_path / "mock_repo_companion"
+    repo.mkdir()
+
+    backend_dir = repo / "backend"
+    backend_dir.mkdir()
+    (backend_dir / "main.py").write_text("# main", encoding="utf-8")
+    (backend_dir / "requirements.txt").write_text("fastapi>=0.100.0\n", encoding="utf-8")
+    app_dir = backend_dir / "app"
+    app_dir.mkdir()
+    (app_dir / "server.py").write_text("# server", encoding="utf-8")
+
+    frontend_dist = repo / "frontend" / "dist"
+    frontend_dist.mkdir(parents=True)
+    (frontend_dist / "index.html").write_text("<html><body>CraftLab</body></html>", encoding="utf-8")
+
+    # Add mock craftlab_ctl package
+    ctl_dir = repo / "CraftLab-ctl"
+    ctl_src = ctl_dir / "src" / "craftlab_ctl"
+    ctl_src.mkdir(parents=True)
+    (ctl_src / "__init__.py").write_text("__version__ = '1.0.0'\n", encoding="utf-8")
+
+    # Add mock craftlab_security package under packages/
+    sec_dir = repo / "packages" / "craftlab_security"
+    sec_src = sec_dir / "src" / "craftlab_security"
+    sec_src.mkdir(parents=True)
+    (sec_src / "__init__.py").write_text("# security\n", encoding="utf-8")
+
+    out_dir = tmp_path / "dist"
+
+    tar_path = create_release_package(
+        repo_root=repo,
+        version="1.6.0",
+        output_dir=out_dir,
+        skip_frontend_build=True,
+        git_commit="testcommithash2",
+    )
+
+    assert tar_path.exists()
+    with tarfile.open(tar_path, "r:gz") as tar:
+        names = tar.getnames()
+        assert "backend/craftlab_ctl/__init__.py" in names
+        assert "backend/craftlab_security/__init__.py" in names
+

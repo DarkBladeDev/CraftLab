@@ -195,6 +195,12 @@ class UpdatePlugin(Plugin):
             shutil.rmtree(target_dir, ignore_errors=True)
             return OperationResult.fail(error=f"Failed to extract release archive: {e}")
 
+        # Sync any companion wheels bundled in release tarball into wheels_dir
+        if ctx.paths.wheels_dir and (target_dir / "wheels").exists():
+            ctx.paths.wheels_dir.mkdir(parents=True, exist_ok=True)
+            for whl in (target_dir / "wheels").glob("*.whl"):
+                shutil.copy2(whl, ctx.paths.wheels_dir / whl.name)
+
         await ctx.step("validate_manifest")
         manifest_file = target_dir / "manifest.json"
         if not manifest_file.exists():

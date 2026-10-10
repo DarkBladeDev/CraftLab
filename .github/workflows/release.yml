@@ -87,10 +87,17 @@ jobs:
             --skip-frontend \
             --git-commit "${{ github.sha }}"
 
-      - name: Build CraftLab-ctl Python Wheel
+      - name: Build Companion Python Wheels
         run: |
           python -m pip install --upgrade pip build
           python -m build CraftLab-ctl --wheel --outdir dist/releases
+          if [ -d "packages" ]; then
+            for pkg in packages/*/; do
+              if [ -f "$pkg/pyproject.toml" ]; then
+                python -m build "$pkg" --wheel --outdir dist/releases
+              fi
+            done
+          fi
 
       - name: Stage Release Assets & Generate Checksums
         run: |

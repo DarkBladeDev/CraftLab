@@ -92,6 +92,34 @@ def copy_backend_files(src_backend: Path, dest_backend: Path) -> None:
             dirs_exist_ok=True,
         )
 
+    # Vendor companion packages from packages/ directly into backend so release is hermetic
+    packages_dir = src_backend.parent / "packages"
+    if packages_dir.exists():
+        for pkg_dir in sorted(packages_dir.iterdir()):
+            if not pkg_dir.is_dir():
+                continue
+            src_pkg = pkg_dir / "src"
+            if src_pkg.exists():
+                for sub in sorted(src_pkg.iterdir()):
+                    if sub.is_dir() and (sub / "__init__.py").exists():
+                        dest_pkg = dest_backend / sub.name
+                        shutil.copytree(
+                            sub,
+                            dest_pkg,
+                            ignore=shutil.ignore_patterns("__pycache__", "*.pyc", "*.pyo"),
+                            dirs_exist_ok=True,
+                        )
+            else:
+                for sub in sorted(pkg_dir.iterdir()):
+                    if sub.is_dir() and (sub / "__init__.py").exists():
+                        dest_pkg = dest_backend / sub.name
+                        shutil.copytree(
+                            sub,
+                            dest_pkg,
+                            ignore=shutil.ignore_patterns("__pycache__", "*.pyc", "*.pyo"),
+                            dirs_exist_ok=True,
+                        )
+
 
 def build_release_manifest(
     version: str,
@@ -155,7 +183,45 @@ def create_release_package(
             dest_ctl_web = staging_dir / "ctl_web_dist"
             shutil.copytree(ctl_web_dir, dest_ctl_web, dirs_exist_ok=True)
 
-        # 3. Compute component checksums for manifest
+        # 4. Build companion wheels (CraftLab-ctl and packages/*)
+        wheels_to_build = []
+        ctl_dir = repo_root / "CraftLab-ctl"
+        if ctl_dir.exists() and (ctl_dir / "pyproject.toml").exists():
+            wheels_to_build.append(ctl_dir)
+
+        packages_dir = repo_root / "packages"
+        if packages_dir.exists():
+            for pkg_dir in sorted(packages_dir.iterdir()):
+                if pkg_dir.is_dir() and (pkg_dir / "pyproject.toml").exists():
+                    wheels_to_build.append(pkg_dir)
+
+        built_wheels = []
+        wheels_cache = repo_root / "cache" / "wheels"
+        for target_pkg in wheels_to_build:
+            print(f"[*] Building companion wheel for {target_pkg.name}...")
+            try:
+                subprocess.run(
+                    [sys.executable, "-m", "pip", "wheel", "-w", str(output_dir), "--no-deps", str(target_pkg)],
+                    check=True,
+                    capture_output=True,
+                )
+                pkg_clean = target_pkg.name.replace("-", "_").lower()
+                for whl in output_dir.glob(f"{pkg_clean}*.whl"):
+                    if whl not in built_wheels:
+                        built_wheels.append(whl)
+                    if wheels_cache.exists():
+                        shutil.copy2(whl, wheels_cache / whl.name)
+            except Exception as e:
+                print(f"[!] Warning: failed to build wheel for {target_pkg.name}: {e}")
+
+        # Also bundle companion wheels inside archive under staging_dir / "wheels"
+        if built_wheels:
+            dest_wheels = staging_dir / "wheels"
+            dest_wheels.mkdir(parents=True, exist_ok=True)
+            for whl in built_wheels:
+                shutil.copy2(whl, dest_wheels / whl.name)
+
+        # 5. Compute component checksums for manifest
         checksums = {}
         for root, _, files in os.walk(staging_dir):
             for file in sorted(files):
@@ -163,7 +229,7 @@ def create_release_package(
                 rel_path = full_path.relative_to(staging_dir).as_posix()
                 checksums[rel_path] = compute_sha256(full_path)
 
-        # 4. Write manifest.json
+        # 6. Write manifest.json
         manifest_data = build_release_manifest(
             version=norm_version,
             git_commit=commit,
@@ -173,7 +239,7 @@ def create_release_package(
         with open(manifest_file, "w", encoding="utf-8") as f:
             json.dump(manifest_data, f, indent=2)
 
-        # 5. Archive to tar.gz
+        # 7. Archive to tar.gz
         tar_filename = f"craftlab-v{norm_version}.tar.gz"
         tar_path = output_dir / tar_filename
         print(f"[*] Packaging into {tar_path}...")
@@ -181,7 +247,7 @@ def create_release_package(
             for item in staging_dir.iterdir():
                 tar.add(item, arcname=item.name)
 
-        # 6. Generate .sha256 checksum file
+        # 8. Generate .sha256 checksum file
         archive_sha = compute_sha256(tar_path)
         sha_file = output_dir / f"{tar_filename}.sha256"
         with open(sha_file, "w", encoding="utf-8") as f:
@@ -189,23 +255,6 @@ def create_release_package(
 
         print(f"[+] Successfully built {tar_filename} (SHA256: {archive_sha[:16]}...)")
         print(f"[+] Checksum written to {sha_file}")
-
-        # 7. Build CraftLab-ctl wheel for companion installation
-        ctl_dir = repo_root / "CraftLab-ctl"
-        if ctl_dir.exists() and (ctl_dir / "pyproject.toml").exists():
-            print("[*] Building companion craftlab-ctl wheel...")
-            try:
-                subprocess.run(
-                    [sys.executable, "-m", "pip", "wheel", "-w", str(output_dir), "--no-deps", str(ctl_dir)],
-                    check=True,
-                    capture_output=True,
-                )
-                wheels_cache = repo_root / "cache" / "wheels"
-                if wheels_cache.exists():
-                    for whl in output_dir.glob("craftlab_ctl*.whl"):
-                        shutil.copy2(whl, wheels_cache / whl.name)
-            except Exception as e:
-                print(f"[!] Warning: failed to build craftlab-ctl wheel: {e}")
 
         return tar_path
 
