@@ -105,7 +105,13 @@ CraftLab features a zero-downtime, rollback-safe update system orchestrated by `
 
 ## Web Control Dashboard
 
-`craftctld` serves a web control dashboard on port `8443`:
-- **Real-Time Service Metrics**: Monitor CPU, memory usage, and uptime for managed components.
-- **One-Click Updates**: Trigger release inspection, prepare releases, and execute atomic switches with live terminal output.
-- **Diagnostics Log**: View doctor checks and active release manifests.
+`craftctld` serves a modern, modular web control dashboard on port `8443` built with React and Tailwind CSS:
+
+- **Categorized Pages**: Top horizontal navigation tabs (`Overview`, `System & Host`, `Lifecycle & Ops`, `Releases & Updates`, `Doctor & Health`, `Terminal & Logs`) organize operational domains while preserving 100% of the screen width for panel grids.
+- **Modular Paginated Data Containers**: Powered by a typed declarative TypeScript schema (`PaginatedContainerPreset`) and `<ContainerEngine />` supporting hybrid pagination:
+  - **Subviews Mode (`subviews`)**: Internal carousel-style mode switching (metrics summary $\rightarrow$ granular breakdown $\rightarrow$ operational actions) inside a single compact card footprint.
+  - **Records Collection Mode (`records`)**: Paginated collection rows (installed releases, audit logs, agents) with next/previous controls without overflowing cards.
+  - **Simple Mode (`none`)**: Direct single-surface rendering for wide streams such as the real-time log terminal.
+- **Draggable & Resizable Grid (`DraggableGrid`)**: Native drag-to-reorder via drag handles (`[::]`), dynamic column span resizing (`- / + Cols`), automatic layout persistence in browser `localStorage`, and a one-click "Reset Layout" action.
+- **Role-Based Access Control (RBAC)**: Fine-grained role checks (`admin`, `operator`, `viewer`, `is_break_glass`) on input action controls, disabling or locking restricted triggers.
+

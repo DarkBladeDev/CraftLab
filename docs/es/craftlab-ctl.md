@@ -105,7 +105,13 @@ CraftLab implementa un sistema de actualización con cero tiempo de inactividad 
 
 ## Panel Web de Control
 
-`craftctld` expone un dashboard web en el puerto `8443`:
-- **Métricas en tiempo real**: Monitorea consumo de memoria, CPU y tiempo en línea de los módulos.
-- **Actualizaciones a un clic**: Ejecuta comprobaciones, preparaciones y conmutaciones con salida de terminal en vivo.
-- **Historial de diagnósticos**: Revisa los resultados del chequeo `doctor` y los manifiestos de versión instalados.
+`craftctld` expone un dashboard web moderno y modular en el puerto `8443` construido con React y Tailwind CSS:
+
+- **Páginas Categorizadas (Categorized Pages)**: Barra superior de pestañas horizontales (`Overview`, `System & Host`, `Lifecycle & Ops`, `Releases & Updates`, `Doctor & Health`, `Terminal & Logs`) que organiza los dominios operativos preservando el 100% del ancho de pantalla para la cuadrícula de paneles.
+- **Contenedores de Datos Paginados Modulares (Paginated Data Containers)**: Motor modular (`ContainerEngine`) basado en un schema declarativo tipado en TypeScript (`PaginatedContainerPreset`) con arquitectura de paginación híbrida:
+  - **Modo Sub-vistas (`subviews`)**: Alterna modos de pantalla internos (resumen de métricas $\rightarrow$ desglose granular $\rightarrow$ formulario de acciones) dentro de un mismo slot de tarjeta compacto.
+  - **Modo Colección de Registros (`records`)**: Pagina colecciones y listas de datos (releases instaladas, auditorías, agentes) con controles de avance/retroceso sin desbordar la tarjeta.
+  - **Modo Simple (`none`)**: Visualización directa para flujos anchos continuos como el terminal de logs en tiempo real.
+- **Cuadrícula Reorganizable y Redimensionable (`DraggableGrid`)**: Arrastre nativo por tirador (`[::]`), ajuste dinámico del ancho de columnas (`- / + Cols`), persistencia automática del diseño personalizado en el `localStorage` del navegador y botón para restablecer valores por defecto.
+- **Control de Acceso en Controles (RBAC)**: Validación automática de roles (`admin`, `operator`, `viewer`, `is_break_glass`) en botones y campos de entrada, deshabilitando acciones no autorizadas.
+
