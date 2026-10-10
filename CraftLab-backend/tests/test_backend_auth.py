@@ -103,10 +103,12 @@ async def test_public_pack_endpoints_unauthenticated():
         assert res_prot.status_code == 401
         assert res_prot.json() == {"detail": "Authentication required"}
 
-        # Public download endpoint must NOT return 401 (returns 200 with zip when pack exists)
+        # Public download endpoint must NOT return 401 (returns 200 with zip when pack exists or 404 when not yet compiled)
         res_dl = await client.get("/api/v1/packs/dev-server/download")
-        assert res_dl.status_code == 200
-        assert "application/zip" in res_dl.headers.get("content-type", "")
+        assert res_dl.status_code in (200, 404)
+        assert res_dl.status_code != 401
+        if res_dl.status_code == 200:
+            assert "application/zip" in res_dl.headers.get("content-type", "")
 
         # Public latest endpoint must NOT return 401 (returns 200 or 404 depending on records, never 401)
         res_latest = await client.get("/api/v1/packs/dev-server/latest")

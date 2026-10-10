@@ -50,11 +50,13 @@ sidebar:
 - Mantiene compatibilidad aplicando simultáneamente `CustomModelData` para packs y configuraciones anteriores.
 - Persiste las definiciones de ítems localmente en el servidor para que sigan funcionando incluso si se interrumpe la conexión con el backend.
 
-### 2. Motor de Props y Displays Virtuales (`PropManager`)
+### 2. Motor de Props, Máquina de Estados y Displays Virtuales (`PropManager`)
 - **Cero Lag de Ticks**: En lugar de sobrecargar el mundo con ArmorStands pesados o entidades de bloque, los props se renderizan a nivel de cliente mediante paquetes de display entities emitidos por PacketEvents.
-- **Colisiones Sólidas**: Ubica automáticamente bloques de barrera invisibles en las coordenadas del prop para evitar que los jugadores lo atraviesen.
-- **Mecánica Interactiva de Asiento**: Detecta clics derechos sobre sillas o sofás y monta al jugador en un marcador invisible.
-- **Persistencia en SQLite**: Las coordenadas, rotaciones y estados de los props se almacenan de manera persistente en `plugins/McpAgent/data/props.db`.
+- **Máquina de Estados y Swapping Visual**: Permite múltiples estados por prop (`default_state` y `states`), alternando modelos visuales al instante vía `WrapperPlayServerEntityMetadata` (Data Component `item_model`) sin parpadeos ni despawn de entidades.
+- **Iluminación Dinámica Nativa**: Administra bloques `Material.LIGHT` (niveles 0 a 15) en Paper 1.21; los coloca y remueve automáticamente al cambiar de estado o al destruir el prop.
+- **Hitboxes Dinámicas y Eyección Segura**: Soporta transición entre estados sólidos (`BARRIER`) y transitables (`STRUCTURE_VOID`), aplicando un impulso de velocidad horizontal suave a los jugadores que ocupen el área antes de cerrar colisiones sólidas para evitar asfixia o atrapamiento.
+- **Interacción y Efectos**: Control de cooldown anti-spam (250 ms) en clics derechos, reproducción de efectos de sonido configurados (Bukkit y nombres de pack personalizados) y soporte para mecánicas de asiento (`seat`) o recostado (`lay`).
+- **Persistencia en SQLite**: Las coordenadas, rotaciones y el estado activo (`current_state`) de los props se almacenan de manera persistente en `plugins/McpAgent/data/props.db`.
 
 ### 3. Distribución de Resource Packs (`ResourcePackManager`)
 - Escucha el evento `PlayerJoinEvent` e invita a los jugadores a descargar el resource pack del servidor.

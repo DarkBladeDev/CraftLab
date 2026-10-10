@@ -72,7 +72,7 @@ Automatiza el complejo ensamblado de paquetes de texturas y modelos para Minecra
 | `/api/v1/auth/login` | POST | Autentica al usuario y entrega un token JWT de acceso. |
 | `/api/v1/items` | GET / POST | Lista y crea definiciones de ítems personalizados. |
 | `/api/v1/items/{id}` | GET / PUT / DELETE | Consulta, actualiza o elimina una definición de ítem. |
-| `/api/v1/props` | GET / POST | Lista y crea definiciones de bloques/props virtuales. |
+| `/api/v1/props` | GET / POST | Lista y crea definiciones de bloques/props virtuales con soporte para máquinas de estados. |
 | `/api/v1/packs/build` | POST | Dispara la compilación del resource pack y genera el ZIP final. |
 | `/api/v1/packs/download` | GET | Descarga el archivo comprimido del resource pack activo. |
 | `/api/v1/targets` | GET / POST | Administra los servidores Paper registrados en la flota. |

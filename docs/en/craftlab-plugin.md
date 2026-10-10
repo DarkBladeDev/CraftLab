@@ -50,11 +50,13 @@ sidebar:
 - Concurrently applies `CustomModelData` to maintain compatibility with legacy resource pack configurations.
 - Persists all deployed item definitions locally so they remain accessible even if the server is offline from the backend.
 
-### 2. Virtual Display Entity Engine (`PropManager`)
+### 2. Virtual Display Entity Engine & State Machine (`PropManager`)
 - **Zero-Tick Lag**: Rather than creating resource-heavy ArmorStands or tile entities, props are rendered as client-side Display Entities via PacketEvents packets.
-- **Solid Collisions**: Automatically places invisible barrier blocks at prop anchor coordinates to prevent players and mobs from walking through props.
-- **Interactive Sitting**: Detects player right-clicks on designated chair props and mounts the player to an invisible marker entity.
-- **Database Persistence**: Prop locations, rotation matrices, and custom definitions are saved in `plugins/McpAgent/data/props.db`.
+- **State Machine & Model Swapping**: Supports multiple named states per prop (`default_state` and `states`), instantly swapping displayed item models via `WrapperPlayServerEntityMetadata` (Data Component `item_model`) with zero entity respawn or flickering.
+- **Native Dynamic Lighting**: Seamlessly manages Paper 1.21 `Material.LIGHT` blocks (levels 0–15), automatically placing and removing them upon state transition or prop destruction.
+- **Dynamic Hitboxes & Safe Eviction**: Toggles collision between solid (`BARRIER`) and passable (`STRUCTURE_VOID`), applying a smooth horizontal velocity push vector to occupying entities before placing solid barriers to prevent suffocation.
+- **Interaction & Audio Feedback**: Enforces a 250ms anti-spam interaction cooldown, plays configured sound effects (Bukkit enums and custom pack sounds), and integrates with sitting (`seat`) or lying (`lay`) mechanics.
+- **Database Persistence**: Prop locations, rotation matrices, and active state keys (`current_state`) are saved persistently in `plugins/McpAgent/data/props.db`.
 
 ### 3. Resource Pack Distribution (`ResourcePackManager`)
 - Listens for `PlayerJoinEvent` and prompts players with the official server resource pack.

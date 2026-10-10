@@ -72,7 +72,7 @@ CraftLab automates the tedious assembly of Minecraft resource packs:
 | `/api/v1/auth/login` | POST | Authenticates user and returns JWT access token. |
 | `/api/v1/items` | GET / POST | Lists and creates custom item definitions. |
 | `/api/v1/items/{id}` | GET / PUT / DELETE | Retrieves, updates, or deletes an item definition. |
-| `/api/v1/props` | GET / POST | Lists and creates custom virtual block/prop definitions. |
+| `/api/v1/props` | GET / POST | Lists and creates custom virtual block/prop definitions with multi-state machine support. |
 | `/api/v1/packs/build` | POST | Triggers resource pack compilation and generates distribution ZIP. |
 | `/api/v1/packs/download` | GET | Serves the active compiled resource pack archive. |
 | `/api/v1/targets` | GET / POST | Manages registered Paper game servers in the fleet. |

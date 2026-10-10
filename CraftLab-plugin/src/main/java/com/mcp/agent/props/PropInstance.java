@@ -11,8 +11,13 @@ public class PropInstance {
     private final int z;
     private final float yaw;
     private final long placedAt;
+    private volatile String currentState;
 
     public PropInstance(UUID instanceId, String propId, String world, int x, int y, int z, float yaw, long placedAt) {
+        this(instanceId, propId, world, x, y, z, yaw, placedAt, "default");
+    }
+
+    public PropInstance(UUID instanceId, String propId, String world, int x, int y, int z, float yaw, long placedAt, String currentState) {
         this.instanceId = instanceId;
         this.propId = propId;
         this.world = world;
@@ -21,6 +26,7 @@ public class PropInstance {
         this.z = z;
         this.yaw = yaw;
         this.placedAt = placedAt;
+        this.currentState = (currentState != null && !currentState.isEmpty()) ? currentState : "default";
     }
 
     public UUID getInstanceId() {
@@ -53,5 +59,13 @@ public class PropInstance {
 
     public long getPlacedAt() {
         return placedAt;
+    }
+
+    public String getCurrentState() {
+        return currentState != null ? currentState : "default";
+    }
+
+    public void setCurrentState(String currentState) {
+        this.currentState = (currentState != null && !currentState.isEmpty()) ? currentState : "default";
     }
 }

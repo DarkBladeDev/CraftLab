@@ -54,7 +54,7 @@ public class PropPlaceBreakListener implements Listener {
         }
         Material type = block.getType();
         if (type == null) return false;
-        return type == Material.AIR || type == Material.CAVE_AIR || type == Material.VOID_AIR || type == Material.STRUCTURE_VOID;
+        return type == Material.AIR || type == Material.CAVE_AIR || type == Material.VOID_AIR || type == Material.STRUCTURE_VOID || type == Material.LIGHT;
     }
 
     @EventHandler(priority = EventPriority.HIGH, ignoreCancelled = true)
@@ -108,7 +108,12 @@ public class PropPlaceBreakListener implements Listener {
         event.setCancelled(true);
 
         // 3. Place collision blocks (BARRIER for solid or STRUCTURE_VOID for passable) across all rotated offsets
-        Material collisionMat = "passable".equalsIgnoreCase(propDef.getHitboxType())
+        String initialHitbox = propDef.getHitboxType();
+        PropDefinition.PropState defState = propDef.getState(propDef.getDefaultState());
+        if (defState != null && defState.getHitboxType() != null) {
+            initialHitbox = defState.getHitboxType();
+        }
+        Material collisionMat = "passable".equalsIgnoreCase(initialHitbox)
                 ? Material.STRUCTURE_VOID
                 : Material.BARRIER;
         for (int[] off : offsets) {
@@ -126,7 +131,8 @@ public class PropPlaceBreakListener implements Listener {
                 anchorBlock.getY(),
                 anchorBlock.getZ(),
                 cardinalYaw,
-                System.currentTimeMillis()
+                System.currentTimeMillis(),
+                propDef.getDefaultState()
         );
 
         propManager.registerPlacedProp(instance);
@@ -145,6 +151,14 @@ public class PropPlaceBreakListener implements Listener {
     @EventHandler(priority = EventPriority.HIGHEST, ignoreCancelled = true)
     public void onBlockBreak(BlockBreakEvent event) {
         Block block = event.getBlock();
+        if (block.getType() == Material.LIGHT) {
+            for (java.util.Map.Entry<UUID, Location> entry : propManager.getActiveLightLocations().entrySet()) {
+                if (entry.getValue().equals(block.getLocation())) {
+                    event.setCancelled(true);
+                    return;
+                }
+            }
+        }
         if (block.getType() != Material.BARRIER && block.getType() != Material.STRUCTURE_VOID) return;
 
         String worldName = block.getWorld().getName();
@@ -159,7 +173,10 @@ public class PropPlaceBreakListener implements Listener {
         // 1. Broadcast destroy packet FIRST before removing entity ID mapping from memory
         propManager.broadcastDestroy(instance);
 
-        // 2. Revert all occupied collision blocks across the rotated footprint to AIR
+        // 2. Clean up active light block
+        propManager.removePropLighting(instance.getInstanceId());
+
+        // 3. Revert all occupied collision blocks across the rotated footprint to AIR
         World world = block.getWorld();
         List<int[]> occupiedBlocks = propManager.getOccupiedBlocks(instance);
         for (int[] coords : occupiedBlocks) {
@@ -169,7 +186,7 @@ public class PropPlaceBreakListener implements Listener {
             }
         }
 
-        // 3. Remove instance from manager and disk
+        // 4. Remove instance from manager and disk
         propManager.removePlacedProp(instance.getInstanceId());
 
         // 4. Break particles and sound

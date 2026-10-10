@@ -30,6 +30,8 @@ def _serialize_block_model(b: BlockModel) -> dict:
         "tool_type": b.tool_type or "AXE",
         "drop_item_id": b.drop_item_id,
         "plugin_properties": b.plugin_properties or {},
+        "default_state": getattr(b, "default_state", None) or "default",
+        "states": getattr(b, "states", None) or {},
     }
 
 
@@ -56,6 +58,10 @@ async def get_block(block_id: str, db: AsyncSession = Depends(get_db)):
 async def create_or_update_block(block_in: BlockDefinition, db: AsyncSession = Depends(get_db)):
     result = await db.execute(select(BlockModel).where(BlockModel.id == block_in.id))
     existing = result.scalar_one_or_none()
+    states_dict = {
+        k: (v.model_dump() if hasattr(v, "model_dump") else v)
+        for k, v in block_in.states.items()
+    }
 
     if existing:
         existing.display_name = block_in.display_name
@@ -72,6 +78,8 @@ async def create_or_update_block(block_in: BlockDefinition, db: AsyncSession = D
         existing.tool_type = block_in.tool_type
         existing.drop_item_id = block_in.drop_item_id
         existing.plugin_properties = block_in.plugin_properties
+        existing.default_state = block_in.default_state
+        existing.states = states_dict
     else:
         new_block = BlockModel(
             id=block_in.id,
@@ -88,7 +96,9 @@ async def create_or_update_block(block_in: BlockDefinition, db: AsyncSession = D
             hardness=block_in.hardness,
             tool_type=block_in.tool_type,
             drop_item_id=block_in.drop_item_id,
-            plugin_properties=block_in.plugin_properties
+            plugin_properties=block_in.plugin_properties,
+            default_state=block_in.default_state,
+            states=states_dict,
         )
         db.add(new_block)
 

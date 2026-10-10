@@ -16,6 +16,7 @@ public class PropStorage {
     private final Gson gson = new Gson();
     private static final Type INT_ARRAY_LIST_TYPE = new TypeToken<List<int[]>>() {}.getType();
     private static final Type FLOAT_LIST_TYPE = new TypeToken<List<Float>>() {}.getType();
+    private static final Type STATES_MAP_TYPE = new TypeToken<Map<String, PropDefinition.PropState>>() {}.getType();
 
     public PropStorage(File dataFolder, Logger logger) {
         this.logger = logger;
@@ -53,7 +54,9 @@ public class PropStorage {
                     "seat_height REAL NOT NULL, " +
                     "hardness REAL NOT NULL, " +
                     "tool_type TEXT NOT NULL, " +
-                    "drop_item_id TEXT" +
+                    "drop_item_id TEXT, " +
+                    "default_state TEXT DEFAULT 'default', " +
+                    "states_json TEXT DEFAULT '{}'" +
                     ")");
 
             // Migration checks for existing databases
@@ -65,6 +68,14 @@ public class PropStorage {
                 stmt.execute("ALTER TABLE prop_definitions ADD COLUMN seat_height REAL DEFAULT 0.5");
             } catch (SQLException ignored) {
             }
+            try {
+                stmt.execute("ALTER TABLE prop_definitions ADD COLUMN default_state TEXT DEFAULT 'default'");
+            } catch (SQLException ignored) {
+            }
+            try {
+                stmt.execute("ALTER TABLE prop_definitions ADD COLUMN states_json TEXT DEFAULT '{}'");
+            } catch (SQLException ignored) {
+            }
 
             stmt.execute("CREATE TABLE IF NOT EXISTS placed_props (" +
                     "instance_id TEXT PRIMARY KEY, " +
@@ -74,8 +85,14 @@ public class PropStorage {
                     "y INTEGER NOT NULL, " +
                     "z INTEGER NOT NULL, " +
                     "yaw REAL NOT NULL, " +
-                    "placed_at INTEGER NOT NULL" +
+                    "placed_at INTEGER NOT NULL, " +
+                    "current_state TEXT DEFAULT 'default'" +
                     ")");
+
+            try {
+                stmt.execute("ALTER TABLE placed_props ADD COLUMN current_state TEXT DEFAULT 'default'");
+            } catch (SQLException ignored) {
+            }
 
             stmt.execute("CREATE INDEX IF NOT EXISTS idx_placed_props_coords ON placed_props (world, x, y, z)");
         } catch (SQLException e) {
@@ -86,7 +103,7 @@ public class PropStorage {
     public synchronized void saveDefinition(PropDefinition def) {
         String sql = "INSERT OR REPLACE INTO prop_definitions (id, display_name, mode, item_model, block_model, " +
                 "scale_json, translation_json, hitbox_type, hitbox_offsets_json, interaction_type, " +
-                "seat_height, hardness, tool_type, drop_item_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
+                "seat_height, hardness, tool_type, drop_item_id, default_state, states_json) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
         try (Connection conn = getConnection(); PreparedStatement ps = conn.prepareStatement(sql)) {
             ps.setString(1, def.getId());
             ps.setString(2, def.getDisplayName());
@@ -102,6 +119,8 @@ public class PropStorage {
             ps.setFloat(12, def.getHardness());
             ps.setString(13, def.getToolType());
             ps.setString(14, def.getDropItemId());
+            ps.setString(15, def.getDefaultState());
+            ps.setString(16, gson.toJson(def.getStates()));
             ps.executeUpdate();
         } catch (SQLException e) {
             logger.log(Level.SEVERE, "Failed to save prop definition: " + def.getId(), e);
@@ -156,12 +175,25 @@ public class PropStorage {
         def.setHardness(rs.getFloat("hardness"));
         def.setToolType(rs.getString("tool_type"));
         def.setDropItemId(rs.getString("drop_item_id"));
+        try {
+            String defState = rs.getString("default_state");
+            if (defState != null && !defState.isEmpty()) def.setDefaultState(defState);
+        } catch (SQLException ignored) {
+        }
+        try {
+            String statesJson = rs.getString("states_json");
+            if (statesJson != null && !statesJson.isEmpty()) {
+                Map<String, PropDefinition.PropState> states = gson.fromJson(statesJson, STATES_MAP_TYPE);
+                if (states != null) def.setStates(states);
+            }
+        } catch (SQLException ignored) {
+        }
         return def;
     }
 
     public synchronized void saveInstance(PropInstance instance) {
-        String sql = "INSERT OR REPLACE INTO placed_props (instance_id, prop_id, world, x, y, z, yaw, placed_at) " +
-                "VALUES (?, ?, ?, ?, ?, ?, ?, ?)";
+        String sql = "INSERT OR REPLACE INTO placed_props (instance_id, prop_id, world, x, y, z, yaw, placed_at, current_state) " +
+                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)";
         try (Connection conn = getConnection(); PreparedStatement ps = conn.prepareStatement(sql)) {
             ps.setString(1, instance.getInstanceId().toString());
             ps.setString(2, instance.getPropId());
@@ -171,9 +203,21 @@ public class PropStorage {
             ps.setInt(6, instance.getZ());
             ps.setFloat(7, instance.getYaw());
             ps.setLong(8, instance.getPlacedAt());
+            ps.setString(9, instance.getCurrentState());
             ps.executeUpdate();
         } catch (SQLException e) {
             logger.log(Level.SEVERE, "Failed to save prop instance: " + instance.getInstanceId(), e);
+        }
+    }
+
+    public synchronized void updateInstanceState(UUID instanceId, String state) {
+        String sql = "UPDATE placed_props SET current_state = ? WHERE instance_id = ?";
+        try (Connection conn = getConnection(); PreparedStatement ps = conn.prepareStatement(sql)) {
+            ps.setString(1, (state != null && !state.isEmpty()) ? state : "default");
+            ps.setString(2, instanceId.toString());
+            ps.executeUpdate();
+        } catch (SQLException e) {
+            logger.log(Level.SEVERE, "Failed to update prop instance state: " + instanceId, e);
         }
     }
 
@@ -219,6 +263,14 @@ public class PropStorage {
     }
 
     private PropInstance mapInstance(ResultSet rs) throws SQLException {
+        String currentState = "default";
+        try {
+            currentState = rs.getString("current_state");
+        } catch (SQLException ignored) {
+        }
+        if (currentState == null || currentState.isEmpty()) {
+            currentState = "default";
+        }
         return new PropInstance(
                 UUID.fromString(rs.getString("instance_id")),
                 rs.getString("prop_id"),
@@ -227,7 +279,8 @@ public class PropStorage {
                 rs.getInt("y"),
                 rs.getInt("z"),
                 rs.getFloat("yaw"),
-                rs.getLong("placed_at")
+                rs.getLong("placed_at"),
+                currentState
         );
     }
 }

@@ -11,10 +11,15 @@ import {
   Check,
   AlertCircle,
   Bed,
+  Lightbulb,
+  Volume2,
+  ArrowRightLeft,
+  Layers,
 } from 'lucide-react'
 import {
   Block,
   Item,
+  PropState,
   fetchBlocks,
   saveBlock,
   deleteBlock,
@@ -38,6 +43,8 @@ const DEFAULT_BLOCK: Block = {
   tool_type: 'AXE',
   drop_item_id: '',
   plugin_properties: {},
+  default_state: 'default',
+  states: {},
 }
 
 const PRESET_HITBOXES = [
@@ -75,12 +82,26 @@ export function BlockStudio({ onRevisionCreated }: { onRevisionCreated?: () => v
     }
   }
 
+  const [activeStateKey, setActiveStateKey] = useState<string | null>(null)
+
   useEffect(() => {
     loadData()
   }, [])
 
+  const currentStates = selectedBlock.states || {}
+  const stateKeys = Object.keys(currentStates)
+
   const handleSelectBlock = (block: Block) => {
-    setSelectedBlock({ ...block })
+    const states = block.states || {}
+    const defaultState = block.default_state || 'default'
+    setSelectedBlock({
+      ...DEFAULT_BLOCK,
+      ...block,
+      default_state: defaultState,
+      states,
+    })
+    const keys = Object.keys(states)
+    setActiveStateKey(keys.includes(defaultState) ? defaultState : (keys[0] || null))
     setIsEditing(true)
     setStatusMessage(null)
   }
@@ -91,8 +112,117 @@ export function BlockStudio({ onRevisionCreated }: { onRevisionCreated?: () => v
       id: `prop_${Date.now().toString().slice(-4)}`,
       display_name: '<yellow>New Prop</yellow>',
     })
+    setActiveStateKey(null)
     setIsEditing(false)
     setStatusMessage(null)
+  }
+
+  const handleAddState = () => {
+    const key = prompt('Enter unique state identifier (e.g. "on", "off", "open"):')?.trim().toLowerCase()
+    if (!key) return
+    if (currentStates[key]) {
+      alert(`State "${key}" already exists!`)
+      return
+    }
+    const updatedStates = {
+      ...currentStates,
+      [key]: {
+        name: key.charAt(0).toUpperCase() + key.slice(1),
+        block_model: selectedBlock.block_model || '',
+        light_level: 0,
+        sound: null,
+        hitbox_type: null,
+        next_state: null,
+      },
+    }
+    setSelectedBlock({
+      ...selectedBlock,
+      states: updatedStates,
+      default_state: selectedBlock.default_state && currentStates[selectedBlock.default_state] ? selectedBlock.default_state : key,
+    })
+    setActiveStateKey(key)
+  }
+
+  const handleRemoveState = (keyToRemove: string) => {
+    const { [keyToRemove]: _, ...rest } = currentStates
+    const remainingKeys = Object.keys(rest)
+    const newDefault = selectedBlock.default_state === keyToRemove ? (remainingKeys[0] || 'default') : (selectedBlock.default_state || 'default')
+    setSelectedBlock({
+      ...selectedBlock,
+      states: rest,
+      default_state: newDefault,
+    })
+    if (activeStateKey === keyToRemove) {
+      setActiveStateKey(remainingKeys[0] || null)
+    }
+  }
+
+  const handleUpdateCurrentState = (partial: Partial<PropState>) => {
+    if (!activeStateKey || !currentStates[activeStateKey]) return
+    setSelectedBlock({
+      ...selectedBlock,
+      states: {
+        ...currentStates,
+        [activeStateKey]: {
+          ...currentStates[activeStateKey],
+          ...partial,
+        },
+      },
+    })
+  }
+
+  const handleApplyLampPreset = () => {
+    const baseModel = selectedBlock.block_model || 'studio:props/custom_prop'
+    setSelectedBlock({
+      ...selectedBlock,
+      default_state: 'off',
+      states: {
+        off: {
+          name: 'Apagada',
+          block_model: baseModel.replace(/_on$/, '') + '_off',
+          light_level: 0,
+          sound: { key: 'block.wooden_button.click_off', volume: 0.8, pitch: 1.0 },
+          hitbox_type: null,
+          next_state: 'on',
+        },
+        on: {
+          name: 'Encendida',
+          block_model: baseModel.replace(/_off$/, '') + '_on',
+          light_level: 14,
+          sound: { key: 'block.wooden_button.click_on', volume: 0.8, pitch: 1.0 },
+          hitbox_type: null,
+          next_state: 'off',
+        },
+      },
+    })
+    setActiveStateKey('off')
+  }
+
+  const handleApplyDoorPreset = () => {
+    const baseModel = selectedBlock.block_model || 'studio:props/custom_prop'
+    setSelectedBlock({
+      ...selectedBlock,
+      default_state: 'closed',
+      states: {
+        closed: {
+          name: 'Cerrada',
+          block_model: baseModel.replace(/_open$/, '') + '_closed',
+          light_level: 0,
+          sound: { key: 'block.wooden_door.close', volume: 1.0, pitch: 1.0 },
+          hitbox_type: 'solid',
+          next_state: 'open',
+        },
+        open: {
+          name: 'Abierta',
+          block_model: baseModel.replace(/_closed$/, '') + '_open',
+          light_level: 0,
+          sound: { key: 'block.wooden_door.open', volume: 1.0, pitch: 1.0 },
+          hitbox_type: 'passable',
+          next_state: 'closed',
+        },
+      },
+    })
+    setActiveStateKey('closed')
   }
 
   const handleSave = async (e: React.FormEvent) => {
@@ -107,6 +237,8 @@ export function BlockStudio({ onRevisionCreated }: { onRevisionCreated?: () => v
         ...selectedBlock,
         block_model: selectedBlock.block_model?.trim() || selectedBlock.item_model?.trim() || null,
         item_model: selectedBlock.item_model?.trim() || selectedBlock.block_model?.trim() || null,
+        default_state: selectedBlock.default_state?.trim() || 'default',
+        states: selectedBlock.states || {},
       }
       const saved = await saveBlock(payload)
       setStatusMessage(`Saved block "${saved.id}" successfully!`)
@@ -557,6 +689,256 @@ export function BlockStudio({ onRevisionCreated }: { onRevisionCreated?: () => v
                 </div>
               )}
             </div>
+          </div>
+
+          {/* Section 5: States, Lighting & Variants */}
+          <div className="p-5 rounded-xl bg-[#141418] border border-[#23232b] space-y-4">
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+              <h3 className="text-xs font-bold uppercase tracking-wider text-gray-400 flex items-center space-x-2">
+                <Layers className="w-4 h-4 text-emerald-400" />
+                <span>States, Lighting & Variants</span>
+                {stateKeys.length > 0 && (
+                  <span className="px-1.5 py-0.5 rounded text-[10px] bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+                    {stateKeys.length} {stateKeys.length === 1 ? 'state' : 'states'}
+                  </span>
+                )}
+              </h3>
+              <div className="flex items-center space-x-2">
+                <button
+                  type="button"
+                  onClick={handleApplyLampPreset}
+                  className="px-2.5 py-1 text-[11px] rounded bg-[#1c1c22] hover:bg-[#252530] text-gray-300 border border-[#2b2b35] transition flex items-center space-x-1"
+                >
+                  <Lightbulb className="w-3 h-3 text-amber-400" />
+                  <span>Preset: Lamp</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={handleApplyDoorPreset}
+                  className="px-2.5 py-1 text-[11px] rounded bg-[#1c1c22] hover:bg-[#252530] text-gray-300 border border-[#2b2b35] transition flex items-center space-x-1"
+                >
+                  <ArrowRightLeft className="w-3 h-3 text-emerald-400" />
+                  <span>Preset: Door/Gate</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={handleAddState}
+                  className="px-2.5 py-1 text-[11px] rounded bg-emerald-600/20 hover:bg-emerald-600/30 text-emerald-400 border border-emerald-500/30 transition flex items-center space-x-1"
+                >
+                  <Plus className="w-3 h-3" />
+                  <span>Add State</span>
+                </button>
+              </div>
+            </div>
+
+            {stateKeys.length === 0 ? (
+              <div className="p-4 rounded-lg bg-[#0e0e11] border border-[#23232b] text-center text-xs text-gray-400">
+                <p>This prop currently has no custom states (behaves as a single static model).</p>
+                <p className="text-[11px] text-gray-500 mt-1">Use a preset above or click "Add State" to create interactive toggleable variants.</p>
+              </div>
+            ) : (
+              <div className="space-y-4">
+                {/* State Tabs */}
+                <div className="flex flex-wrap items-center gap-1.5 p-1 bg-[#0e0e11] rounded-lg border border-[#23232b]">
+                  {stateKeys.map((key) => {
+                    const isDefault = selectedBlock.default_state === key
+                    const isSelected = activeStateKey === key
+                    return (
+                      <button
+                        key={key}
+                        type="button"
+                        onClick={() => setActiveStateKey(key)}
+                        className={`px-3 py-1.5 rounded-md text-xs font-medium flex items-center space-x-1.5 transition ${
+                          isSelected
+                            ? 'bg-emerald-600 text-white shadow-sm'
+                            : 'bg-transparent text-gray-400 hover:text-gray-200 hover:bg-[#1a1a22]'
+                        }`}
+                      >
+                        <span>{currentStates[key]?.name || key}</span>
+                        <span className={`text-[10px] px-1 rounded ${isSelected ? 'bg-emerald-700 text-emerald-100' : 'bg-[#23232b] text-gray-400'}`}>
+                          {key}
+                        </span>
+                        {isDefault && (
+                          <span className="text-[9px] px-1 rounded bg-amber-400/20 text-amber-300 font-bold">
+                            DEFAULT
+                          </span>
+                        )}
+                      </button>
+                    )
+                  })}
+                </div>
+
+                {/* Active State Form Card */}
+                {activeStateKey && currentStates[activeStateKey] && (
+                  <div className="p-4 rounded-xl bg-[#0e0e11] border border-[#23232b] space-y-4">
+                    <div className="flex items-center justify-between pb-3 border-b border-[#1e1e26]">
+                      <div className="flex items-center space-x-2">
+                        <span className="text-xs font-bold text-gray-200">Configuring State:</span>
+                        <span className="px-2 py-0.5 rounded text-xs font-mono bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+                          {activeStateKey}
+                        </span>
+                        {selectedBlock.default_state !== activeStateKey && (
+                          <button
+                            type="button"
+                            onClick={() => setSelectedBlock({ ...selectedBlock, default_state: activeStateKey })}
+                            className="text-[10px] text-gray-400 hover:text-amber-300 underline"
+                          >
+                            Set as Default State
+                          </button>
+                        )}
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => handleRemoveState(activeStateKey)}
+                        className="text-xs text-red-400 hover:text-red-300 flex items-center space-x-1 transition"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                        <span>Delete State</span>
+                      </button>
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div>
+                        <label className="block text-xs font-medium text-gray-300 mb-1">State Display Label</label>
+                        <input
+                          type="text"
+                          value={currentStates[activeStateKey]?.name || ''}
+                          onChange={(e) => handleUpdateCurrentState({ name: e.target.value })}
+                          placeholder="e.g. Encendida, Open, High Speed"
+                          className="w-full px-3 py-2 bg-[#141418] border border-[#23232b] rounded-lg text-xs text-gray-200 focus:border-emerald-500 outline-none"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="block text-xs font-medium text-gray-300 mb-1">Target Next State (on right-click)</label>
+                        <select
+                          value={currentStates[activeStateKey]?.next_state || ''}
+                          onChange={(e) => handleUpdateCurrentState({ next_state: e.target.value || null })}
+                          className="w-full px-3 py-2 bg-[#141418] border border-[#23232b] rounded-lg text-xs text-gray-200 focus:border-emerald-500 outline-none"
+                        >
+                          <option value="">None (Does not transition)</option>
+                          {stateKeys.map((sk) => (
+                            <option key={sk} value={sk}>
+                              {currentStates[sk]?.name ? `${currentStates[sk].name} (${sk})` : sk}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+
+                      <div className="md:col-span-2">
+                        <label className="block text-xs font-medium text-gray-300 mb-1">Block Model Override for this State</label>
+                        <input
+                          type="text"
+                          value={currentStates[activeStateKey]?.block_model || ''}
+                          onChange={(e) => handleUpdateCurrentState({ block_model: e.target.value || null })}
+                          placeholder={selectedBlock.block_model || 'namespace:props/model'}
+                          className="w-full px-3 py-2 bg-[#141418] border border-[#23232b] rounded-lg text-xs font-mono text-gray-200 focus:border-emerald-500 outline-none"
+                        />
+                        <p className="text-[11px] text-gray-500 mt-1">
+                          Leave empty to inherit the prop's primary block model.
+                        </p>
+                      </div>
+
+                      {/* Light Level Setting */}
+                      <div>
+                        <div className="flex justify-between text-xs font-medium text-gray-300 mb-1">
+                          <span className="flex items-center space-x-1.5">
+                            <Lightbulb className="w-3.5 h-3.5 text-amber-400" />
+                            <span>Emitted Light Level</span>
+                          </span>
+                          <span className="text-amber-400 font-bold">{currentStates[activeStateKey]?.light_level || 0} / 15</span>
+                        </div>
+                        <input
+                          type="range"
+                          min="0"
+                          max="15"
+                          step="1"
+                          value={currentStates[activeStateKey]?.light_level || 0}
+                          onChange={(e) => handleUpdateCurrentState({ light_level: parseInt(e.target.value, 10) || 0 })}
+                          className="w-full accent-amber-500 cursor-pointer"
+                        />
+                        <p className="text-[11px] text-gray-500 mt-1">
+                          0 = No light, 15 = Full glow (managed automatically via Paper 1.21 Material.LIGHT).
+                        </p>
+                      </div>
+
+                      {/* Collision Override */}
+                      <div>
+                        <label className="block text-xs font-medium text-gray-300 mb-1">Hitbox Collision in this State</label>
+                        <select
+                          value={currentStates[activeStateKey]?.hitbox_type || ''}
+                          onChange={(e) => handleUpdateCurrentState({ hitbox_type: (e.target.value as 'solid' | 'passable') || null })}
+                          className="w-full px-3 py-2 bg-[#141418] border border-[#23232b] rounded-lg text-xs text-gray-200 focus:border-emerald-500 outline-none"
+                        >
+                          <option value="">Inherit Prop Hitbox ({selectedBlock.hitbox_type})</option>
+                          <option value="solid">Solid Barrier (Blocks movement)</option>
+                          <option value="passable">Passable Structure Void (Walk through)</option>
+                        </select>
+                        <p className="text-[11px] text-gray-500 mt-1">
+                          Use "Passable" for open doors/gates to allow players to walk through freely.
+                        </p>
+                      </div>
+
+                      {/* Sound Setting */}
+                      <div className="md:col-span-2 pt-2 border-t border-[#1e1e26] space-y-3">
+                        <label className="text-xs font-medium text-gray-300 flex items-center space-x-1.5">
+                          <Volume2 className="w-3.5 h-3.5 text-emerald-400" />
+                          <span>Entry Sound Effect</span>
+                        </label>
+                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                          <div className="sm:col-span-2">
+                            <input
+                              type="text"
+                              value={currentStates[activeStateKey]?.sound?.key || ''}
+                              onChange={(e) => {
+                                const keyVal = e.target.value.trim()
+                                if (!keyVal) {
+                                  handleUpdateCurrentState({ sound: null })
+                                } else {
+                                  handleUpdateCurrentState({
+                                    sound: {
+                                      key: keyVal,
+                                      volume: currentStates[activeStateKey]?.sound?.volume ?? 1.0,
+                                      pitch: currentStates[activeStateKey]?.sound?.pitch ?? 1.0,
+                                    },
+                                  })
+                                }
+                              }}
+                              placeholder="e.g. block.wooden_button.click_on, block.wooden_door.open"
+                              className="w-full px-3 py-2 bg-[#141418] border border-[#23232b] rounded-lg text-xs font-mono text-gray-200 focus:border-emerald-500 outline-none"
+                            />
+                          </div>
+                          <div className="flex items-center space-x-2">
+                            <div className="flex-1">
+                              <span className="block text-[10px] text-gray-400 mb-0.5">Pitch ({currentStates[activeStateKey]?.sound?.pitch ?? 1.0})</span>
+                              <input
+                                type="range"
+                                min="0.5"
+                                max="2.0"
+                                step="0.1"
+                                disabled={!currentStates[activeStateKey]?.sound}
+                                value={currentStates[activeStateKey]?.sound?.pitch ?? 1.0}
+                                onChange={(e) => {
+                                  if (currentStates[activeStateKey]?.sound) {
+                                    handleUpdateCurrentState({
+                                      sound: {
+                                        ...currentStates[activeStateKey]!.sound!,
+                                        pitch: parseFloat(e.target.value) || 1.0,
+                                      },
+                                    })
+                                  }
+                                }}
+                                className="w-full accent-emerald-500 cursor-pointer disabled:opacity-40"
+                              />
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
           </div>
 
           {/* Save Action Bar */}

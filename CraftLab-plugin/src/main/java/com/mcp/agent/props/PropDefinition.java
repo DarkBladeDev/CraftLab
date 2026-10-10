@@ -3,11 +3,107 @@ package com.mcp.agent.props;
 import com.google.gson.Gson;
 import com.google.gson.reflect.TypeToken;
 
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.List;
+import java.util.*;
 
 public class PropDefinition {
+
+    public static class PropStateSound {
+        private String key;
+        private float volume = 1.0f;
+        private float pitch = 1.0f;
+
+        public PropStateSound() {}
+
+        public PropStateSound(String key, float volume, float pitch) {
+            this.key = key;
+            this.volume = volume;
+            this.pitch = pitch;
+        }
+
+        public String getKey() {
+            return key;
+        }
+
+        public void setKey(String key) {
+            this.key = key;
+        }
+
+        public float getVolume() {
+            return volume;
+        }
+
+        public void setVolume(float volume) {
+            this.volume = volume;
+        }
+
+        public float getPitch() {
+            return pitch;
+        }
+
+        public void setPitch(float pitch) {
+            this.pitch = pitch;
+        }
+    }
+
+    public static class PropState {
+        private String name;
+        private String blockModel;
+        private int lightLevel = 0;
+        private PropStateSound sound;
+        private String hitboxType;
+        private String nextState;
+
+        public PropState() {}
+
+        public String getName() {
+            return name;
+        }
+
+        public void setName(String name) {
+            this.name = name;
+        }
+
+        public String getBlockModel() {
+            return blockModel;
+        }
+
+        public void setBlockModel(String blockModel) {
+            this.blockModel = blockModel;
+        }
+
+        public int getLightLevel() {
+            return lightLevel;
+        }
+
+        public void setLightLevel(int lightLevel) {
+            this.lightLevel = lightLevel;
+        }
+
+        public PropStateSound getSound() {
+            return sound;
+        }
+
+        public void setSound(PropStateSound sound) {
+            this.sound = sound;
+        }
+
+        public String getHitboxType() {
+            return hitboxType;
+        }
+
+        public void setHitboxType(String hitboxType) {
+            this.hitboxType = hitboxType;
+        }
+
+        public String getNextState() {
+            return nextState;
+        }
+
+        public void setNextState(String nextState) {
+            this.nextState = nextState;
+        }
+    }
+
     private String id;
     private String displayName;
     private String mode = "display_prop";
@@ -22,6 +118,8 @@ public class PropDefinition {
     private float hardness = 1.0f;
     private String toolType = "AXE";
     private String dropItemId;
+    private String defaultState = "default";
+    private Map<String, PropState> states = new LinkedHashMap<>();
 
     public PropDefinition() {
         hitboxOffsets.add(new int[]{0, 0, 0});
@@ -151,6 +249,35 @@ public class PropDefinition {
         this.dropItemId = dropItemId;
     }
 
+    public String getDefaultState() {
+        return defaultState != null && !defaultState.isEmpty() ? defaultState : "default";
+    }
+
+    public void setDefaultState(String defaultState) {
+        this.defaultState = defaultState;
+    }
+
+    public Map<String, PropState> getStates() {
+        return states != null ? states : Collections.emptyMap();
+    }
+
+    public void setStates(Map<String, PropState> states) {
+        this.states = states != null ? states : new LinkedHashMap<>();
+    }
+
+    public PropState getState(String stateKey) {
+        if (stateKey == null || states == null) return null;
+        return states.get(stateKey);
+    }
+
+    public String getBlockModelForState(String stateKey) {
+        PropState state = getState(stateKey);
+        if (state != null && state.getBlockModel() != null && !state.getBlockModel().trim().isEmpty()) {
+            return state.getBlockModel().trim();
+        }
+        return getBlockModel();
+    }
+
     public static PropDefinition fromJson(com.google.gson.JsonObject obj) {
         PropDefinition def = new PropDefinition();
         if (obj.has("id")) def.setId(obj.get("id").getAsString());
@@ -197,6 +324,44 @@ public class PropDefinition {
 
         if (obj.has("drop_item_id") && !obj.get("drop_item_id").isJsonNull()) def.setDropItemId(obj.get("drop_item_id").getAsString());
         else if (obj.has("dropItemId") && !obj.get("dropItemId").isJsonNull()) def.setDropItemId(obj.get("dropItemId").getAsString());
+
+        if (obj.has("default_state") && !obj.get("default_state").isJsonNull()) def.setDefaultState(obj.get("default_state").getAsString());
+        else if (obj.has("defaultState") && !obj.get("defaultState").isJsonNull()) def.setDefaultState(obj.get("defaultState").getAsString());
+
+        if (obj.has("states") && obj.get("states").isJsonObject()) {
+            com.google.gson.JsonObject statesObj = obj.getAsJsonObject("states");
+            Map<String, PropState> stateMap = new LinkedHashMap<>();
+            for (String key : statesObj.keySet()) {
+                com.google.gson.JsonElement el = statesObj.get(key);
+                if (el.isJsonObject()) {
+                    com.google.gson.JsonObject sObj = el.getAsJsonObject();
+                    PropState s = new PropState();
+                    if (sObj.has("name") && !sObj.get("name").isJsonNull()) s.setName(sObj.get("name").getAsString());
+                    if (sObj.has("block_model") && !sObj.get("block_model").isJsonNull()) s.setBlockModel(sObj.get("block_model").getAsString());
+                    else if (sObj.has("blockModel") && !sObj.get("blockModel").isJsonNull()) s.setBlockModel(sObj.get("blockModel").getAsString());
+
+                    if (sObj.has("light_level")) s.setLightLevel(sObj.get("light_level").getAsInt());
+                    else if (sObj.has("lightLevel")) s.setLightLevel(sObj.get("lightLevel").getAsInt());
+
+                    if (sObj.has("hitbox_type") && !sObj.get("hitbox_type").isJsonNull()) s.setHitboxType(sObj.get("hitbox_type").getAsString());
+                    else if (sObj.has("hitboxType") && !sObj.get("hitboxType").isJsonNull()) s.setHitboxType(sObj.get("hitboxType").getAsString());
+
+                    if (sObj.has("next_state") && !sObj.get("next_state").isJsonNull()) s.setNextState(sObj.get("next_state").getAsString());
+                    else if (sObj.has("nextState") && !sObj.get("nextState").isJsonNull()) s.setNextState(sObj.get("nextState").getAsString());
+
+                    if (sObj.has("sound") && sObj.get("sound").isJsonObject()) {
+                        com.google.gson.JsonObject sndObj = sObj.getAsJsonObject("sound");
+                        PropStateSound snd = new PropStateSound();
+                        if (sndObj.has("key") && !sndObj.get("key").isJsonNull()) snd.setKey(sndObj.get("key").getAsString());
+                        if (sndObj.has("volume")) snd.setVolume(sndObj.get("volume").getAsFloat());
+                        if (sndObj.has("pitch")) snd.setPitch(sndObj.get("pitch").getAsFloat());
+                        s.setSound(snd);
+                    }
+                    stateMap.put(key, s);
+                }
+            }
+            def.setStates(stateMap);
+        }
 
         return def;
     }

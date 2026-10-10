@@ -13,6 +13,7 @@ import com.github.retrooper.packetevents.wrapper.play.server.WrapperPlayServerSp
 import io.github.retrooper.packetevents.util.SpigotConversionUtil;
 import org.bukkit.Location;
 import org.bukkit.Material;
+import org.bukkit.block.Block;
 import org.bukkit.entity.Player;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.meta.ItemMeta;
@@ -47,6 +48,7 @@ public class PropManager {
     private final Map<UUID, Integer> instanceToEntityId = new ConcurrentHashMap<>();
     private final Map<String, UUID> blockToInstance = new ConcurrentHashMap<>();
     private final Map<UUID, Set<UUID>> playersViewingProps = new ConcurrentHashMap<>();
+    private final Map<UUID, Location> activeLightLocations = new ConcurrentHashMap<>();
     private final AtomicInteger nextEntityId = new AtomicInteger(2_000_000);
 
     public static String toBlockKey(String world, int x, int y, int z) {
@@ -73,6 +75,7 @@ public class PropManager {
         definitions.putAll(storage.getAllDefinitions());
         for (PropInstance instance : storage.getAllInstances()) {
             addInstanceToMemory(instance);
+            applyPropLighting(instance);
         }
         logger.info("Loaded " + definitions.size() + " prop definitions and " + instancesById.size() + " placed props.");
     }
@@ -102,14 +105,28 @@ public class PropManager {
     public synchronized void registerPlacedProp(PropInstance instance) {
         addInstanceToMemory(instance);
         storage.saveInstance(instance);
+        applyPropLighting(instance);
     }
 
     public synchronized void removePlacedProp(UUID instanceId) {
+        removePropLighting(instanceId);
         PropInstance instance = instancesById.remove(instanceId);
         if (instance != null) {
             removeInstanceFromSpatialIndex(instance);
             storage.removeInstance(instanceId);
             instanceToEntityId.remove(instanceId);
+        }
+    }
+
+    public PropStorage getStorage() {
+        return storage;
+    }
+
+    public void updateInstanceState(UUID instanceId, String newState) {
+        PropInstance instance = instancesById.get(instanceId);
+        if (instance != null) {
+            instance.setCurrentState(newState);
+            storage.updateInstanceState(instanceId, newState);
         }
     }
 
@@ -318,34 +335,8 @@ public class PropManager {
         metadata.add(new EntityData<>(METADATA_INDEX_ROTATION_LEFT, EntityDataTypes.QUATERNION, rotQuaternion));
 
         // Display Item (Index 23 in MC 1.20.5+)
-        ItemStack displayItem = createDisplayItemStack(def);
-        if (displayItem != null) {
-            com.github.retrooper.packetevents.protocol.item.ItemStack peItem =
-                    SpigotConversionUtil.fromBukkitItemStack(displayItem);
-
-            // Directly inject ITEM_MODEL into PacketEvents ItemStack if specified
-            String activeModel = def != null ? def.getBlockModel() : null;
-            if (activeModel != null && !activeModel.isEmpty()) {
-                String model = activeModel.trim().toLowerCase();
-                String ns = "minecraft";
-                String path = model;
-                if (model.contains(":")) {
-                    String[] parts = model.split(":", 2);
-                    ns = parts[0];
-                    path = parts[1];
-                }
-                try {
-                    peItem.setComponent(
-                            com.github.retrooper.packetevents.protocol.component.ComponentTypes.ITEM_MODEL,
-                            new com.github.retrooper.packetevents.protocol.component.builtin.item.ItemModel(
-                                    new com.github.retrooper.packetevents.resources.ResourceLocation(ns, path)
-                            )
-                    );
-                } catch (Throwable t) {
-                    logger.warning("Failed to set PacketEvents ITEM_MODEL: " + t.getMessage());
-                }
-            }
-
+        com.github.retrooper.packetevents.protocol.item.ItemStack peItem = createPacketEventsItemStack(def, prop.getCurrentState());
+        if (peItem != null) {
             metadata.add(new EntityData<>(METADATA_INDEX_ITEM_STACK, EntityDataTypes.ITEMSTACK, peItem));
         }
 
@@ -413,8 +404,124 @@ public class PropManager {
         }
     }
 
-    private ItemStack createDisplayItemStack(PropDefinition def) {
-        String activeModel = (def != null) ? def.getBlockModel() : null;
+    public void broadcastStateUpdate(PropInstance prop) {
+        int entityId = instanceToEntityId.getOrDefault(prop.getInstanceId(), -1);
+        if (entityId == -1) return;
+
+        PropDefinition def = definitions.get(prop.getPropId());
+        com.github.retrooper.packetevents.protocol.item.ItemStack peItem = createPacketEventsItemStack(def, prop.getCurrentState());
+        if (peItem == null) return;
+
+        List<EntityData<?>> metadata = new ArrayList<>();
+        metadata.add(new EntityData<>(METADATA_INDEX_ITEM_STACK, EntityDataTypes.ITEMSTACK, peItem));
+        WrapperPlayServerEntityMetadata metaPacket = new WrapperPlayServerEntityMetadata(entityId, metadata);
+
+        try {
+            for (Player player : org.bukkit.Bukkit.getOnlinePlayers()) {
+                Set<UUID> viewing = playersViewingProps.get(player.getUniqueId());
+                boolean isNear = player.getWorld().getName().equals(prop.getWorld()) &&
+                        player.getLocation().distanceSquared(new Location(player.getWorld(), prop.getX() + 0.5, prop.getY(), prop.getZ() + 0.5)) <= (TRACKING_RANGE * TRACKING_RANGE);
+                if ((viewing != null && viewing.contains(prop.getInstanceId())) || isNear) {
+                    sendPacket(player, metaPacket);
+                }
+            }
+        } catch (Throwable t) {
+            logger.fine("Failed to broadcast state update: " + t.getMessage());
+        }
+    }
+
+    public void applyPropLighting(PropInstance instance) {
+        if (instance == null) return;
+        PropDefinition def = definitions.get(instance.getPropId());
+        String currentState = instance.getCurrentState();
+        PropDefinition.PropState state = def != null ? def.getState(currentState) : null;
+        int lightLevel = state != null ? state.getLightLevel() : 0;
+
+        if (lightLevel <= 0) {
+            removePropLighting(instance.getInstanceId());
+            return;
+        }
+
+        try {
+            org.bukkit.World world = org.bukkit.Bukkit.getWorld(instance.getWorld());
+            if (world == null) return;
+
+            Block baseBlock = world.getBlockAt(instance.getX(), instance.getY(), instance.getZ());
+            String hitbox = (state != null && state.getHitboxType() != null)
+                    ? state.getHitboxType()
+                    : (def != null ? def.getHitboxType() : "solid");
+
+            Block targetBlock;
+            if ("passable".equalsIgnoreCase(hitbox) && (baseBlock.getType() == Material.AIR || baseBlock.getType() == Material.STRUCTURE_VOID || baseBlock.getType() == Material.LIGHT)) {
+                targetBlock = baseBlock;
+            } else {
+                Block above = baseBlock.getRelative(0, 1, 0);
+                if (above.getType() == Material.AIR || above.getType() == Material.LIGHT) {
+                    targetBlock = above;
+                } else {
+                    targetBlock = baseBlock;
+                }
+            }
+
+            Location oldLoc = activeLightLocations.get(instance.getInstanceId());
+            if (oldLoc != null && !oldLoc.equals(targetBlock.getLocation())) {
+                Block oldBlock = oldLoc.getBlock();
+                if (oldBlock.getType() == Material.LIGHT) {
+                    oldBlock.setType(Material.AIR);
+                }
+            }
+
+            targetBlock.setType(Material.LIGHT);
+            if (targetBlock.getBlockData() instanceof org.bukkit.block.data.type.Light lightData) {
+                lightData.setLevel(Math.min(15, Math.max(0, lightLevel)));
+                targetBlock.setBlockData(lightData);
+            } else if (targetBlock.getBlockData() instanceof org.bukkit.block.data.Levelled levelled) {
+                levelled.setLevel(Math.min(15, Math.max(0, lightLevel)));
+                targetBlock.setBlockData(levelled);
+            }
+            activeLightLocations.put(instance.getInstanceId(), targetBlock.getLocation());
+        } catch (Throwable t) {
+            logger.fine("Failed to apply lighting for prop " + instance.getInstanceId() + ": " + t.getMessage());
+        }
+    }
+
+    public void removePropLighting(UUID instanceId) {
+        Location loc = activeLightLocations.remove(instanceId);
+        if (loc != null) {
+            try {
+                org.bukkit.World world = loc.getWorld();
+                if (world != null) {
+                    Block b = loc.getBlock();
+                    if (b.getType() == Material.LIGHT) {
+                        b.setType(Material.AIR);
+                    }
+                }
+            } catch (Throwable t) {
+                logger.fine("Failed to remove lighting for prop " + instanceId + ": " + t.getMessage());
+            }
+        }
+    }
+
+    public void cleanupLighting() {
+        for (UUID id : new ArrayList<>(activeLightLocations.keySet())) {
+            removePropLighting(id);
+        }
+    }
+
+    public Map<UUID, Location> getActiveLightLocations() {
+        return Collections.unmodifiableMap(activeLightLocations);
+    }
+
+    public Location getActiveLightLocation(UUID instanceId) {
+        return activeLightLocations.get(instanceId);
+    }
+
+    public ItemStack createDisplayItemStack(PropDefinition def) {
+        return createDisplayItemStack(def, null);
+    }
+
+    public ItemStack createDisplayItemStack(PropDefinition def, String currentState) {
+        String activeModel = (def != null) ? def.getBlockModelForState(currentState) : null;
         Material mat = (activeModel != null && !activeModel.isEmpty())
                 ? Material.WHITE_WOOL
                 : Material.PAPER;
@@ -440,6 +547,37 @@ public class PropManager {
             item.setItemMeta(meta);
         }
         return item;
+    }
+
+    public com.github.retrooper.packetevents.protocol.item.ItemStack createPacketEventsItemStack(PropDefinition def, String currentState) {
+        ItemStack displayItem = createDisplayItemStack(def, currentState);
+        if (displayItem == null) return null;
+
+        com.github.retrooper.packetevents.protocol.item.ItemStack peItem =
+                SpigotConversionUtil.fromBukkitItemStack(displayItem);
+
+        String activeModel = (def != null) ? def.getBlockModelForState(currentState) : null;
+        if (activeModel != null && !activeModel.isEmpty()) {
+            String model = activeModel.trim().toLowerCase();
+            String ns = "minecraft";
+            String path = model;
+            if (model.contains(":")) {
+                String[] parts = model.split(":", 2);
+                ns = parts[0];
+                path = parts[1];
+            }
+            try {
+                peItem.setComponent(
+                        com.github.retrooper.packetevents.protocol.component.ComponentTypes.ITEM_MODEL,
+                        new com.github.retrooper.packetevents.protocol.component.builtin.item.ItemModel(
+                                new com.github.retrooper.packetevents.resources.ResourceLocation(ns, path)
+                        )
+                );
+            } catch (Throwable t) {
+                logger.warning("Failed to set PacketEvents ITEM_MODEL: " + t.getMessage());
+            }
+        }
+        return peItem;
     }
 
     public static Quaternion4f calculateRotationQuaternion(float yaw) {

@@ -25,4 +25,6 @@ class BlockModel(Base):
     tool_type = Column(String, default="AXE", nullable=False)
     drop_item_id = Column(String, nullable=True)
     plugin_properties = Column(JSON, default=dict)
+    default_state = Column(String, default="default", nullable=True)
+    states = Column(JSON, default=dict)
     updated_at = Column(DateTime, default=utcnow, onupdate=utcnow)

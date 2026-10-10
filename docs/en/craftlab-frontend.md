@@ -43,11 +43,13 @@ Design custom items with full fidelity for modern Minecraft versions:
 - **Visual Attributes Editor**: Customize item names, colorized lore formatting (MiniMessage / legacy colors), rarity, enchantments, and item flags.
 - **Real-Time Deployment**: Push modified item definitions directly into active Paper servers with a single click.
 
-### 2. Block Studio (Virtual Props)
+### 2. Block Studio (Virtual Props & State Machines)
 Author custom furniture, 3D decorative blocks, and props without registering tile entities or lagging server performance:
 - **PacketEvents Display Previews**: Visual configuration of display entity scales, translation offsets, and rotation angles.
-- **Physical Collision Anchors**: Automatically bind invisible barrier blocks to give props solid collision boxes.
-- **Interactive Sit Mechanics**: Attach passenger seats to furniture props allowing players to sit by right-clicking.
+- **State Machines & Variants**: Dedicated tab to configure multiple named states (`default_state`, `states`), distinct block models, light levels (0–15), entry sounds, and quick presets (Lamps, Doors/Gates).
+- **Dynamic Hitboxes**: Configure solid (`solid`) or passable (`passable`) collision per state with safe horizontal player ejection on close.
+- **Physical Collision Anchors**: Automatically bind invisible barrier or structure void blocks across relative footprint coordinates.
+- **Interactive Sit & Lay Mechanics**: Attach passenger seats to furniture props allowing players to sit or lie down by right-clicking.
 - **Break Lifecycle**: Link custom prop drops and sound effects upon block destruction.
 
 ### 3. Pack Manager

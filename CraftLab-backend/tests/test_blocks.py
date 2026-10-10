@@ -118,3 +118,80 @@ def test_block_model_fallback_to_item_model():
     assert block.block_model == "studio:furniture/chair"
     canonical = block.to_canonical_dict()
     assert canonical["block_model"] == "studio:furniture/chair"
+
+
+def test_multi_state_prop_validation():
+    block = BlockDefinition(
+        id="vintage_lamp",
+        display_name="Vintage Lamp",
+        default_state="off",
+        states={
+            "off": {
+                "name": "Apagada",
+                "block_model": "studio:props/lamp_off",
+                "light_level": 0,
+                "next_state": "on"
+            },
+            "on": {
+                "name": "Encendida",
+                "block_model": "studio:props/lamp_on",
+                "light_level": 14,
+                "sound": {
+                    "key": "block.wooden_button.click_on",
+                    "volume": 0.8,
+                    "pitch": 1.0
+                },
+                "next_state": "off"
+            }
+        }
+    )
+    assert block.default_state == "off"
+    assert len(block.states) == 2
+    assert block.states["on"].light_level == 14
+    assert block.states["on"].sound.key == "block.wooden_button.click_on"
+    canonical = block.to_canonical_dict()
+    assert canonical["default_state"] == "off"
+    assert "off" in canonical["states"]
+    assert "on" in canonical["states"]
+    assert canonical["states"]["on"]["light_level"] == 14
+
+
+def test_invalid_light_level_rejected():
+    with pytest.raises(ValidationError):
+        BlockDefinition(
+            id="faulty_lamp",
+            display_name="Faulty Lamp",
+            states={
+                "on": {
+                    "block_model": "studio:props/lamp_on",
+                    "light_level": 16
+                }
+            }
+        )
+
+
+def test_dangling_next_state_rejected():
+    with pytest.raises(ValidationError):
+        BlockDefinition(
+            id="faulty_switch",
+            display_name="Faulty Switch",
+            states={
+                "off": {
+                    "block_model": "studio:props/switch_off",
+                    "next_state": "invalid_state_key"
+                }
+            }
+        )
+
+
+def test_backward_compatibility_empty_states():
+    block = BlockDefinition(
+        id="classic_chair",
+        display_name="Classic Chair",
+        item_model="studio:furniture/chair"
+    )
+    assert block.default_state == "default"
+    assert block.states == {}
+    canonical = block.to_canonical_dict()
+    assert canonical["states"] == {}
+

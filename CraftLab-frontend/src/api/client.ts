@@ -74,6 +74,21 @@ export interface PluginSchema {
   default_yaml_template?: string
 }
 
+export interface PropStateSound {
+  key: string
+  volume: number
+  pitch: number
+}
+
+export interface PropState {
+  name?: string
+  block_model?: string | null
+  light_level?: number
+  sound?: PropStateSound | null
+  hitbox_type?: 'solid' | 'passable' | null
+  next_state?: string | null
+}
+
 export interface Block {
   id: string
   display_name: string
@@ -90,6 +105,8 @@ export interface Block {
   tool_type: string
   drop_item_id?: string | null
   plugin_properties?: Record<string, any>
+  default_state?: string
+  states?: Record<string, PropState>
 }
 
 export interface Revision {

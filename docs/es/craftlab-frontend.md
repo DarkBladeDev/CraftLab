@@ -43,11 +43,13 @@ Crea y modifica ítems personalizados con compatibilidad completa para versiones
 - **Editor Visual de Atributos**: Modifica nombres en pantalla, descripciones formateadas (MiniMessage y códigos de color clásicos), rarezas y encantamientos.
 - **Despliegue Inmediato**: Aplica cambios en los servidores Paper conectados con un solo clic.
 
-### 2. Block Studio (Props Virtuales)
+### 2. Block Studio (Props Virtuales y Máquinas de Estados)
 Diseña mobiliario, bloques decorativos y props 3D sin registrar tile entities ni provocar sobrecarga de ticks en el servidor:
 - **Previsualizaciones PacketEvents**: Configuración de escalas, traslaciones y rotaciones para display entities.
-- **Anclaje de Colisiones Físicas**: Vinculación automática con bloques de barrera invisibles para asegurar colisiones sólidas.
-- **Mecánicas Interactivas para Sentarse**: Asigna puntos de asiento a muebles permitiendo que los jugadores se sienten al hacer clic derecho.
+- **Máquinas de Estados y Variantes**: Pestaña dedicada para crear múltiples estados (`default_state`, `states`), modelos alternativos, niveles de luz (0–15), sonidos de entrada y presets rápidos (Lámparas, Puertas/Rejas).
+- **Hitboxes Dinámicas**: Alterna entre hitboxes sólidas (`solid`) y transitables (`passable`) por estado, asegurando eyección física de jugadores para evitar asfixia.
+- **Anclaje de Colisiones Físicas**: Vinculación automática con bloques de barrera o structure void en coordenadas relativas.
+- **Mecánicas Interactivas para Sentarse y Recostarse**: Asigna puntos de asiento a muebles permitiendo que los jugadores se sienten o recuesten al hacer clic derecho.
 - **Ciclo de Vida de Destrucción**: Asigna drops específicos y efectos de sonido al romper los props.
 
 ### 3. Gestor de Packs (Pack Manager)
