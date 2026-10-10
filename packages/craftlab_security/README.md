@@ -28,5 +28,5 @@ pytest packages/craftlab_security/tests -v
 ## Documentation
 
 For architecture details, integration guides, and API specifications, see:
-- [CraftLab Packages Registry](../../docs/packages/README.md)
-- [craftlab-security Package Documentation](../../docs/packages/craftlab-security.md)
+- [craftlab_security Documentation](https://github.com/DarkBladeDev/CraftLab/blob/main/docs/en/packages/craftlab-security.md)
+- [CraftLab Packages Registry](https://github.com/DarkBladeDev/CraftLab/blob/main/docs/en/packages/index.md)

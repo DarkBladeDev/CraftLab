@@ -74,6 +74,10 @@ The native in-game runtime for Paper servers:
 - **Oraxen Compatibility**: Scans and exports legacy Oraxen configurations without conflicts.
 - **In-Game Commands**: Provides `/mcp give`, `/mcp status`, and `/mcp reloadpack` for server operators.
 
+### 5. [Shared Packages](packages/index.md)
+Modular libraries powering cross-cutting domain logic:
+- **`craftlab_security`**: Canonical security event schema, pre-persistence sensitive data sanitization, WAL SQLite audit logging, and production fail-fast environment validation.
+
 ---
 
 ## Next Steps

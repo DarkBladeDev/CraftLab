@@ -74,6 +74,10 @@ El componente nativo en el servidor Paper:
 - **Compatibilidad con Oraxen**: Detección, exportación y sincronización bidireccional sin conflictos.
 - **Comandos de Operador**: Acceso en el juego mediante `/mcp give`, `/mcp status` y `/mcp reloadpack`.
 
+### 5. [Packages Compartidos](packages/index.md)
+Bibliotecas modulares que implementan lógica transversal de la plataforma:
+- **`craftlab_security`**: Esquema canónico de eventos de seguridad, sanitización universal de secretos, persistencia SQLite en modo WAL y validación fail-fast en arranque de producción.
+
 ---
 
 ## Siguientes Pasos

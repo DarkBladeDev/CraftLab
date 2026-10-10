@@ -1,13 +1,12 @@
-# Package: `craftlab_security`
-
-- **Location:** [`packages/craftlab_security`](https://github.com/DarkBladeDev/CraftLab/blob/main/packages/craftlab_security)
-- **Version:** `0.1.0`
-- **Type:** Internal shared library (Python 3.11+)
-- **Dependencies:** `pydantic >= 2.0.0`
-
+---
+title: craftlab_security Package
+description: Canonical security event contract, universal data sanitization, and WAL SQLite audit sink.
+sidebar:
+  order: 2
+  label: craftlab_security
 ---
 
-## 1. Overview & Scope
+# craftlab_security Package
 
 `craftlab_security` is the central security and audit library for the CraftLab monorepo, providing:
 1. A **canonical security and audit event contract** shared across FastAPI backend, WebSocket Gateway, and supervisor daemon `craftctld`.
@@ -17,9 +16,18 @@
 
 ---
 
-## 2. Architecture & Modules
+## Technical Specifications
 
-### 2.1. Canonical Event Schema (`models.py`)
+- **Location:** [`packages/craftlab_security`](https://github.com/DarkBladeDev/CraftLab/tree/main/packages/craftlab_security)
+- **Version:** `0.1.0`
+- **Type:** Internal shared library (Python 3.11+)
+- **Dependencies:** `pydantic >= 2.0.0`
+
+---
+
+## Subsystems & Architecture
+
+### 1. Canonical Event Schema (`models.py`)
 
 Defines Pydantic v2 data models for structured security events.
 
@@ -43,7 +51,7 @@ Defines Pydantic v2 data models for structured security events.
 - `TransportType`: `HTTP`, `WS`, `IPC`, `INTERNAL`, `UNKNOWN`
 
 #### Event Model: `SecurityEvent`
-Key normalized fields:
+Normalized fields:
 - `schema_version`: Integer schema version (`1`).
 - `event_id`: Unique UUIDv4 generated at point of emission.
 - `occurred_at`: UTC timestamp formatted in ISO 8601.
@@ -61,7 +69,7 @@ Key normalized fields:
 
 ---
 
-### 2.2. Universal Data Sanitizer (`sanitizer.py`)
+### 2. Universal Data Sanitizer (`sanitizer.py`)
 
 Guarantees that sensitive data, credentials, and excessive payloads are scrubbed prior to persistence or logging.
 
@@ -78,7 +86,7 @@ Guarantees that sensitive data, credentials, and excessive payloads are scrubbed
 
 ---
 
-### 2.3. SQLite Persistence Sink (`sink.py`)
+### 3. SQLite Persistence Sink (`sink.py`)
 
 Stores audit events into an isolated SQLite database file (`data/security-audit.sqlite3`).
 
@@ -94,7 +102,7 @@ Stores audit events into an isolated SQLite database file (`data/security-audit.
 
 ---
 
-### 2.4. Production Fail-Fast Validation (`validation.py`)
+### 4. Production Fail-Fast Validation (`validation.py`)
 
 Enforces secure boot policies in production deployments.
 
@@ -102,19 +110,19 @@ Function: `validate_production_security_environment()`
 - Checks environment variables `CRAFTLAB_ENV` or `ENV`.
 - When set to `production` or `prod`:
   1. **Disabled Authentication:** Raises `SecurityConfigurationError` if `CRAFTLAB_AUTH_ENABLED == "false"`.
-  2. **Default Placeholder Root Tokens:** Raises `SecurityConfigurationError` if `CRAFTLAB_ROOT_TOKEN` equals default placeholder values (such as `change_me_to_a_secure_root_token`, `root-token`, `admin`, etc.).
+  2. **Default Placeholder Root Tokens:** Raises `SecurityConfigurationError` if `CRAFTLAB_ROOT_TOKEN` equals default placeholder values (`change_me_to_a_secure_root_token`, `root-token`, `admin`, etc.).
 - When in `development` or `test`: logs security warnings without halting execution.
 
 ---
 
-## 3. Monorepo Integration
+## Monorepo Integration
 
-### 3.1. `CraftLab-backend`
+### 1. `CraftLab-backend`
 - **Boot Lifecycle:** Invokes `validate_production_security_environment()` during FastAPI startup in `main.py`.
 - **FastAPI Endpoint Audit:** Shared helper `app.core.security.emit_audit_event()` emits events for login failures (`auth.failure`), administrative operations (`admin.action`), and permission rejections (`authz.denied`).
 - **WebSocket Gateway:** `app.gateway.manager.AgentSessionManager` enforces cryptographic secret validation on agent `hello` handshakes via constant-time `secrets.compare_digest`, rejecting invalid agents with code 1008 and recording `websocket.auth.failure`.
 
-### 3.2. `CraftLab-ctl`
+### 2. `CraftLab-ctl`
 - **Supervisor Boot:** Validates production environment configuration in `DaemonService.start()` and `server/app.py`.
 - **Hardened CORS:** Disallows wildcard origins when credentials are enabled.
 - **Secure Cookies:** Enforces `Secure=True` for session cookies on HTTPS deployments.
@@ -124,9 +132,9 @@ Function: `validate_production_security_environment()`
 
 ---
 
-## 4. Usage Examples
+## Code Examples
 
-### 4.1. Emitting a Critical Security Event
+### Emitting a Critical Event
 ```python
 from pathlib import Path
 from craftlab_security import (
@@ -150,7 +158,7 @@ event = SecurityEvent(
 sink.emit_critical(event)
 ```
 
-### 4.2. Universal Attribute Sanitization
+### Universal Sanitization
 ```python
 from craftlab_security import DataSanitizer
 
@@ -170,10 +178,10 @@ clean_attributes = DataSanitizer.sanitize_dict(raw_attributes)
 
 ---
 
-## 5. Verification & Testing
+## Unit Testing
 
-Unit tests for `craftlab_security` are located in [`packages/craftlab_security/tests/`](https://github.com/DarkBladeDev/CraftLab/blob/main/packages/craftlab_security/tests):
+Unit tests for `craftlab_security` reside under [`packages/craftlab_security/tests/`](https://github.com/DarkBladeDev/CraftLab/tree/main/packages/craftlab_security/tests):
+
 ```bash
 pytest packages/craftlab_security/tests -v
 ```
-All 11 unit tests verify schema validation, denylist redaction, string truncation, batch telemetry flushing, WAL initialization, and production environment guardrails.
