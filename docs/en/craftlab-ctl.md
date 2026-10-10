@@ -107,11 +107,61 @@ CraftLab features a zero-downtime, rollback-safe update system orchestrated by `
 
 `craftctld` serves a modern, modular web control dashboard on port `8443` built with React and Tailwind CSS:
 
-- **Categorized Pages**: Top horizontal navigation tabs (`Overview`, `System & Host`, `Lifecycle & Ops`, `Releases & Updates`, `Doctor & Health`, `Terminal & Logs`) organize operational domains while preserving 100% of the screen width for panel grids.
+- **Categorized Pages**: Top horizontal navigation tabs (`Overview`, `System & Host`, `Lifecycle & Ops`, `Releases & Updates`, `Security & Audit`, `Doctor & Health`, `Terminal & Logs`) organize operational domains while preserving 100% of the screen width for panel grids.
 - **Modular Paginated Data Containers**: Powered by a typed declarative TypeScript schema (`PaginatedContainerPreset`) and `<ContainerEngine />` supporting hybrid pagination:
   - **Subviews Mode (`subviews`)**: Internal carousel-style mode switching (metrics summary $\rightarrow$ granular breakdown $\rightarrow$ operational actions) inside a single compact card footprint.
   - **Records Collection Mode (`records`)**: Paginated collection rows (installed releases, audit logs, agents) with next/previous controls without overflowing cards.
   - **Simple Mode (`none`)**: Direct single-surface rendering for wide streams such as the real-time log terminal.
 - **Draggable & Resizable Grid (`DraggableGrid`)**: Native drag-to-reorder via drag handles (`[::]`), dynamic column span resizing (`- / + Cols`), automatic layout persistence in browser `localStorage`, and a one-click "Reset Layout" action.
 - **Role-Based Access Control (RBAC)**: Fine-grained role checks (`admin`, `operator`, `viewer`, `is_break_glass`) on input action controls, disabling or locking restricted triggers.
+
+---
+
+## Security & Audit Control Plane
+
+`CraftLab-ctl` integrates comprehensive threat posture monitoring, proactive heuristic anomaly detection, forensic audit exploration, and instant containment controls.
+
+### Modular Security Presets
+
+The dedicated **Security & Audit** category hosts three specialized container presets:
+
+1. **Security Threat Radar (`securityThreatRadarPreset`)**:
+   - **Composite Threat Index**: Real-time 0–100 gauge computed by the anomaly evaluator over a rolling 15-minute sliding window.
+   - **Posture Classification**: Color-coded status badge (`NORMAL`, `ELEVATED`, `HIGH`, `CRITICAL`, or `LOCKDOWN`).
+   - **Live Telemetry Indicators**: 15-minute failed login counters, 24-hour total events, active quarantine counts, and active anomaly tallies.
+   - **Containment Controls**: One-click Emergency Lockdown toggle (restricted to `admin` role) and audit log retention purge.
+
+2. **Anomaly Monitor & Mitigations (`securityAnomalyMonitorPreset`)**:
+   - **Heuristic Detection Engine**: Automatically flags brute-force authentication spikes (>5 failures within 60s from the same IP or user), break-glass credential usage, authorization denial spikes, and suspicious route scanning.
+   - **Dual Subviews**:
+     - *Active Anomalies*: Actionable incident cards displaying anomaly type, description, affected actor/IP, and direct mitigation buttons (**Quarantine IP**, **Dismiss**).
+     - *Active Containment*: Real-time list of quarantined IP addresses with remaining TTLs, manual IP quarantine submission form, unquarantine triggers, and an emergency **Revoke All Active Sessions** action.
+
+3. **Forensic Audit Explorer (`securityAuditExplorerPreset`)**:
+   - **Canonical SQLite Storage**: Directly queries isolated WAL-mode database (`data/security-audit.sqlite3`) where all events are sanitized prior to persistence.
+   - **Records Pagination & Filtering**: Filter events by severity (`CRITICAL`, `HIGH`, `WARN`, `INFO`), emitting component, and outcome (`success`, `failure`, `blocked`).
+   - **Attribute Inspector Drawer**: Expand any event to inspect sanitized context (source IP, request path, HTTP status, reason codes) without exposing secrets.
+
+### Security REST API Endpoints
+
+All endpoints require active session authentication under `/api/v1/security/`:
+
+| Endpoint | Method | Role | Description |
+| :--- | :--- | :--- | :--- |
+| `/api/v1/security/posture` | `GET` | Authenticated | Returns composite threat score, posture status, and counters. |
+| `/api/v1/security/anomalies` | `GET` | Authenticated | Lists active detected anomalies. |
+| `/api/v1/security/anomalies/dismiss`| `POST` | Operator / Admin | Dismisses an active anomaly alert by ID. |
+| `/api/v1/security/events` | `GET` | Authenticated | Paginated query over canonical security audit records. |
+| `/api/v1/security/quarantines` | `GET` | Authenticated | Lists active quarantined IP addresses and expiration TTLs. |
+| `/api/v1/security/quarantine` | `POST` | Admin | Immediately quarantines an IP address with specified TTL (minutes). |
+| `/api/v1/security/unquarantine` | `POST` | Admin | Lifts quarantine from an IP address. |
+| `/api/v1/security/revoke-sessions` | `POST` | Admin | Revokes sessions for a specific user or all users across the system. |
+| `/api/v1/security/toggle-lockdown` | `POST` | Admin | Toggles emergency lockdown mode (rejects all non-admin access). |
+| `/api/v1/security/purge` | `POST` | Admin | Purges audit logs older than specified retention days. |
+
+### Active Containment Middleware
+
+- **IP Quarantine Filter**: The control server middleware checks incoming client IPs against the in-memory and disk-persisted `IpQuarantineManager`. Blocked IPs immediately receive `403 Forbidden` and emit an `authz.denied` audit event.
+- **Emergency Lockdown Gate**: When lockdown mode is active, all non-admin authentication attempts are rejected and mutating control endpoints are restricted to authenticated administrators.
+
 

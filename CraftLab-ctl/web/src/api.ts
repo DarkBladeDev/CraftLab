@@ -80,6 +80,66 @@ export interface OperationResponse {
   }>;
 }
 
+export interface SecurityPosture {
+  threat_index: number;
+  classification: "NORMAL" | "ELEVATED" | "HIGH" | "CRITICAL" | "LOCKDOWN";
+  failed_auths_15m: number;
+  active_alerts_count: number;
+  quarantined_ips_count: number;
+  lockdown_enabled: boolean;
+  evaluated_at: string;
+}
+
+export interface SecurityAnomaly {
+  alert_id: string;
+  rule: string;
+  title: string;
+  description: string;
+  severity: "critical" | "high" | "medium" | "low";
+  source_ip?: string;
+  target_actor?: string;
+  timestamp: string;
+  metadata?: Record<string, any>;
+}
+
+export interface SecurityQuarantineEntry {
+  ip: string;
+  reason: string;
+  created_at: string;
+  expires_at: string;
+  quarantined_by: string;
+}
+
+export interface SecurityEventRecord {
+  event_id: string;
+  schema_version: number;
+  occurred_at: string;
+  received_at: string;
+  component: string;
+  event_type: string;
+  severity: string;
+  outcome: string;
+  actor_type: string;
+  actor_id?: string;
+  source_ip?: string;
+  source_transport: string;
+  route?: string;
+  method?: string;
+  status_code?: number;
+  reason_code?: string;
+  operation_id?: string;
+  request_id?: string;
+  duration_ms?: number;
+  attributes_json: string;
+}
+
+export interface SecurityEventsResponse {
+  events: SecurityEventRecord[];
+  total: number;
+  limit: number;
+  offset: number;
+}
+
 export const api = {
   async getMe(): Promise<UserContext | null> {
     try {
@@ -220,5 +280,126 @@ export const api = {
   createLogWebSocket(): WebSocket {
     const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
     return new WebSocket(`${protocol}//${window.location.host}/api/v1/ws/logs`);
+  },
+
+  async getSecurityPosture(): Promise<SecurityPosture> {
+    const res = await fetch("/api/v1/security/posture", { credentials: "include" });
+    if (!res.ok) throw new Error("Failed to fetch security posture");
+    return await res.json();
+  },
+
+  async getSecurityAnomalies(): Promise<SecurityAnomaly[]> {
+    const res = await fetch("/api/v1/security/anomalies", { credentials: "include" });
+    if (!res.ok) throw new Error("Failed to fetch security anomalies");
+    return await res.json();
+  },
+
+  async dismissSecurityAnomaly(alertId: string): Promise<void> {
+    const res = await fetch("/api/v1/security/anomalies/dismiss", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      credentials: "include",
+      body: JSON.stringify({ alert_id: alertId }),
+    });
+    if (!res.ok) throw new Error("Failed to dismiss security anomaly");
+  },
+
+  async getSecurityEvents(params?: {
+    component?: string;
+    event_type?: string;
+    severity?: string;
+    outcome?: string;
+    limit?: number;
+    offset?: number;
+  }): Promise<SecurityEventsResponse> {
+    const searchParams = new URLSearchParams();
+    if (params?.component) searchParams.set("component", params.component);
+    if (params?.event_type) searchParams.set("event_type", params.event_type);
+    if (params?.severity) searchParams.set("severity", params.severity);
+    if (params?.outcome) searchParams.set("outcome", params.outcome);
+    if (params?.limit) searchParams.set("limit", params.limit.toString());
+    if (params?.offset) searchParams.set("offset", params.offset.toString());
+
+    const res = await fetch(`/api/v1/security/events?${searchParams.toString()}`, {
+      credentials: "include",
+    });
+    if (!res.ok) throw new Error("Failed to fetch security events");
+    return await res.json();
+  },
+
+  async getSecurityQuarantines(): Promise<SecurityQuarantineEntry[]> {
+    const res = await fetch("/api/v1/security/quarantines", { credentials: "include" });
+    if (!res.ok) throw new Error("Failed to fetch quarantined IPs");
+    return await res.json();
+  },
+
+  async quarantineIp(ip: string, durationMinutes = 60, reason = "Manual quarantine"): Promise<OperationResponse> {
+    const res = await fetch("/api/v1/security/quarantine", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      credentials: "include",
+      body: JSON.stringify({ ip, duration_minutes: durationMinutes, reason }),
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.detail || "Failed to quarantine IP");
+    }
+    return await res.json();
+  },
+
+  async unquarantineIp(ip: string): Promise<OperationResponse> {
+    const res = await fetch("/api/v1/security/unquarantine", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      credentials: "include",
+      body: JSON.stringify({ ip }),
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.detail || "Failed to unquarantine IP");
+    }
+    return await res.json();
+  },
+
+  async revokeSessions(username?: string, allExceptCaller = true): Promise<OperationResponse> {
+    const res = await fetch("/api/v1/security/revoke-sessions", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      credentials: "include",
+      body: JSON.stringify({ username, all_except_caller: allExceptCaller }),
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.detail || "Failed to revoke sessions");
+    }
+    return await res.json();
+  },
+
+  async toggleLockdown(enabled: boolean, reason = ""): Promise<OperationResponse> {
+    const res = await fetch("/api/v1/security/toggle-lockdown", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      credentials: "include",
+      body: JSON.stringify({ enabled, reason }),
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.detail || "Failed to toggle lockdown");
+    }
+    return await res.json();
+  },
+
+  async purgeSecurityLogs(retentionDays = 30): Promise<OperationResponse> {
+    const res = await fetch("/api/v1/security/purge", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      credentials: "include",
+      body: JSON.stringify({ retention_days: retentionDays }),
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.detail || "Failed to purge security logs");
+    }
+    return await res.json();
   },
 };

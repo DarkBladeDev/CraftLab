@@ -24,6 +24,8 @@ from craftlab_ctl.auth.db import (
     create_session,
     get_session,
     delete_session,
+    revoke_user_sessions,
+    revoke_all_sessions_except,
     create_api_token,
     get_user_by_api_token,
 )
@@ -55,6 +57,8 @@ __all__ = [
     "create_session",
     "get_session",
     "delete_session",
+    "revoke_user_sessions",
+    "revoke_all_sessions_except",
     "create_api_token",
     "get_user_by_api_token",
     "resolve_auth_context",

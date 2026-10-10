@@ -154,3 +154,40 @@ def test_rbac_and_break_glass(temp_ctl_paths: CtlPaths, monkeypatch):
     )
     assert resolved_bg is not None
     assert resolved_bg.is_break_glass is True
+
+
+def test_session_revocation(temp_ctl_paths: CtlPaths):
+    from craftlab_ctl.auth import revoke_user_sessions, revoke_all_sessions_except
+
+    db_path = temp_ctl_paths.auth_db_path
+    init_auth_db(db_path)
+
+    u1 = create_user(db_path, username="user1", password="pw1", roles=[Role.VIEWER.value])
+    u2 = create_user(db_path, username="user2", password="pw2", roles=[Role.VIEWER.value])
+
+    s1_1 = create_session(db_path, u1.id)
+    s1_2 = create_session(db_path, u1.id)
+    s2_1 = create_session(db_path, u2.id)
+
+    # Revoke sessions for user1 by username
+    revoked = revoke_user_sessions(db_path, "user1")
+    assert revoked == 2
+    assert get_session(db_path, s1_1.session_id) is None
+    assert get_session(db_path, s1_2.session_id) is None
+    assert get_session(db_path, s2_1.session_id) is not None
+
+    # Create new sessions and test revoke_all_sessions_except
+    s1_3 = create_session(db_path, u1.id)
+    s2_2 = create_session(db_path, u2.id)
+
+    # Keep s2_2, revoke the rest
+    revoked_all = revoke_all_sessions_except(db_path, except_session_id=s2_2.session_id)
+    assert revoked_all == 2  # s2_1 and s1_3
+    assert get_session(db_path, s2_2.session_id) is not None
+    assert get_session(db_path, s2_1.session_id) is None
+    assert get_session(db_path, s1_3.session_id) is None
+
+    # Revoke all remaining
+    revoked_remaining = revoke_all_sessions_except(db_path)
+    assert revoked_remaining == 1
+    assert get_session(db_path, s2_2.session_id) is None

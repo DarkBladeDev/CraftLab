@@ -230,6 +230,33 @@ def delete_session(db_path: Path, session_id: str) -> bool:
         return cur.rowcount > 0
 
 
+def revoke_user_sessions(db_path: Path, username_or_id: str) -> int:
+    """Revokes all active sessions for a specific user by username or user ID."""
+    init_auth_db(db_path)
+    with get_db_connection(db_path) as conn:
+        cur = conn.execute(
+            """
+            DELETE FROM sessions
+            WHERE user_id = ? OR user_id IN (SELECT id FROM users WHERE username = ?)
+            """,
+            (username_or_id, username_or_id),
+        )
+        conn.commit()
+        return cur.rowcount
+
+
+def revoke_all_sessions_except(db_path: Path, except_session_id: Optional[str] = None) -> int:
+    """Revokes all active sessions across the system, optionally preserving the caller's session."""
+    init_auth_db(db_path)
+    with get_db_connection(db_path) as conn:
+        if except_session_id:
+            cur = conn.execute("DELETE FROM sessions WHERE session_id != ?", (except_session_id,))
+        else:
+            cur = conn.execute("DELETE FROM sessions")
+        conn.commit()
+        return cur.rowcount
+
+
 def create_api_token(
     db_path: Path, user_id: str, name: str, token_str: Optional[str] = None
 ) -> str:

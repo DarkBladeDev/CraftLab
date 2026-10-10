@@ -9,6 +9,12 @@ from craftlab_ctl.core.models import (
 )
 from craftlab_ctl.core.audit import AuditLogger
 from craftlab_ctl.core.lock import OperationLock, LockError
+from craftlab_ctl.core.quarantine import QuarantineEntry, IpQuarantineManager
+from craftlab_ctl.core.anomaly import (
+    AnomalyAlert,
+    SecurityPosture,
+    SecurityAnomalyEvaluator,
+)
 
 __all__ = [
     "CtlPaths",
@@ -23,4 +29,9 @@ __all__ = [
     "AuditLogger",
     "OperationLock",
     "LockError",
+    "QuarantineEntry",
+    "IpQuarantineManager",
+    "AnomalyAlert",
+    "SecurityPosture",
+    "SecurityAnomalyEvaluator",
 ]

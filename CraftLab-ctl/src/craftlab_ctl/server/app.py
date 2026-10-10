@@ -35,8 +35,38 @@ class MaintenanceRequest(BaseModel):
     message: str = ""
 
 
+class QuarantineRequest(BaseModel):
+    ip: str
+    duration_minutes: int = 60
+    reason: str = "Manual operator quarantine"
+
+
+class UnquarantineRequest(BaseModel):
+    ip: str
+
+
+class RevokeSessionsRequest(BaseModel):
+    username: Optional[str] = None
+    all_except_caller: bool = True
+
+
+class LockdownRequest(BaseModel):
+    enabled: bool
+    reason: str = ""
+
+
+class PurgeLogsRequest(BaseModel):
+    retention_days: int = 30
+
+
+class DismissAnomalyRequest(BaseModel):
+    alert_id: str
+
+
 from craftlab_ctl.core.paths import CtlPaths, get_paths
 from craftlab_ctl.core.models import OperationResult, CheckStatus, AuditEvent
+from craftlab_ctl.core.quarantine import IpQuarantineManager
+from craftlab_ctl.core.anomaly import SecurityAnomalyEvaluator
 from craftlab_ctl.auth.models import (
     Role,
     AuthContext,
@@ -53,6 +83,8 @@ from craftlab_ctl.auth.db import (
     get_user_by_username,
     create_session,
     delete_session,
+    revoke_user_sessions,
+    revoke_all_sessions_except,
 )
 from craftlab_ctl.auth.rbac import resolve_auth_context
 from craftlab_ctl.supervisor import ProcessSupervisor
@@ -111,6 +143,31 @@ def create_control_app(
     app.state.supervisor = supervisor
     app.state.log_buffer = ring_buf
 
+    quarantine_manager = IpQuarantineManager(state_dir=ctl_paths.state_dir)
+    lockdown_state = {"enabled": False, "reason": ""}
+    audit_sink = getattr(getattr(daemon_service, "audit", None), "_sink", None)
+    anomaly_evaluator = SecurityAnomalyEvaluator(sink=audit_sink)
+
+    app.state.quarantine_manager = quarantine_manager
+    app.state.lockdown_state = lockdown_state
+    app.state.anomaly_evaluator = anomaly_evaluator
+
+    @app.middleware("http")
+    async def security_quarantine_middleware(request: Request, call_next):
+        client_ip = None
+        if request.client and request.client.host:
+            client_ip = request.client.host
+        forwarded = request.headers.get("x-forwarded-for")
+        if forwarded:
+            client_ip = forwarded.split(",")[0].strip()
+
+        if client_ip and quarantine_manager.is_quarantined(client_ip):
+            return JSONResponse(
+                status_code=status.HTTP_403_FORBIDDEN,
+                content={"detail": f"Source IP {client_ip} is quarantined due to detected security anomalies"},
+            )
+        return await call_next(request)
+
     import contextlib
 
     @contextlib.asynccontextmanager
@@ -166,6 +223,12 @@ def create_control_app(
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail="Invalid username or password",
+            )
+
+        if lockdown_state["enabled"] and Role.ADMIN.value not in user.roles:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="System is in emergency lockdown mode: non-admin logins restricted",
             )
 
         # Create session
@@ -484,6 +547,168 @@ def create_control_app(
             }
         finally:
             daemon_service.lock.release()
+
+    # --- Security & Audit Routes ---
+    @app.get("/api/v1/security/posture")
+    async def get_security_posture(auth: AuthContext = Depends(require_auth)):
+        quarantined = quarantine_manager.get_active_quarantines()
+        posture, _ = anomaly_evaluator.evaluate(
+            quarantined_count=len(quarantined),
+            lockdown_enabled=lockdown_state["enabled"],
+        )
+        return posture.model_dump()
+
+    @app.get("/api/v1/security/anomalies")
+    async def get_security_anomalies(auth: AuthContext = Depends(require_auth)):
+        quarantined = quarantine_manager.get_active_quarantines()
+        _, alerts = anomaly_evaluator.evaluate(
+            quarantined_count=len(quarantined),
+            lockdown_enabled=lockdown_state["enabled"],
+        )
+        return [a.model_dump() for a in alerts]
+
+    @app.post("/api/v1/security/anomalies/dismiss")
+    async def dismiss_security_anomaly(
+        req: DismissAnomalyRequest,
+        auth: AuthContext = Depends(require_roles(Role.ADMIN.value, Role.OPERATOR.value)),
+    ):
+        anomaly_evaluator.dismiss_alert(req.alert_id)
+        return {"status": "ok", "message": f"Alert {req.alert_id} dismissed"}
+
+    @app.get("/api/v1/security/events")
+    async def get_security_events(
+        component: Optional[str] = None,
+        event_type: Optional[str] = None,
+        severity: Optional[str] = None,
+        outcome: Optional[str] = None,
+        limit: int = 50,
+        offset: int = 0,
+        auth: AuthContext = Depends(require_auth),
+    ):
+        if not audit_sink:
+            return {"events": [], "total": 0, "limit": limit, "offset": offset}
+        raw_events = audit_sink.query_events(
+            component=component,
+            event_type=event_type,
+            severity=severity,
+            limit=limit,
+            offset=offset,
+        )
+        if outcome:
+            raw_events = [e for e in raw_events if e.get("outcome") == outcome]
+        return {
+            "events": raw_events,
+            "total": len(raw_events),
+            "limit": limit,
+            "offset": offset,
+        }
+
+    @app.get("/api/v1/security/quarantines")
+    async def get_security_quarantines(auth: AuthContext = Depends(require_auth)):
+        return [e.model_dump() for e in quarantine_manager.get_active_quarantines()]
+
+    @app.post("/api/v1/security/quarantine")
+    async def quarantine_ip(
+        req: QuarantineRequest,
+        auth: AuthContext = Depends(require_roles(Role.ADMIN.value)),
+    ):
+        entry = quarantine_manager.quarantine(
+            ip=req.ip,
+            duration_minutes=req.duration_minutes,
+            reason=req.reason,
+            actor=auth.username,
+        )
+        if hasattr(daemon_service, "audit"):
+            daemon_service.audit.log(
+                AuditEvent(
+                    caller_id=f"web:{auth.username}",
+                    command="security.quarantine",
+                    parameters={"ip": req.ip, "duration_minutes": req.duration_minutes, "reason": req.reason},
+                    outcome="success",
+                )
+            )
+        return {"success": True, "entry": entry.model_dump()}
+
+    @app.post("/api/v1/security/unquarantine")
+    async def unquarantine_ip(
+        req: UnquarantineRequest,
+        auth: AuthContext = Depends(require_roles(Role.ADMIN.value)),
+    ):
+        ok = quarantine_manager.unquarantine(req.ip)
+        if hasattr(daemon_service, "audit"):
+            daemon_service.audit.log(
+                AuditEvent(
+                    caller_id=f"web:{auth.username}",
+                    command="security.unquarantine",
+                    parameters={"ip": req.ip},
+                    outcome="success" if ok else "failed",
+                )
+            )
+        return {"success": ok, "message": f"IP {req.ip} unquarantined" if ok else "IP not found in quarantine"}
+
+    @app.post("/api/v1/security/revoke-sessions")
+    async def revoke_sessions(
+        req: RevokeSessionsRequest,
+        request: Request,
+        auth: AuthContext = Depends(require_roles(Role.ADMIN.value)),
+    ):
+        if req.username:
+            count = revoke_user_sessions(ctl_paths.auth_db_path, req.username)
+        else:
+            caller_session = None
+            if req.all_except_caller:
+                cookie_val = request.cookies.get("craftlab_session")
+                if cookie_val:
+                    caller_session = cookie_val.split(".")[0]
+            count = revoke_all_sessions_except(ctl_paths.auth_db_path, except_session_id=caller_session)
+
+        if hasattr(daemon_service, "audit"):
+            daemon_service.audit.log(
+                AuditEvent(
+                    caller_id=f"web:{auth.username}",
+                    command="security.revoke_sessions",
+                    parameters={"username": req.username, "all_except_caller": req.all_except_caller},
+                    outcome="success",
+                )
+            )
+        return {"success": True, "revoked_count": count}
+
+    @app.post("/api/v1/security/toggle-lockdown")
+    async def toggle_lockdown(
+        req: LockdownRequest,
+        auth: AuthContext = Depends(require_roles(Role.ADMIN.value)),
+    ):
+        lockdown_state["enabled"] = req.enabled
+        lockdown_state["reason"] = req.reason
+        if hasattr(daemon_service, "audit"):
+            daemon_service.audit.log(
+                AuditEvent(
+                    caller_id=f"web:{auth.username}",
+                    command="security.toggle_lockdown",
+                    parameters={"enabled": req.enabled, "reason": req.reason},
+                    outcome="success",
+                )
+            )
+        return {"success": True, "enabled": req.enabled, "reason": req.reason}
+
+    @app.post("/api/v1/security/purge")
+    async def purge_audit_logs(
+        req: PurgeLogsRequest,
+        auth: AuthContext = Depends(require_roles(Role.ADMIN.value)),
+    ):
+        purged = 0
+        if audit_sink:
+            purged = audit_sink.purge_retention(retention_days=req.retention_days)
+        if hasattr(daemon_service, "audit"):
+            daemon_service.audit.log(
+                AuditEvent(
+                    caller_id=f"web:{auth.username}",
+                    command="security.purge",
+                    parameters={"retention_days": req.retention_days},
+                    outcome="success",
+                )
+            )
+        return {"success": True, "purged_count": purged}
 
     # --- WebSocket Routes ---
     @app.websocket("/api/v1/ws/logs")

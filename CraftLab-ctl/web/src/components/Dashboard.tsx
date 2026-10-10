@@ -7,6 +7,10 @@ import {
   DoctorResult,
   ReleasesInfo,
   UpdateCheckResult,
+  SecurityPosture,
+  SecurityAnomaly,
+  SecurityQuarantineEntry,
+  SecurityEventRecord,
 } from "../api";
 import { ContainerActionDispatcher } from "../types/presets";
 import { CategoryTabBar } from "./navigation/CategoryTabBar";
@@ -27,6 +31,10 @@ export const Dashboard: React.FC<DashboardProps> = ({ user, onLogout }) => {
   const [doctor, setDoctor] = useState<DoctorResult | null>(null);
   const [releasesInfo, setReleasesInfo] = useState<ReleasesInfo | null>(null);
   const [updateCheck, setUpdateCheck] = useState<UpdateCheckResult | null>(null);
+  const [securityPosture, setSecurityPosture] = useState<SecurityPosture | null>(null);
+  const [securityAnomalies, setSecurityAnomalies] = useState<SecurityAnomaly[]>([]);
+  const [quarantines, setQuarantines] = useState<SecurityQuarantineEntry[]>([]);
+  const [auditEvents, setAuditEvents] = useState<SecurityEventRecord[]>([]);
   const [logs, setLogs] = useState<string[]>([]);
   const [actionLoading, setActionLoading] = useState<string | null>(null);
   const [message, setMessage] = useState<{ text: string; type: "ok" | "err" } | null>(null);
@@ -40,16 +48,24 @@ export const Dashboard: React.FC<DashboardProps> = ({ user, onLogout }) => {
   // Periodic Telemetry and Data Polling
   const refreshData = async () => {
     try {
-      const [s, m, r] = await Promise.all([
+      const [s, m, r, p, a, q, evts] = await Promise.all([
         api.getStatus(),
         api.getMetrics(),
         api.getReleases().catch(() => null),
+        api.getSecurityPosture().catch(() => null),
+        api.getSecurityAnomalies().catch(() => []),
+        api.getSecurityQuarantines().catch(() => []),
+        api.getSecurityEvents({ limit: 50 }).catch(() => ({ events: [] })),
       ]);
       setStatus(s);
       setMetrics(m);
       if (r) setReleasesInfo(r);
+      if (p) setSecurityPosture(p);
+      setSecurityAnomalies(a || []);
+      setQuarantines(q || []);
+      if (evts?.events) setAuditEvents(evts.events);
     } catch (err: any) {
-      console.error("Failed to refresh status/metrics:", err);
+      console.error("Failed to refresh status/metrics/security:", err);
     }
   };
 
@@ -238,6 +254,108 @@ export const Dashboard: React.FC<DashboardProps> = ({ user, onLogout }) => {
           return handleRollback(payload);
         case "toggle_maintenance":
           return handleToggleMaintenance();
+        case "security.refresh":
+          await refreshData();
+          setMessage({ text: "Security telemetry and posture refreshed", type: "ok" });
+          return;
+        case "security.quarantine_ip":
+        case "security.manual_quarantine": {
+          const ip = typeof payload === "string" ? payload : payload?.ip;
+          if (!ip) return;
+          setActionLoading("quarantine");
+          try {
+            const res = await api.quarantineIp(ip, payload?.duration_minutes || 60, payload?.reason || "Quarantined by operator");
+            setMessage({ text: res.message || `IP ${ip} quarantined`, type: "ok" });
+            await refreshData();
+          } catch (err: any) {
+            setMessage({ text: err.message || "Failed to quarantine IP", type: "err" });
+          } finally {
+            setActionLoading(null);
+          }
+          return;
+        }
+        case "security.unquarantine_ip": {
+          const ip = typeof payload === "string" ? payload : payload?.ip;
+          if (!ip) return;
+          setActionLoading("unquarantine");
+          try {
+            const res = await api.unquarantineIp(ip);
+            setMessage({ text: res.message || `IP ${ip} unquarantined`, type: "ok" });
+            await refreshData();
+          } catch (err: any) {
+            setMessage({ text: err.message || "Failed to unquarantine IP", type: "err" });
+          } finally {
+            setActionLoading(null);
+          }
+          return;
+        }
+        case "security.revoke_sessions": {
+          setActionLoading("revoke_sessions");
+          try {
+            const res = await api.revokeSessions();
+            setMessage({ text: res.message || "Active sessions revoked", type: "ok" });
+            await refreshData();
+          } catch (err: any) {
+            setMessage({ text: err.message || "Failed to revoke sessions", type: "err" });
+          } finally {
+            setActionLoading(null);
+          }
+          return;
+        }
+        case "security.revoke_user_sessions": {
+          const username = typeof payload === "string" ? payload : payload?.username;
+          if (!username) return;
+          setActionLoading("revoke_user_sessions");
+          try {
+            const res = await api.revokeSessions(username);
+            setMessage({ text: res.message || `Revoked sessions for user ${username}`, type: "ok" });
+            await refreshData();
+          } catch (err: any) {
+            setMessage({ text: err.message || "Failed to revoke user sessions", type: "err" });
+          } finally {
+            setActionLoading(null);
+          }
+          return;
+        }
+        case "security.toggle_lockdown": {
+          setActionLoading("toggle_lockdown");
+          const next = !securityPosture?.lockdown_enabled;
+          try {
+            const res = await api.toggleLockdown(next, next ? "Emergency lockdown enabled" : "");
+            setMessage({ text: res.message || `Emergency lockdown ${next ? "enabled" : "disabled"}`, type: "ok" });
+            await refreshData();
+          } catch (err: any) {
+            setMessage({ text: err.message || "Failed to toggle lockdown", type: "err" });
+          } finally {
+            setActionLoading(null);
+          }
+          return;
+        }
+        case "security.dismiss_anomaly": {
+          const alertId = typeof payload === "string" ? payload : payload?.alert_id;
+          if (!alertId) return;
+          try {
+            await api.dismissSecurityAnomaly(alertId);
+            setMessage({ text: `Alert ${alertId} dismissed`, type: "ok" });
+            await refreshData();
+          } catch (err: any) {
+            setMessage({ text: err.message || "Failed to dismiss alert", type: "err" });
+          }
+          return;
+        }
+        case "security.purge_logs": {
+          setActionLoading("purge_logs");
+          try {
+            const res = await api.purgeSecurityLogs(payload || 30);
+            setMessage({ text: res.message || "Security audit logs purged", type: "ok" });
+            await refreshData();
+          } catch (err: any) {
+            setMessage({ text: err.message || "Failed to purge audit logs", type: "err" });
+          } finally {
+            setActionLoading(null);
+          }
+          return;
+        }
         default:
           console.warn("Unrecognized action:", actionId, payload);
       }
@@ -251,6 +369,12 @@ export const Dashboard: React.FC<DashboardProps> = ({ user, onLogout }) => {
     doctor,
     releasesInfo,
     updateCheck,
+    security: {
+      posture: securityPosture,
+      anomalies: securityAnomalies,
+      quarantines: quarantines,
+      events: auditEvents,
+    },
   };
 
   // Filter Presets by Active Category
