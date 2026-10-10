@@ -58,6 +58,15 @@ versions:
   # -------------------------------------------------------------
   # CURRENT VERSION (LATEST) -> Always the first entry [0]
   # -------------------------------------------------------------
+  - version: "0.9.0"
+    releaseDate: "2026-10-10"
+    reference: "v0.9.0"
+    downloadUrl: "https://github.com/DarkBladeDev/CraftLab/releases/tag/v0.9.0"
+    changelog: "Added prop state machine, PacketEvents visual model swapping, native Paper 1.21 dynamic lighting, and dynamic hitboxes with safe eviction."
+    minecraft:
+      - "1.21.1"
+      - "1.21.x"
+
   - version: "0.8.0"
     releaseDate: "2026-10-10"
     reference: "v0.8.0"
