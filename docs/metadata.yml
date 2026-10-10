@@ -58,6 +58,15 @@ versions:
   # -------------------------------------------------------------
   # CURRENT VERSION (LATEST) -> Always the first entry [0]
   # -------------------------------------------------------------
+  - version: "0.6.0"
+    releaseDate: "2026-10-10"
+    reference: "v0.6.0"
+    downloadUrl: "https://github.com/DarkBladeDev/CraftLab/releases/tag/v0.6.0"
+    changelog: "Security & audit architecture v1: canonical craftlab_security package, SQLite WAL sink, and transport hardening."
+    minecraft:
+      - "1.21.1"
+      - "1.21.x"
+
   - version: "0.5.2"
     releaseDate: "2026-10-09"
     reference: "v0.5.2"
