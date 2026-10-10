@@ -1,6 +1,6 @@
 # Package: `craftlab_security`
 
-- **Location:** [`packages/craftlab_security`](../../packages/craftlab_security)
+- **Location:** [`packages/craftlab_security`](https://github.com/DarkBladeDev/CraftLab/blob/main/packages/craftlab_security)
 - **Version:** `0.1.0`
 - **Type:** Internal shared library (Python 3.11+)
 - **Dependencies:** `pydantic >= 2.0.0`
@@ -172,7 +172,7 @@ clean_attributes = DataSanitizer.sanitize_dict(raw_attributes)
 
 ## 5. Verification & Testing
 
-Unit tests for `craftlab_security` are located in [`packages/craftlab_security/tests/`](../../packages/craftlab_security/tests):
+Unit tests for `craftlab_security` are located in [`packages/craftlab_security/tests/`](https://github.com/DarkBladeDev/CraftLab/blob/main/packages/craftlab_security/tests):
 ```bash
 pytest packages/craftlab_security/tests -v
 ```
