@@ -48,6 +48,10 @@ class CtlPaths(BaseModel):
         return self.data_dir / "auth.db"
 
     @property
+    def security_audit_db_path(self) -> Path:
+        return self.data_dir / "security-audit.sqlite3"
+
+    @property
     def current_pointer_path(self) -> Path:
         return self.home / "current"
 

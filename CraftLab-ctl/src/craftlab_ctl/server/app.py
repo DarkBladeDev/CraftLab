@@ -78,9 +78,28 @@ def create_control_app(
         openapi_url="/api/openapi.json",
     )
 
+    cors_env = os.getenv("CRAFTLAB_CTL_CORS_ORIGINS") or os.getenv("CRAFTLAB_CORS_ORIGINS")
+    if cors_env:
+        origins = [o.strip() for o in cors_env.split(",") if o.strip()]
+    else:
+        origins = [
+            "http://localhost:5173",
+            "http://127.0.0.1:5173",
+            "http://localhost:8443",
+            "http://127.0.0.1:8443",
+            "http://localhost:8000",
+            "http://127.0.0.1:8000",
+        ]
+
+    # Strictly disallow wildcard origins when credentials are enabled
+    if "*" in origins:
+        origins = [o for o in origins if o != "*"]
+        if not origins:
+            origins = ["http://127.0.0.1:8443"]
+
     app.add_middleware(
         CORSMiddleware,
-        allow_origins=["*"],
+        allow_origins=origins,
         allow_credentials=True,
         allow_methods=["*"],
         allow_headers=["*"],
@@ -141,7 +160,7 @@ def create_control_app(
 
     # --- API Routes ---
     @app.post("/api/v1/auth/login", response_model=LoginResponse)
-    async def login(req: LoginRequest, response: Response):
+    async def login(req: LoginRequest, response: Response, request: Request):
         user = get_user_by_username(ctl_paths.auth_db_path, req.username)
         if not user or not user.is_active or not verify_password(user.password_hash, req.password):
             raise HTTPException(
@@ -154,12 +173,15 @@ def create_control_app(
         secret = get_or_create_auth_secret(ctl_paths.state_dir)
         signed_cookie = sign_session_token(session.session_id, secret)
 
+        env_mode = (os.getenv("CRAFTLAB_ENV") or os.getenv("ENV") or "development").strip().lower()
+        is_secure = (env_mode in ("production", "prod")) or (request.url.scheme == "https")
+
         response.set_cookie(
             key="craftlab_session",
             value=signed_cookie,
             httponly=True,
             samesite="lax",
-            secure=False,  # Set to True when TLS is enforced
+            secure=is_secure,
             max_age=7 * 86400,
             path="/",
         )
@@ -466,14 +488,16 @@ def create_control_app(
     # --- WebSocket Routes ---
     @app.websocket("/api/v1/ws/logs")
     async def ws_logs(websocket: WebSocket):
-        # Authenticate WS
+        # Authenticate WS strictly via session cookie or Authorization header (no query param token)
         cookie_val = websocket.cookies.get("craftlab_session")
-        token_val = websocket.query_params.get("token")
+        auth_header = websocket.headers.get("authorization")
+        bearer_token = None
+        if auth_header and auth_header.startswith("Bearer "):
+            bearer_token = auth_header[7:].strip()
+
         auth = resolve_auth_context(
-            ctl_paths, cookie_token=cookie_val, bearer_token=token_val
+            ctl_paths, cookie_token=cookie_val, bearer_token=bearer_token
         )
-        if not auth and token_val:
-            auth = resolve_auth_context(ctl_paths, cookie_token=token_val)
         if not auth:
             await websocket.close(code=status.WS_1008_POLICY_VIOLATION)
             return

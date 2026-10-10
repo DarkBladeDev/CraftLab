@@ -28,6 +28,8 @@ start_time = time.time()
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    from craftlab_security import validate_production_security_environment
+    validate_production_security_environment()
     logger.info("Initializing database...")
     await init_db()
     yield

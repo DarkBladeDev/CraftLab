@@ -17,14 +17,32 @@ from craftlab_ctl.auth.db import (
     delete_session,
 )
 
+from app.core.security import emit_audit_event
+from craftlab_security import EventType, Severity, Outcome, ActorType, ReasonCode
+
 router = APIRouter(prefix="/api/v1/auth", tags=["auth"])
 
 
 @router.post("/login", response_model=LoginResponse)
-async def login(req: LoginRequest, response: Response):
+async def login(req: LoginRequest, response: Response, request: Request):
     paths = get_ctl_paths()
+    client_ip = request.client.host if request.client else None
     user = get_user_by_username(paths.auth_db_path, req.username)
     if not user or not user.is_active or not verify_password(user.password_hash, req.password):
+        emit_audit_event(
+            event_type=EventType.AUTH_FAILURE,
+            severity=Severity.MEDIUM,
+            outcome=Outcome.DENIED,
+            actor_id=req.username,
+            actor_type=ActorType.ANONYMOUS,
+            source_ip=client_ip,
+            route="/api/v1/auth/login",
+            method="POST",
+            status_code=401,
+            reason_code=ReasonCode.INVALID_CREDENTIALS.value,
+            attributes={"attempted_username": req.username},
+            critical=True,
+        )
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid username or password",
@@ -34,14 +52,30 @@ async def login(req: LoginRequest, response: Response):
     secret = get_or_create_auth_secret(paths.state_dir)
     signed_cookie = sign_session_token(session.session_id, secret)
 
+    env_mode = (settings.paths.home and (request.headers.get("x-craftlab-env") or "")).strip().lower()
+    is_secure = (request.url.scheme == "https") or (env_mode in ("production", "prod"))
+
     response.set_cookie(
         key="craftlab_session",
         value=signed_cookie,
         httponly=True,
         samesite="lax",
-        secure=False,
+        secure=is_secure,
         max_age=7 * 86400,
         path="/",
+    )
+
+    emit_audit_event(
+        event_type=EventType.AUTH_SUCCESS,
+        severity=Severity.INFO,
+        outcome=Outcome.SUCCESS,
+        actor_id=user.username,
+        actor_type=ActorType.USER,
+        source_ip=client_ip,
+        route="/api/v1/auth/login",
+        method="POST",
+        status_code=200,
+        attributes={"user_id": user.id, "roles": user.roles},
     )
 
     return LoginResponse(

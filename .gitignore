@@ -1,11 +1,11 @@
-minecraft-content-platform-spec-v1/
-
 # Python
 **/.venv/
 CraftLab-backend/.venv/
 backend/.venv/
 **/__pycache__/
 *.pyc
+.pytest_cache/
+**/.pytest_cache/
 *.db
 CraftLab-backend/*.db
 backend/*.db
@@ -40,4 +40,4 @@ cache/
 releases/
 current
 current_tmp
-
+.project/**

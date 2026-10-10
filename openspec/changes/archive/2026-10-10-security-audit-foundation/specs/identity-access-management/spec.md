@@ -1,31 +1,6 @@
-# identity-access-management Specification
+# Spec Delta
 
-## Purpose
-Provides a secure multi-user identity and access management system with dedicated SQLite persistence, Argon2id hashing, unified Single Sign-On (SSO) session cookies, API tokens, and hierarchical role-based access control (RBAC).
-
-## Requirements
-
-### Requirement: Dedicated Persistent Identity Storage
-The identity system SHALL persist user accounts, credentials, and role assignments in a dedicated SQLite database located at `data/auth.db`, completely independent of the application content database `data/mcp.db`.
-
-#### Scenario: User database initialization
-- **WHEN** the system boots and `data/auth.db` does not exist
-- **THEN** it automatically initializes the identity schema with user tables, role mappings, and audit timestamps
-
-#### Scenario: Isolation from content database restore
-- **WHEN** an operator restores a backup of the content database `data/mcp.db`
-- **THEN** user accounts, passwords, and active session records in `data/auth.db` remain unaltered
-
-### Requirement: Secure Password Hashing and Verification
-The system SHALL hash all user passwords using the Argon2id algorithm with cryptographic salt, and SHALL verify passwords using constant-time comparison.
-
-#### Scenario: Password hashing on creation or update
-- **WHEN** a user account is created or its password changed
-- **THEN** the password is saved exclusively as an Argon2id hash with random per-user salt and never stored in plain text
-
-#### Scenario: Constant-time password verification
-- **WHEN** a user submits authentication credentials
-- **THEN** the system verifies the provided password against the stored Argon2id hash using constant-time comparison to prevent timing attacks
+## MODIFIED Requirements
 
 ### Requirement: Dual Web Session and API Token Authentication
 The system SHALL support web browser authentication via secure HTTP cookies and programmatic automation via Bearer API tokens, while enforcing transport security and disallowing query parameter credentials.
@@ -42,21 +17,6 @@ The system SHALL support web browser authentication via secure HTTP cookies and 
 - **WHEN** an authenticated web browser initiates a WebSocket connection
 - **THEN** the server authenticates the connection using the forwarded session cookie or Bearer authorization header, and rejects connections attempting to authenticate via query string parameters
 
-### Requirement: Hierarchical Role-Based Access Control
-The system SHALL enforce role-based access control with predefined roles (`admin`, `operator`, `creator`, `viewer`) across all supervisor and application endpoints.
-
-#### Scenario: Admin role access
-- **WHEN** an authenticated user with `admin` role requests any supervisor, lifecycle, backup, or application operation
-- **THEN** the system authorizes the request
-
-#### Scenario: Operator role restricted access
-- **WHEN** an authenticated user with `operator` role requests status, metrics, diagnostics, or process restart
-- **THEN** the system authorizes the operation, but rejects destructive operations such as database deletion or user privilege modification
-
-#### Scenario: Creator role forbidden on supervisor
-- **WHEN** an authenticated user with `creator` role attempts to access `craftctld` supervisor control endpoints
-- **THEN** the request is rejected with a 403 Forbidden error
-
 ### Requirement: Break-Glass Emergency Administrative Access
 The system SHALL provide a fail-safe bootstrap root credential configurable via environment variables or configuration files that allows administrative recovery when the identity database is inaccessible or uninitialized, while prohibiting insecure default credentials in production.
 
@@ -67,6 +27,8 @@ The system SHALL provide a fail-safe bootstrap root credential configurable via 
 #### Scenario: Rejection of placeholder credentials in production
 - **WHEN** the system boots in production mode with unconfigured or placeholder root credentials
 - **THEN** the startup sequence halts with a fatal configuration error
+
+## ADDED Requirements
 
 ### Requirement: Strict Cross-Origin Resource Sharing Controls
 The system SHALL enforce explicit origin allowlists on HTTP endpoints and forbid wildcard origins combined with credentialed requests.

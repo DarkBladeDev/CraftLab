@@ -17,11 +17,15 @@ All protocol messages between the control plane and agents MUST adhere to a unif
 - **THEN** the message is rejected with a structured protocol error and not dispatched to handlers
 
 ### Requirement: Outbound Authenticated Session Lifecycle
-Agents MUST initiate outbound TLS WebSocket connections, establish authenticated sessions, and maintain connectivity using periodic heartbeats.
+Agents MUST initiate outbound TLS WebSocket connections, establish authenticated sessions using validated cryptographic credentials, and maintain connectivity using periodic heartbeats.
 
 #### Scenario: Session establishment via Hello handshake
-- **WHEN** an authenticated agent establishes a connection and sends an `agent.hello` payload with target ID and runtime metadata
-- **THEN** the gateway validates the credential target binding and responds with `agent.session.accept` containing negotiated protocol parameters
+- **WHEN** an agent establishes a connection and sends an `agent.hello` payload with target ID, target secret, and runtime metadata
+- **THEN** the gateway validates the target secret against stored target credentials, and responds with `agent.session.accept` containing negotiated protocol parameters upon successful verification
+
+#### Scenario: Rejection of unauthenticated agent handshake
+- **WHEN** an agent connection sends an `agent.hello` payload with an invalid, missing, or mismatched target secret
+- **THEN** the gateway rejects the session with a policy violation code, closes the WebSocket immediately, and records an authentication failure event
 
 #### Scenario: Heartbeat and connection staleness tracking
 - **WHEN** an agent is connected

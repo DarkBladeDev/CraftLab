@@ -27,7 +27,9 @@ class DaemonService:
         self.paths = paths or get_paths()
         self.registry = PluginRegistry()
         self.lock = OperationLock()
-        self.audit = AuditLogger(state_dir=self.paths.state_dir)
+        self.audit = AuditLogger(
+            state_dir=self.paths.state_dir, db_path=self.paths.security_audit_db_path
+        )
         self.server: Optional[LocalControlServer] = None
         self.web_server: Optional[Any] = None
         self.web_task: Optional[asyncio.Task] = None
@@ -67,7 +69,9 @@ class DaemonService:
         if action == "execute":
             cmd_name = payload.get("command")
             params = payload.get("parameters", {})
-            caller_id = payload.get("caller_id", "cli")
+            # Derive caller_id strictly from transport context rather than untrusted client payload
+            local_user = os.getenv("USER") or os.getenv("USERNAME") or "local"
+            caller_id = f"ipc:{local_user}"
 
             cmd_def = self.registry.get_command(cmd_name)
             if not cmd_def:
@@ -215,6 +219,9 @@ class DaemonService:
 
 
 async def run_daemon():
+    from craftlab_security import validate_production_security_environment
+    validate_production_security_environment()
+
     daemon = DaemonService()
     await daemon.start(enable_web=True)
     host = os.getenv("CRAFTLAB_CTL_HOST", "127.0.0.1")

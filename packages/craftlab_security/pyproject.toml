@@ -1,0 +1,23 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "craftlab-security"
+version = "0.1.0"
+description = "Canonical Security and Audit Foundation for CraftLab"
+readme = "README.md"
+requires-python = ">=3.11"
+authors = [{ name = "DarkBladeDev" }]
+dependencies = [
+    "pydantic>=2.7.0",
+]
+
+[project.optional-dependencies]
+test = [
+    "pytest>=8.0.0",
+    "pytest-asyncio>=0.23.0",
+]
+
+[tool.setuptools.packages.find]
+where = ["src"]

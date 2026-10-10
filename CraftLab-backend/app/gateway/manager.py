@@ -1,6 +1,7 @@
 import asyncio
 import json
 import logging
+import os
 import base64
 import zipfile
 from pathlib import Path
@@ -28,11 +29,13 @@ class AgentSessionManager:
 
     async def register_session(self, target_id: str, websocket: WebSocket):
         self._active_sessions[target_id] = websocket
+        self._emit_connected(target_id)
         logger.info(f"Target '{target_id}' connected via WebSocket.")
 
     async def unregister_session(self, target_id: str, db_session_maker):
         if target_id in self._active_sessions:
             del self._active_sessions[target_id]
+            self._emit_disconnected(target_id)
             logger.info(f"Target '{target_id}' disconnected.")
 
         # Update target status to offline in database
@@ -46,6 +49,70 @@ class AgentSessionManager:
                     await db.commit()
         except Exception as e:
             logger.error(f"Error marking target {target_id} offline in db: {e}")
+
+    def _emit_auth_failure(self, target_id: str, reason: str = "invalid_credentials"):
+        try:
+            from craftlab_security import (
+                SecurityAuditSink, SecurityEvent, Component, EventType,
+                Severity, Outcome, ActorContext, ActorType, SourceContext, TransportType
+            )
+            audit_path = settings.paths.data_dir / "security-audit.sqlite3"
+            sink = SecurityAuditSink(db_path=audit_path)
+            evt = SecurityEvent(
+                component=Component.WEBSOCKET_GATEWAY,
+                event_type=EventType.WEBSOCKET_AUTH_FAILURE,
+                severity=Severity.HIGH,
+                outcome=Outcome.DENIED,
+                actor=ActorContext(type=ActorType.AGENT, id=target_id),
+                source=SourceContext(transport=TransportType.WS),
+                reason_code=reason,
+                attributes={"target_id": target_id},
+            )
+            sink.emit_critical(evt)
+        except Exception as e:
+            logger.debug(f"Failed to emit security event: {e}")
+
+    def _emit_connected(self, target_id: str):
+        try:
+            from craftlab_security import (
+                SecurityAuditSink, SecurityEvent, Component, EventType,
+                Severity, Outcome, ActorContext, ActorType, SourceContext, TransportType
+            )
+            audit_path = settings.paths.data_dir / "security-audit.sqlite3"
+            sink = SecurityAuditSink(db_path=audit_path)
+            evt = SecurityEvent(
+                component=Component.WEBSOCKET_GATEWAY,
+                event_type=EventType.WEBSOCKET_CONNECTED,
+                severity=Severity.INFO,
+                outcome=Outcome.SUCCESS,
+                actor=ActorContext(type=ActorType.AGENT, id=target_id),
+                source=SourceContext(transport=TransportType.WS),
+                attributes={"target_id": target_id},
+            )
+            sink.emit_telemetry(evt)
+        except Exception:
+            pass
+
+    def _emit_disconnected(self, target_id: str):
+        try:
+            from craftlab_security import (
+                SecurityAuditSink, SecurityEvent, Component, EventType,
+                Severity, Outcome, ActorContext, ActorType, SourceContext, TransportType
+            )
+            audit_path = settings.paths.data_dir / "security-audit.sqlite3"
+            sink = SecurityAuditSink(db_path=audit_path)
+            evt = SecurityEvent(
+                component=Component.WEBSOCKET_GATEWAY,
+                event_type=EventType.WEBSOCKET_DISCONNECTED,
+                severity=Severity.INFO,
+                outcome=Outcome.SUCCESS,
+                actor=ActorContext(type=ActorType.AGENT, id=target_id),
+                source=SourceContext(transport=TransportType.WS),
+                attributes={"target_id": target_id},
+            )
+            sink.emit_telemetry(evt)
+        except Exception:
+            pass
 
     async def shutdown(self, db_session_maker):
         """
@@ -102,6 +169,7 @@ class AgentSessionManager:
 
         # 1. Hello handshake
         if env.messageType == "hello":
+            target_secret = env.payload.get("targetSecret") or env.payload.get("secret")
             agent_version = env.payload.get("agentVersion", "unknown")
             minecraft_version = env.payload.get("minecraftVersion", "unknown")
             paper_version = env.payload.get("paperVersion", "unknown")
@@ -118,23 +186,46 @@ class AgentSessionManager:
                     "minecraftVersion": minecraft_version,
                     "paperVersion": paper_version,
                     "adapters": adapters,
-                    "detectedPlugins": detected_plugins
+                    "detectedPlugins": detected_plugins,
                 }
+
+                env_mode = (os.getenv("CRAFTLAB_ENV") or os.getenv("ENV") or "development").strip().lower()
+                is_prod = env_mode in ("production", "prod")
+
                 if not target:
-                    # Auto-register target if not existing in dev mode
-                    target = TargetModel(
-                        id=target_id,
-                        name=f"Server {target_id}",
-                        secret="dev-secret",
-                        status="online",
-                        environment_metadata=env_meta,
-                        last_seen_at=datetime.now(timezone.utc)
-                    )
-                    db.add(target)
+                    if is_prod:
+                        logger.warning(f"Rejecting unauthenticated target registration for '{target_id}' in production")
+                        self._emit_auth_failure(target_id, reason="target_not_registered")
+                        if hasattr(websocket, "close"):
+                            await websocket.close(code=1008, reason="Target not registered")
+                        return None
+                    else:
+                        # Auto-register target in dev mode
+                        effective_secret = target_secret or "dev-secret"
+                        target = TargetModel(
+                            id=target_id,
+                            name=f"Server {target_id}",
+                            secret=effective_secret,
+                            status="online",
+                            environment_metadata=env_meta,
+                            last_seen_at=datetime.now(timezone.utc),
+                        )
+                        db.add(target)
                 else:
+                    import secrets
+                    dev_compat = (not is_prod and target.secret == "dev-secret" and not target_secret)
+                    if not dev_compat:
+                        if not target_secret or not secrets.compare_digest(str(target.secret), str(target_secret)):
+                            logger.warning(f"Target secret mismatch for target '{target_id}'")
+                            self._emit_auth_failure(target_id, reason="target_secret_mismatch")
+                            if hasattr(websocket, "close"):
+                                await websocket.close(code=1008, reason="Authentication failed: target secret mismatch")
+                            return None
+
                     target.status = "online"
                     target.environment_metadata = env_meta
                     target.last_seen_at = datetime.now(timezone.utc)
+
                 await db.commit()
 
                 # Process initial manifest if provided during handshake
