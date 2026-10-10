@@ -20,7 +20,7 @@ export const doctorDiagnosticsPreset: PaginatedContainerPreset = {
       badgeColor: (data: any): "green" | "red" | "slate" =>
         data.doctor ? (data.doctor.healthy ? "green" : "red") : "slate",
       description:
-        'Haz clic en "Run Checks" para ejecutar verificaciones de entorno, base de datos y permisos.',
+        'Click "Run Checks" to execute environment, database, and permission checks.',
       outputs: [
         {
           type: "status_pill",
@@ -59,7 +59,7 @@ export const doctorDiagnosticsPreset: PaginatedContainerPreset = {
         if (!data.doctor?.checks || data.doctor.checks.length === 0) {
           return (
             <div className="text-slate-500 italic text-xs py-3 text-center">
-              No se han ejecutado verificaciones aún.
+              No diagnostic checks have been executed yet.
             </div>
           );
         }

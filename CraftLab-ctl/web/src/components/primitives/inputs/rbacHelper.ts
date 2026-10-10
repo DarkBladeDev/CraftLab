@@ -20,6 +20,6 @@ export function checkRoleAccess(
 
   return {
     authorized: false,
-    reason: `Acción restringida. Requiere rol: ${requiredRoles.join(", ")}`,
+    reason: `Restricted action. Requires role: ${requiredRoles.join(", ")}`,
   };
 }

@@ -64,7 +64,7 @@ export const lifecycleSupervisorPreset: PaginatedContainerPreset = {
           variant: "danger",
           requiredRoles: ["admin", "operator"],
           disabledIf: (data) => data.status?.status === "stopped",
-          confirmMessage: "¿Estás seguro de detener el proceso supervisado de CraftLab?",
+          confirmMessage: "Are you sure you want to stop the supervised CraftLab process?",
         },
       ],
     },
@@ -73,7 +73,7 @@ export const lifecycleSupervisorPreset: PaginatedContainerPreset = {
       title: "Supervisor Diagnostics Trigger",
       badge: "Diagnostics",
       badgeColor: "blue",
-      description: "Ejecutar pruebas diagnósticas rápidas o recargar parámetros.",
+      description: "Execute quick diagnostic checks or reload parameters.",
       inputs: [
         {
           type: "button",

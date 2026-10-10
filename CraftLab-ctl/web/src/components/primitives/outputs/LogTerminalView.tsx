@@ -31,7 +31,7 @@ export const LogTerminalView: React.FC<LogTerminalViewProps> = ({
           <span className="w-2.5 h-2.5 rounded-full bg-amber-500/80" />
           <span className="w-2.5 h-2.5 rounded-full bg-emerald-500/80" />
           <span className="text-[11px] text-slate-400 font-sans ml-1 font-medium">
-            Terminal Stream ({logs.length} líneas)
+            Terminal Stream ({logs.length} lines)
           </span>
         </div>
         <div className="flex items-center gap-2 text-[11px] font-sans">

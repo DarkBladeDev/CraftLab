@@ -9,7 +9,7 @@ export const releasesManagerPreset: PaginatedContainerPreset = {
   paginationMode: "records",
   collection: {
     pageSize: 3,
-    emptyMessage: "No hay versiones instaladas registradas.",
+    emptyMessage: "No installed releases recorded.",
     getItems: (data) => data.releasesInfo?.installed_releases || [],
     renderItem: (version: string, index: number, actions) => {
       return (
@@ -26,8 +26,8 @@ export const releasesManagerPreset: PaginatedContainerPreset = {
               className="px-2 py-1 rounded bg-slate-800 hover:bg-slate-700 disabled:opacity-40 text-slate-300 hover:text-white transition-colors cursor-pointer text-[11px]"
               title={
                 !actions.user.roles.includes("admin")
-                  ? "Requiere rol de admin para rollback"
-                  : "Revertir a esta versión"
+                  ? "Requires admin role for rollback"
+                  : "Roll back to this version"
               }
             >
               Rollback

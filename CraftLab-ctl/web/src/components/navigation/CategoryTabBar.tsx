@@ -58,7 +58,7 @@ export const CategoryTabBar: React.FC<CategoryTabBarProps> = ({
           type="button"
           onClick={onResetLayout}
           className="text-xs text-slate-400 hover:text-slate-200 bg-slate-900/60 hover:bg-slate-800 border border-slate-800 px-3 py-1.5 rounded-xl transition-colors flex items-center gap-1.5 cursor-pointer ml-auto"
-          title="Restaurar el orden y tamaño de paneles por defecto en esta categoría"
+          title="Restore default panel order and size for this category"
         >
           <svg className="w-3.5 h-3.5" viewBox="0 0 20 20" fill="currentColor">
             <path

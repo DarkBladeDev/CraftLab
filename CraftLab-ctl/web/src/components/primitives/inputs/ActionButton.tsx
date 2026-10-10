@@ -50,7 +50,7 @@ export const ActionButton: React.FC<ActionButtonProps> = ({ input, actions, data
       {isLoading ? (
         <>
           <span className="w-3 h-3 border-2 border-current border-t-transparent rounded-full animate-spin" />
-          <span>Ejecutando...</span>
+          <span>Executing...</span>
         </>
       ) : (
         <span>{input.label}</span>

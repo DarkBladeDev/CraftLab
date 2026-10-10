@@ -99,7 +99,7 @@ export const ContainerEngine: React.FC<ContainerEngineProps> = ({
               <div
                 {...dragHandleProps}
                 className="cursor-grab active:cursor-grabbing text-slate-500 hover:text-slate-300 p-0.5 rounded transition-colors select-none"
-                title="Arrastrar para reorganizar"
+                title="Drag to reorder"
               >
                 <svg className="w-4 h-4" viewBox="0 0 20 20" fill="currentColor">
                   <path d="M7 4a2 2 0 11-4 0 2 2 0 014 0zm0 6a2 2 0 11-4 0 2 2 0 014 0zm0 6a2 2 0 11-4 0 2 2 0 014 0zm8-12a2 2 0 11-4 0 2 2 0 014 0zm0 6a2 2 0 11-4 0 2 2 0 014 0zm0 6a2 2 0 11-4 0 2 2 0 014 0z" />
@@ -120,7 +120,7 @@ export const ContainerEngine: React.FC<ContainerEngineProps> = ({
                   type="button"
                   onClick={handlePrevSubView}
                   className="hover:text-blue-400 text-slate-400 font-bold px-1 cursor-pointer transition-colors"
-                  title="Página anterior"
+                  title="Previous page"
                 >
                   ◀
                 </button>
@@ -131,7 +131,7 @@ export const ContainerEngine: React.FC<ContainerEngineProps> = ({
                   type="button"
                   onClick={handleNextSubView}
                   className="hover:text-blue-400 text-slate-400 font-bold px-1 cursor-pointer transition-colors"
-                  title="Página siguiente"
+                  title="Next page"
                 >
                   ▶
                 </button>
@@ -146,7 +146,7 @@ export const ContainerEngine: React.FC<ContainerEngineProps> = ({
                   onClick={handlePrevRecords}
                   disabled={totalRecordPages <= 1}
                   className="hover:text-emerald-400 text-slate-400 font-bold px-1 cursor-pointer disabled:opacity-40 transition-colors"
-                  title="Página anterior de registros"
+                  title="Previous records page"
                 >
                   ◀
                 </button>
@@ -158,7 +158,7 @@ export const ContainerEngine: React.FC<ContainerEngineProps> = ({
                   onClick={handleNextRecords}
                   disabled={totalRecordPages <= 1}
                   className="hover:text-emerald-400 text-slate-400 font-bold px-1 cursor-pointer disabled:opacity-40 transition-colors"
-                  title="Página siguiente de registros"
+                  title="Next records page"
                 >
                   ▶
                 </button>
@@ -173,7 +173,7 @@ export const ContainerEngine: React.FC<ContainerEngineProps> = ({
                   onClick={() => onResizeSpan(-1)}
                   disabled={cols <= (preset.defaultSpan.minCols || 1)}
                   className="px-1.5 py-0.5 text-slate-400 hover:text-white disabled:opacity-30 cursor-pointer"
-                  title="Reducir ancho"
+                  title="Decrease width"
                 >
                   -
                 </button>
@@ -183,7 +183,7 @@ export const ContainerEngine: React.FC<ContainerEngineProps> = ({
                   onClick={() => onResizeSpan(1)}
                   disabled={cols >= (preset.defaultSpan.maxCols || 4)}
                   className="px-1.5 py-0.5 text-slate-400 hover:text-white disabled:opacity-30 cursor-pointer"
-                  title="Ampliar ancho"
+                  title="Increase width"
                 >
                   +
                 </button>
@@ -256,7 +256,7 @@ export const ContainerEngine: React.FC<ContainerEngineProps> = ({
             <div className="space-y-2">
               {currentRecords.length === 0 ? (
                 <div className="text-slate-500 italic text-xs py-4 text-center">
-                  {collection.emptyMessage || "No hay registros disponibles."}
+                  {collection.emptyMessage || "No records available."}
                 </div>
               ) : (
                 currentRecords.map((item, idx) => (

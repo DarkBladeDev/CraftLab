@@ -83,10 +83,10 @@ export const Dashboard: React.FC<DashboardProps> = ({ user, onLogout }) => {
     setMessage(null);
     try {
       const res = await api.executeLifecycle(action);
-      setMessage({ text: res.message || `Acción ${action} ejecutada con éxito`, type: "ok" });
+      setMessage({ text: res.message || `Action ${action} executed successfully`, type: "ok" });
       await refreshData();
     } catch (err: any) {
-      setMessage({ text: err.message || `Error al ejecutar acción ${action}`, type: "err" });
+      setMessage({ text: err.message || `Failed to execute action ${action}`, type: "err" });
     } finally {
       setActionLoading(null);
     }
@@ -99,11 +99,11 @@ export const Dashboard: React.FC<DashboardProps> = ({ user, onLogout }) => {
       const doc = await api.getDoctor();
       setDoctor(doc);
       setMessage({
-        text: `Doctor completado: ${doc.overall}`,
+        text: `Doctor completed: ${doc.overall}`,
         type: doc.overall === "FAIL" ? "err" : "ok",
       });
     } catch (err: any) {
-      setMessage({ text: err.message || "Error al ejecutar el doctor", type: "err" });
+      setMessage({ text: err.message || "Failed to run doctor", type: "err" });
     } finally {
       setActionLoading(null);
     }
@@ -117,12 +117,12 @@ export const Dashboard: React.FC<DashboardProps> = ({ user, onLogout }) => {
       setUpdateCheck(res);
       setMessage({
         text: res.update_available
-          ? `Nueva versión ${res.latest_version} disponible!`
-          : `CraftLab está actualizado (${res.current_version})`,
+          ? `New version ${res.latest_version} available!`
+          : `CraftLab is up to date (${res.current_version})`,
         type: "ok",
       });
     } catch (err: any) {
-      setMessage({ text: err.message || "Error al consultar actualizaciones", type: "err" });
+      setMessage({ text: err.message || "Failed to check for updates", type: "err" });
     } finally {
       setActionLoading(null);
     }
@@ -135,13 +135,13 @@ export const Dashboard: React.FC<DashboardProps> = ({ user, onLogout }) => {
     try {
       const res = await api.prepareUpdate(ver);
       if (res.success) {
-        setMessage({ text: res.message || `Release ${ver} preparada correctamente`, type: "ok" });
+        setMessage({ text: res.message || `Release ${ver} prepared successfully`, type: "ok" });
         await refreshData();
       } else {
-        setMessage({ text: res.error || `Error al preparar release ${ver}`, type: "err" });
+        setMessage({ text: res.error || `Failed to prepare release ${ver}`, type: "err" });
       }
     } catch (err: any) {
-      setMessage({ text: err.message || `Error al preparar release ${ver}`, type: "err" });
+      setMessage({ text: err.message || `Failed to prepare release ${ver}`, type: "err" });
     } finally {
       setActionLoading(null);
     }
@@ -149,7 +149,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ user, onLogout }) => {
 
   const handleApplyUpdate = async (ver: string) => {
     if (!ver) return;
-    if (!window.confirm(`Aplicar la release ${ver} reiniciará el servicio backend de CraftLab. ¿Continuar?`)) {
+    if (!window.confirm(`Applying release ${ver} will restart the CraftLab backend service. Proceed?`)) {
       return;
     }
     setActionLoading("apply_version");
@@ -159,21 +159,21 @@ export const Dashboard: React.FC<DashboardProps> = ({ user, onLogout }) => {
       await api.prepareUpdate(ver);
       const res = await api.applyUpdate(ver);
       if (res.success) {
-        setMessage({ text: res.message || `Release ${ver} aplicada exitosamente!`, type: "ok" });
+        setMessage({ text: res.message || `Release ${ver} applied successfully!`, type: "ok" });
         await refreshData();
       } else {
-        setMessage({ text: res.error || `Error al aplicar release ${ver}`, type: "err" });
+        setMessage({ text: res.error || `Failed to apply release ${ver}`, type: "err" });
       }
     } catch (err: any) {
-      setMessage({ text: err.message || `Error al aplicar release ${ver}`, type: "err" });
+      setMessage({ text: err.message || `Failed to apply release ${ver}`, type: "err" });
     } finally {
       setActionLoading(null);
     }
   };
 
   const handleRollback = async (ver?: string) => {
-    const targetDesc = ver || "versión anterior";
-    if (!window.confirm(`¿Revertir a ${targetDesc}? Esto reiniciará el servicio supervisado.`)) {
+    const targetDesc = ver || "previous version";
+    if (!window.confirm(`Roll back to ${targetDesc}? This will restart the supervised service.`)) {
       return;
     }
     setActionLoading("rollback_release");
@@ -181,13 +181,13 @@ export const Dashboard: React.FC<DashboardProps> = ({ user, onLogout }) => {
     try {
       const res = await api.rollbackUpdate(ver);
       if (res.success) {
-        setMessage({ text: res.message || `Reversión a ${targetDesc} completada!`, type: "ok" });
+        setMessage({ text: res.message || `Rollback to ${targetDesc} completed!`, type: "ok" });
         await refreshData();
       } else {
-        setMessage({ text: res.error || "Fallo en el rollback", type: "err" });
+        setMessage({ text: res.error || "Rollback failed", type: "err" });
       }
     } catch (err: any) {
-      setMessage({ text: err.message || "Fallo al ejecutar rollback", type: "err" });
+      setMessage({ text: err.message || "Failed to execute rollback", type: "err" });
     } finally {
       setActionLoading(null);
     }
@@ -201,15 +201,15 @@ export const Dashboard: React.FC<DashboardProps> = ({ user, onLogout }) => {
     try {
       const res = await api.setMaintenance(
         nextState,
-        nextState ? "Mantenimiento activado desde panel modular" : ""
+        nextState ? "Maintenance enabled from modular panel" : ""
       );
       setMessage({
-        text: res.message || `Modo mantenimiento ${nextState ? "activado" : "desactivado"}`,
+        text: res.message || `Maintenance mode ${nextState ? "enabled" : "disabled"}`,
         type: "ok",
       });
       await refreshData();
     } catch (err: any) {
-      setMessage({ text: err.message || "Error al alternar modo mantenimiento", type: "err" });
+      setMessage({ text: err.message || "Failed to toggle maintenance mode", type: "err" });
     } finally {
       setActionLoading(null);
     }
@@ -239,7 +239,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ user, onLogout }) => {
         case "toggle_maintenance":
           return handleToggleMaintenance();
         default:
-          console.warn("Acción no reconocida:", actionId, payload);
+          console.warn("Unrecognized action:", actionId, payload);
       }
     },
   };
@@ -278,7 +278,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ user, onLogout }) => {
     }
     setResetTrigger((prev) => prev + 1);
     setMessage({
-      text: `Diseño de la categoría restaurado a los valores por defecto`,
+      text: `Category layout restored to default dimensions`,
       type: "ok",
     });
   };

@@ -31,7 +31,7 @@ export const TextInput: React.FC<TextInputProps> = ({ input, actions }) => {
         <span>{input.label}</span>
         {!authorized && (
           <span className="text-[10px] text-amber-300 font-mono" title={reason}>
-            🔒 Restringido
+            🔒 Restricted
           </span>
         )}
       </div>
@@ -49,7 +49,7 @@ export const TextInput: React.FC<TextInputProps> = ({ input, actions }) => {
           disabled={isDisabled || !val.trim()}
           className="bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white font-medium px-3 py-1.5 rounded-lg text-xs transition-colors cursor-pointer disabled:cursor-not-allowed"
         >
-          {input.buttonLabel || "Enviar"}
+          {input.buttonLabel || "Submit"}
         </button>
       </div>
     </form>
