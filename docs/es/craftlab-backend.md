@@ -61,7 +61,8 @@ Automatiza el ensamblado de paquetes de recursos multi-versión para Minecraft c
 - **Empaquetado ZIP Hermético y Determinista**: Compila archivos ZIP idénticos bit a bit con timestamps normalizados y checksum SHA-1 para distribución inmediata mediante WebSocket.
 
 ### 3. Servicios de Dominio Creative Assets Lab
-CraftLab proporciona servicios especializados para la creación y gestión de assets visuales y de audio para el cliente:
+CraftLab proporciona servicios especializados para la creación y gestión de assets visuales y de audio para el cliente con soporte dinámico multi-namespace y descomposición de dos puntos:
+- **Arquitectura Dinámica Multi-Namespace**: Analiza automáticamente identificadores con prefijo de namespace (`<namespace>:<id>`) en todos los servicios de dominio y enruta los assets a sus carpetas correspondientes (`assets/<namespace>/...`), descubriendo dinámicamente los namespaces del workspace mediante `/api/v1/assets/creative/namespaces`.
 - **Asignador de Glifos y Fuentes PUA (`GlyphService`)**: Administra puntos de código en el área de uso privado (`\uE000`–`\uF8FF`), escanea fuentes del workspace en busca de espacios libres, valida anulaciones hexadecimales manuales contra colisiones activas y sintetiza proveedores bitmap en `font/*.json`.
 - **Modelos de Equipamiento 1.21.2+ (`EquipmentService`)**: Valida jerarquías de capas (`humanoid`, `humanoid_leggings`, `wings`, `horse`, etc.), gestiona máscaras de tinte teñibles (`dyeable`) y sintetiza `models/equipment/<id>.json` en la raíz y en `overlay_v1_21_2`.
 - **Eventos de Sonido y Downmixing Mono Espacial (`SoundEventService`)**: Administra el catálogo `sounds.json`, analiza encabezados binarios Vorbis para verificar la topología de canales (Mono vs. Estéreo) y proporciona downmixing automático `(L+R)/2` a Mono `.ogg` para atenuación posicional 3D en Minecraft.
@@ -82,6 +83,7 @@ CraftLab proporciona servicios especializados para la creación y gestión de as
 | `/api/v1/items` | GET / POST | Lista y crea definiciones de ítems personalizados. |
 | `/api/v1/items/{id}` | GET / PUT / DELETE | Consulta, actualiza o elimina una definición de ítem. |
 | `/api/v1/props` | GET / POST | Lista y crea definiciones de bloques/props virtuales con soporte para máquinas de estados. |
+| `/api/v1/assets/creative/namespaces` | GET | Descubre y devuelve todos los namespaces creativos disponibles en el workspace. |
 | `/api/v1/assets/creative/glyphs` | GET / POST / DELETE | Gestiona el registro de glifos PUA y asignación de fuentes. |
 | `/api/v1/assets/creative/equipment` | GET / POST / DELETE | Gestiona descriptores de modelos de equipamiento 1.21.2+ y capas. |
 | `/api/v1/assets/creative/sounds` | GET / POST / DELETE | Gestiona eventos de sounds.json y diagnósticos de audio. |

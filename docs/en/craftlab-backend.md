@@ -61,7 +61,8 @@ CraftLab automates the assembly of multi-version Minecraft resource packs with z
 - **Hermetic ZIP Packaging & Determinism**: Builds bit-identical ZIP archives with normalized timestamps and SHA-1 checksums for client verification and hot distribution via WebSocket notifications.
 
 ### 3. Creative Assets Lab Domain Services
-CraftLab provides dedicated backend domain services for custom client visual and audio assets:
+CraftLab provides dedicated backend domain services for custom client visual and audio assets with dynamic multi-namespace support and colon decomposition:
+- **Dynamic Multi-Namespace Architecture**: Automatically parses colon-prefixed identifiers (`<namespace>:<id>`) across all domain services and routes assets to their dedicated namespace directory (`assets/<namespace>/...`), dynamically discovering all workspace namespaces via `/api/v1/assets/creative/namespaces`.
 - **PUA Font & Glyph Allocator (`GlyphService`)**: Manages Private Use Area codepoints (`\uE000`–`\uF8FF`), scans workspace fonts for free slots, validates manual hex overrides against active collisions, and synthesizes `font/*.json` bitmap providers.
 - **Equipment Models 1.21.2+ (`EquipmentService`)**: Validates layer hierarchies (`humanoid`, `humanoid_leggings`, `wings`, `horse`, etc.), manages dyeable overlay tint masks, and synthesizes `models/equipment/<id>.json` across root and `overlay_v1_21_2`.
 - **Sound Events & Spatial Mono Downmixer (`SoundEventService`)**: Manages `sounds.json` audio event catalogs, probes Vorbis binary headers to verify channel topology (Mono vs. Stereo), and provides automated `(L+R)/2` downmixing to single-channel Mono `.ogg` for 3D positional distance attenuation in Minecraft.
@@ -82,6 +83,7 @@ CraftLab provides dedicated backend domain services for custom client visual and
 | `/api/v1/items` | GET / POST | Lists and creates custom item definitions. |
 | `/api/v1/items/{id}` | GET / PUT / DELETE | Retrieves, updates, or deletes an item definition. |
 | `/api/v1/props` | GET / POST | Lists and creates custom virtual block/prop definitions with multi-state machine support. |
+| `/api/v1/assets/creative/namespaces` | GET | Discovers and returns all available creative namespaces from the workspace. |
 | `/api/v1/assets/creative/glyphs` | GET / POST / DELETE | Manages PUA unicode glyph registrations and font allocations. |
 | `/api/v1/assets/creative/equipment` | GET / POST / DELETE | Manages 1.21.2+ equipment model descriptors and layer stacks. |
 | `/api/v1/assets/creative/sounds` | GET / POST / DELETE | Manages sounds.json events and audio probe inspections. |

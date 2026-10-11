@@ -56,6 +56,7 @@ Diseña mobiliario, bloques decorativos y props 3D sin registrar tile entities n
 
 ### 3. Creative Assets Lab
 Espacio creativo unificado para diseñar y gestionar assets de audio, fuentes, equipamiento y partículas:
+- **Arquitectura Dinámica Multi-Namespace**: Soporte nativo para múltiples namespaces en todas las pestañas con selectores explícitos, sugerencias por datalist del workspace, descomposición automática de dos puntos (`namespace:id`) y badges delimitados en la lista lateral.
 - **Glifos y Fuentes**: Asignador automático de códigos PUA (`\uE000`–`\uF8FF`), anulación hexadecimal manual con detección de colisiones en tiempo real, etiquetas MiniMessage y simuladores de Chat y Tablist en vivo.
 - **Equipamiento y Armaduras (1.21.2+)**: Constructor multicapa compatible con `humanoid`, `humanoid_leggings` y `wings`, máscaras teñibles (`dyeable`), previsualizador 2D/3D tipo paper doll en modelos Steve y Alex, y generador de componentes `minecraft:equippable`.
 - **Eventos de Sonido (SFX)**: Editor visual de `sounds.json` con variaciones multipista, análisis de canales Vorbis (Mono vs. Estéreo) y downmix en un clic `(L+R)/2` a Mono `.ogg` para atenuación posicional 3D.

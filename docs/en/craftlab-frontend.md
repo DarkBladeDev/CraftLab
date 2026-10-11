@@ -56,6 +56,7 @@ Author custom furniture, 3D decorative blocks, and props without registering til
 
 ### 3. Creative Assets Lab
 Unified creative hub for authoring client-side audio, font, equipment, and particle effects:
+- **Dynamic Multi-Namespace Architecture**: Native multi-namespace support across all tabs with explicit namespace selectors, workspace datalist suggestions, automatic colon decomposition (`namespace:id`), and scoped sidebar badges.
 - **Glyphs & Fonts**: Automatic PUA unicode allocator (`\uE000`–`\uF8FF`), manual hexadecimal override with real-time collision detection, MiniMessage tags, and live Minecraft Chat and Tablist preview simulators.
 - **Equipment & Armor (1.21.2+)**: Multi-layer armor builder supporting `humanoid`, `humanoid_leggings`, and `wings` layers, dyeable overlay tint masks, 2D/3D paper doll mannequin preview, and 1-click `minecraft:equippable` JSON generator.
 - **Sound Events (SFX)**: Visual `sounds.json` editor with multi-sample variations, Vorbis channel probe (Mono vs. Stereo), and 1-click downmix converting stereo audio into symmetric `(L+R)/2` Mono `.ogg` for 3D positional distance attenuation.
