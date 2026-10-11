@@ -58,6 +58,15 @@ versions:
   # -------------------------------------------------------------
   # CURRENT VERSION (LATEST) -> Always the first entry [0]
   # -------------------------------------------------------------
+  - version: "0.10.0"
+    releaseDate: "2026-10-11"
+    reference: "v0.10.0"
+    downloadUrl: "https://github.com/DarkBladeDev/CraftLab/releases/tag/v0.10.0"
+    changelog: "Added multi-version cumulative overlays (1.21.2 & 1.21.4), core shader routing, texture atlas auto-synthesis, pre-flight conflict auditing, and frontend diagnostics matrix."
+    minecraft:
+      - "1.21.1"
+      - "1.21.x"
+
   - version: "0.9.0"
     releaseDate: "2026-10-10"
     reference: "v0.9.0"
