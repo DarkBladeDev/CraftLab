@@ -1,5 +1,6 @@
-import { useState } from 'react'
-import { Plus, Trash2, Zap, Shield, Sparkles, ChevronDown, ChevronRight } from 'lucide-react'
+import { useState, useEffect } from 'react'
+import { Plus, Trash2, Zap, Shield, Sparkles, ChevronDown, ChevronRight, Shirt } from 'lucide-react'
+import { fetchEquipmentModels, EquipmentModelItem } from '../../api/client'
 
 interface ComponentBuilderProps {
   components: Record<string, any>
@@ -39,9 +40,14 @@ const POPULAR_ENCHANTMENTS = [
 ]
 
 export function ComponentBuilder({ components, onChangeComponents }: ComponentBuilderProps) {
-  const [activeSection, setActiveSection] = useState<'attributes' | 'enchantments' | null>(
+  const [activeSection, setActiveSection] = useState<'attributes' | 'enchantments' | 'equippable' | null>(
     'attributes'
   )
+  const [availableEquipmentModels, setAvailableEquipmentModels] = useState<EquipmentModelItem[]>([])
+
+  useEffect(() => {
+    fetchEquipmentModels().then(setAvailableEquipmentModels).catch(() => {})
+  }, [])
 
   // Attribute Form state
   const [selectedAttr, setSelectedAttr] = useState(COMMON_ATTRIBUTES[0].id)
@@ -320,6 +326,135 @@ export function ComponentBuilder({ components, onChangeComponents }: ComponentBu
                 </button>
               </div>
             </div>
+          </div>
+        )}
+      </div>
+
+      {/* 3. Equippable (1.21.2+) Accordion */}
+      <div className="border border-[#23232f] rounded-lg overflow-hidden bg-[#16161d]">
+        <button
+          type="button"
+          onClick={() =>
+            setActiveSection(activeSection === 'equippable' ? null : 'equippable')
+          }
+          className="w-full flex items-center justify-between p-2.5 text-left text-xs font-medium text-gray-300 hover:text-white transition"
+        >
+          <div className="flex items-center space-x-2">
+            <Shirt className="w-3.5 h-3.5 text-blue-400" />
+            <span>
+              Equippable Model 1.21.2+{' '}
+              {components['minecraft:equippable'] ? '(Active)' : '(Disabled)'}
+            </span>
+          </div>
+          {activeSection === 'equippable' ? (
+            <ChevronDown className="w-3.5 h-3.5 text-gray-400" />
+          ) : (
+            <ChevronRight className="w-3.5 h-3.5 text-gray-400" />
+          )}
+        </button>
+
+        {activeSection === 'equippable' && (
+          <div className="p-3 border-t border-[#23232f] space-y-3 bg-[#13131a]">
+            {components['minecraft:equippable'] ? (
+              <div className="space-y-3 text-xs">
+                <div className="flex items-center justify-between p-2 bg-[#1a1a24] border border-[#2b2b3a] rounded font-mono">
+                  <div>
+                    <span className="text-gray-400">Slot: </span>
+                    <span className="text-blue-400 font-semibold">
+                      {components['minecraft:equippable'].slot}
+                    </span>
+                    <span className="text-gray-400 ml-3">Model: </span>
+                    <span className="text-purple-300 font-semibold">
+                      {components['minecraft:equippable'].model}
+                    </span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const next = { ...components }
+                      delete next['minecraft:equippable']
+                      onChangeComponents(next)
+                    }}
+                    className="text-gray-500 hover:text-red-400 transition"
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+
+                <div className="grid grid-cols-2 gap-2">
+                  <div>
+                    <label className="block text-gray-400 text-[11px] mb-1">Equipment Slot</label>
+                    <select
+                      value={components['minecraft:equippable'].slot || 'chest'}
+                      onChange={(e) => {
+                        onChangeComponents({
+                          ...components,
+                          'minecraft:equippable': {
+                            ...components['minecraft:equippable'],
+                            slot: e.target.value,
+                          },
+                        })
+                      }}
+                      className="w-full px-2 py-1 text-xs bg-[#1a1a24] border border-[#303040] rounded text-gray-200"
+                    >
+                      {['head', 'chest', 'legs', 'feet', 'mainhand', 'offhand'].map((s) => (
+                        <option key={s} value={s}>
+                          {s}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="block text-gray-400 text-[11px] mb-1">Equipment Model</label>
+                    <input
+                      type="text"
+                      list="eq-models-datalist"
+                      value={components['minecraft:equippable'].model || ''}
+                      onChange={(e) => {
+                        onChangeComponents({
+                          ...components,
+                          'minecraft:equippable': {
+                            ...components['minecraft:equippable'],
+                            model: e.target.value,
+                          },
+                        })
+                      }}
+                      placeholder="craftlab:paladin_set"
+                      className="w-full px-2 py-1 text-xs bg-[#1a1a24] border border-[#303040] rounded text-gray-200 font-mono"
+                    />
+                    <datalist id="eq-models-datalist">
+                      {availableEquipmentModels.map((m) => (
+                        <option key={m.id} value={m.resource_location} />
+                      ))}
+                    </datalist>
+                  </div>
+                </div>
+              </div>
+            ) : (
+              <div className="flex items-center justify-between text-xs">
+                <span className="text-gray-400">
+                  Enable custom armor rendering using Minecraft 1.21.2+ equipment models.
+                </span>
+                <button
+                  type="button"
+                  onClick={() => {
+                    const defaultModel =
+                      availableEquipmentModels[0]?.resource_location || 'craftlab:paladin_set'
+                    onChangeComponents({
+                      ...components,
+                      'minecraft:equippable': {
+                        slot: 'chest',
+                        model: defaultModel,
+                      },
+                    })
+                  }}
+                  className="px-3 py-1 bg-blue-600 hover:bg-blue-500 text-white rounded text-xs font-semibold transition"
+                >
+                  Enable Equippable
+                </button>
+              </div>
+            )}
           </div>
         )}
       </div>

@@ -9,11 +9,25 @@ class PropStateSound(BaseModel):
     pitch: float = Field(default=1.0, ge=0.5, le=2.0)
 
 
+class PropStateParticle(BaseModel):
+    key: str = Field(..., description="Particle identifier e.g. 'minecraft:flame' or custom particle identifier")
+    count: int = Field(default=5, ge=1, le=100)
+    offset: List[float] = Field(default_factory=lambda: [0.0, 0.0, 0.0], description="Relative spawn offset [x, y, z]")
+
+    @field_validator("offset")
+    @classmethod
+    def validate_offset(cls, v: List[float]) -> List[float]:
+        if len(v) != 3:
+            raise ValueError("Offset must be a 3-element list [x, y, z]")
+        return v
+
+
 class PropStateDefinition(BaseModel):
     name: Optional[str] = Field(default=None, description="Human readable state label")
     block_model: Optional[str] = Field(default=None, description="Namespaced block model identifier for this state")
     light_level: int = Field(default=0, ge=0, le=15, description="Light level between 0 and 15")
     sound: Optional[PropStateSound] = Field(default=None, description="Sound effect played on entry")
+    particle: Optional[PropStateParticle] = Field(default=None, description="Particle VFX played on entry")
     hitbox_type: Optional[str] = Field(default=None, description="Optional collision override: solid or passable")
     next_state: Optional[str] = Field(default=None, description="Target state key on interaction")
 
@@ -146,6 +160,11 @@ class BlockDefinition(BaseModel):
                 "light_level": s.light_level,
                 "name": s.name,
                 "next_state": s.next_state,
+                "particle": {
+                    "count": int(s.particle.count),
+                    "key": s.particle.key,
+                    "offset": [round(float(o), 4) for o in s.particle.offset],
+                } if s.particle else None,
                 "sound": {
                     "key": s.sound.key,
                     "pitch": round(float(s.sound.pitch), 4),

@@ -455,5 +455,79 @@ def test_merge_layers_with_multi_overlay_and_shader_routing(tmp_path: Path):
     assert 5002 in cmds
 
 
+def test_semantic_merger_creative_assets():
+    # 1. sounds.json merging
+    base_sounds = {
+        "prop.door": {
+            "category": "blocks",
+            "sounds": [{"name": "craftlab:door_1", "volume": 1.0}]
+        }
+    }
+    overlay_sounds = {
+        "prop.door": {
+            "subtitle": "subtitles.door",
+            "sounds": [{"name": "craftlab:door_2", "volume": 0.9}]
+        },
+        "prop.bell": {
+            "category": "blocks",
+            "sounds": ["craftlab:bell"]
+        }
+    }
+    merged_sounds = SemanticMerger.merge_sounds_json(base_sounds, overlay_sounds)
+    assert "prop.bell" in merged_sounds
+    assert len(merged_sounds["prop.door"]["sounds"]) == 2
+    assert merged_sounds["prop.door"]["subtitle"] == "subtitles.door"
+
+    # 2. font/*.json merging
+    base_font = {
+        "providers": [
+            {"type": "bitmap", "file": "craftlab:font/badge_vip.png", "chars": ["\uE001"]}
+        ]
+    }
+    overlay_font = {
+        "providers": [
+            {"type": "bitmap", "file": "craftlab:font/badge_vip_new.png", "chars": ["\uE001"]},
+            {"type": "bitmap", "file": "craftlab:font/badge_mvp.png", "chars": ["\uE002"]}
+        ]
+    }
+    merged_font = SemanticMerger.merge_font_json(base_font, overlay_font)
+    assert len(merged_font["providers"]) == 2
+    # Overlay overrides matching \uE001
+    assert merged_font["providers"][0]["file"] == "craftlab:font/badge_vip_new.png"
+
+    # 3. particles/*.json merging
+    base_part = {"textures": ["craftlab:particle/spark_0"]}
+    overlay_part = {"textures": ["craftlab:particle/spark_1"]}
+    merged_part = SemanticMerger.merge_particles_json(base_part, overlay_part)
+    assert merged_part["textures"] == ["craftlab:particle/spark_0", "craftlab:particle/spark_1"]
+
+    # 4. equipment/*.json merging
+    base_eq = {"layers": [{"texture": "craftlab:armor_base", "type": "humanoid"}]}
+    overlay_eq = {"layers": [{"texture": "craftlab:armor_upgraded", "type": "humanoid"}]}
+    merged_eq = SemanticMerger.merge_equipment_json(base_eq, overlay_eq)
+    assert merged_eq["layers"][0]["texture"] == "craftlab:armor_upgraded"
+
+
+def test_equipment_models_staged_to_overlay(tmp_path: Path):
+    layer1 = tmp_path / "layer1"
+    layer1.mkdir()
+    eq_file = layer1 / "assets" / "craftlab" / "models" / "equipment" / "paladin.json"
+    eq_file.parent.mkdir(parents=True)
+    eq_file.write_text('{"layers": [{"texture": "craftlab:paladin", "type": "humanoid"}]}', encoding="utf-8")
+
+    out_dir = tmp_path / "out"
+    summary = SemanticMerger.merge_layers_to_directory(
+        ordered_source_dirs=[layer1],
+        output_dir=out_dir,
+        pack_format=34,
+        max_inclusive=65
+    )
+
+    assert (out_dir / "assets" / "craftlab" / "models" / "equipment" / "paladin.json").exists()
+    assert (out_dir / "overlay_v1_21_2" / "assets" / "craftlab" / "models" / "equipment" / "paladin.json").exists()
+    assert summary["total_equipment"] == 1
+
+
+
 
 

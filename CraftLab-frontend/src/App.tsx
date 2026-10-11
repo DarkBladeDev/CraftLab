@@ -1,8 +1,9 @@
 import { useState, useEffect } from 'react'
-import { Box, Rocket, ShieldCheck, Terminal, Package, Wrench, Armchair, FolderGit2 } from 'lucide-react'
+import { Box, Rocket, ShieldCheck, Terminal, Package, Wrench, Armchair, FolderGit2, Sparkles } from 'lucide-react'
 import { TargetMonitor } from './features/targets/TargetMonitor'
 import { ItemEditor } from './features/items/ItemEditor'
 import { BlockStudio } from './features/blocks/BlockStudio'
+import { CreativeAssetsLabView } from './features/creative/CreativeAssetsLabView'
 import { DeployModal } from './features/deployments/DeployModal'
 import { ResourcePackManagerView } from './features/packs/ResourcePackManagerView'
 import { AssetWorkspaceView } from './features/assets/AssetWorkspaceView'
@@ -15,7 +16,7 @@ export default function App() {
   const [isDeployModalOpen, setIsDeployModalOpen] = useState(false)
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false)
   const [currentUser, setCurrentUser] = useState<{ username: string; roles: string[] } | null>(null)
-  const [activeTab, setActiveTab] = useState<'studio' | 'blocks' | 'packs' | 'assets'>('studio')
+  const [activeTab, setActiveTab] = useState<'studio' | 'blocks' | 'creative' | 'packs' | 'assets'>('studio')
 
   const refreshLatestRevision = async () => {
     try {
@@ -144,6 +145,17 @@ export default function App() {
             <span>Blocks & Props</span>
           </button>
           <button
+            onClick={() => setActiveTab('creative')}
+            className={`flex items-center space-x-2 px-4 py-2 rounded-xl text-xs font-semibold transition ${
+              activeTab === 'creative'
+                ? 'bg-rose-500/10 text-rose-400 border border-rose-500/30'
+                : 'text-gray-400 hover:text-gray-200 hover:bg-white/5'
+            }`}
+          >
+            <Sparkles className="w-3.5 h-3.5" />
+            <span>Creative Assets</span>
+          </button>
+          <button
             onClick={() => setActiveTab('packs')}
             className={`flex items-center space-x-2 px-4 py-2 rounded-xl text-xs font-semibold transition ${
               activeTab === 'packs'
@@ -176,6 +188,11 @@ export default function App() {
         {activeTab === 'blocks' && (
           <section>
             <BlockStudio onRevisionCreated={refreshLatestRevision} />
+          </section>
+        )}
+        {activeTab === 'creative' && (
+          <section>
+            <CreativeAssetsLabView />
           </section>
         )}
         {activeTab === 'packs' && (

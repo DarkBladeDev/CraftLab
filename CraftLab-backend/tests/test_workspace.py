@@ -213,9 +213,15 @@ async def test_workspace_api_full_crud_and_metadata(tmp_path, monkeypatch):
         assert r_rename.status_code == 200
         assert r_rename.json()["new_path"] == "assets/craftlab/textures/item/ruby_blade.png"
 
-        # 10. Delete file
+        # 10. Delete files
         r_del = await client.delete(
             "/api/v1/packs/workspace/file?path=assets/craftlab/textures/item/ruby_blade.png"
         )
         assert r_del.status_code == 200
         assert r_del.json()["success"] is True
+
+        r_del_model = await client.delete(
+            "/api/v1/packs/workspace/file?path=assets/craftlab/models/item/ruby_sword.json"
+        )
+        assert r_del_model.status_code == 200
+        assert r_del_model.json()["success"] is True

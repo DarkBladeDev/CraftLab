@@ -80,11 +80,18 @@ export interface PropStateSound {
   pitch: number
 }
 
+export interface PropStateParticle {
+  key: string
+  count?: number
+  offset?: [number, number, number] | number[]
+}
+
 export interface PropState {
   name?: string
   block_model?: string | null
   light_level?: number
   sound?: PropStateSound | null
+  particle?: PropStateParticle | null
   hitbox_type?: 'solid' | 'passable' | null
   next_state?: string | null
 }
@@ -593,6 +600,235 @@ export async function fetchWorkspaceMetadata(path: string): Promise<WorkspaceFil
 
 export function getWorkspaceRawFileUrl(path: string): string {
   return `${API_BASE}/v1/packs/workspace/file?path=${encodeURIComponent(path)}&raw=true`
+}
+
+// --- Creative Assets Lab Types & API ---
+
+export interface GlyphItem {
+  id: string
+  character: string
+  hex: string
+  file: string
+  height: number
+  ascent: number
+  namespace: string
+  font_file: string
+  minimessage?: string
+  placeholder?: string
+}
+
+export interface EquipmentLayer {
+  texture: string
+  type?: string
+  dyeable?: boolean
+}
+
+export interface EquipmentModelItem {
+  id: string
+  namespace: string
+  resource_location: string
+  layers: EquipmentLayer[]
+  is_valid?: boolean
+  file_path?: string
+  raw_json?: string
+}
+
+export interface SoundEventItem {
+  id: string
+  namespace: string
+  resource_location: string
+  category: string
+  subtitle?: string
+  sounds: any[]
+  file_path?: string
+}
+
+export interface ParticleItem {
+  id: string
+  namespace: string
+  resource_location: string
+  textures: string[]
+  emitter?: Record<string, any>
+  is_valid?: boolean
+  file_path?: string
+  raw_json?: string
+}
+
+export interface AudioProbeResult {
+  channels: number
+  is_mono: boolean
+  sample_rate: number
+  format: string
+  warning?: string | null
+  file_size: number
+}
+
+export async function fetchGlyphs(namespace?: string): Promise<{
+  glyphs: GlyphItem[]
+  allocated_pua_hexes: string[]
+  next_available_hex: string
+  count: number
+}> {
+  const url = namespace
+    ? `${API_BASE}/v1/assets/creative/glyphs?namespace=${encodeURIComponent(namespace)}`
+    : `${API_BASE}/v1/assets/creative/glyphs`
+  const res = await fetch(url)
+  if (!res.ok) throw new Error('Failed to fetch glyphs')
+  return res.json()
+}
+
+export async function registerGlyph(req: {
+  id: string
+  file: string
+  hex?: string
+  height?: number
+  ascent?: number
+  namespace?: string
+  font_name?: string
+}): Promise<GlyphItem> {
+  const res = await fetch(`${API_BASE}/v1/assets/creative/glyphs`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(req),
+  })
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}))
+    throw new Error(err.detail || 'Failed to register glyph')
+  }
+  return res.json()
+}
+
+export async function validateGlyphHex(hex: string): Promise<{ valid: boolean; hex?: string; message?: string }> {
+  const res = await fetch(`${API_BASE}/v1/assets/creative/glyphs/validate-hex?hex=${encodeURIComponent(hex)}`)
+  if (!res.ok) throw new Error('Failed to validate hex')
+  return res.json()
+}
+
+export async function deleteGlyph(hex: string): Promise<void> {
+  const res = await fetch(`${API_BASE}/v1/assets/creative/glyphs/${hex}`, { method: 'DELETE' })
+  if (!res.ok) throw new Error('Failed to delete glyph')
+}
+
+export async function fetchEquipmentModels(namespace?: string): Promise<EquipmentModelItem[]> {
+  const url = namespace
+    ? `${API_BASE}/v1/assets/creative/equipment?namespace=${encodeURIComponent(namespace)}`
+    : `${API_BASE}/v1/assets/creative/equipment`
+  const res = await fetch(url)
+  if (!res.ok) throw new Error('Failed to fetch equipment models')
+  return res.json()
+}
+
+export async function saveEquipmentModel(req: {
+  id: string
+  layers: EquipmentLayer[]
+  namespace?: string
+}): Promise<any> {
+  const res = await fetch(`${API_BASE}/v1/assets/creative/equipment`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(req),
+  })
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}))
+    throw new Error(err.detail || 'Failed to save equipment model')
+  }
+  return res.json()
+}
+
+export async function deleteEquipmentModel(id: string): Promise<void> {
+  const res = await fetch(`${API_BASE}/v1/assets/creative/equipment/${id}`, { method: 'DELETE' })
+  if (!res.ok) throw new Error('Failed to delete equipment model')
+}
+
+export async function fetchSoundEvents(namespace?: string): Promise<SoundEventItem[]> {
+  const url = namespace
+    ? `${API_BASE}/v1/assets/creative/sounds?namespace=${encodeURIComponent(namespace)}`
+    : `${API_BASE}/v1/assets/creative/sounds`
+  const res = await fetch(url)
+  if (!res.ok) throw new Error('Failed to fetch sound events')
+  return res.json()
+}
+
+export async function saveSoundEvent(req: {
+  id: string
+  category: string
+  subtitle?: string
+  sounds: any[]
+  namespace?: string
+}): Promise<any> {
+  const res = await fetch(`${API_BASE}/v1/assets/creative/sounds`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(req),
+  })
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}))
+    throw new Error(err.detail || 'Failed to save sound event')
+  }
+  return res.json()
+}
+
+export async function deleteSoundEvent(id: string): Promise<void> {
+  const res = await fetch(`${API_BASE}/v1/assets/creative/sounds/${id}`, { method: 'DELETE' })
+  if (!res.ok) throw new Error('Failed to delete sound event')
+}
+
+export async function probeAudioFile(relativePath: string): Promise<AudioProbeResult> {
+  const res = await fetch(`${API_BASE}/v1/assets/creative/sounds/probe`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ relative_path: relativePath }),
+  })
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}))
+    throw new Error(err.detail || 'Failed to probe audio')
+  }
+  return res.json()
+}
+
+export async function convertAudioToMono(relativePath: string): Promise<{ status: string; file: string; probe: AudioProbeResult }> {
+  const res = await fetch(`${API_BASE}/v1/assets/creative/sounds/convert-mono`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ relative_path: relativePath }),
+  })
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}))
+    throw new Error(err.detail || 'Failed to convert audio to mono')
+  }
+  return res.json()
+}
+
+export async function fetchParticles(namespace?: string): Promise<ParticleItem[]> {
+  const url = namespace
+    ? `${API_BASE}/v1/assets/creative/particles?namespace=${encodeURIComponent(namespace)}`
+    : `${API_BASE}/v1/assets/creative/particles`
+  const res = await fetch(url)
+  if (!res.ok) throw new Error('Failed to fetch particles')
+  return res.json()
+}
+
+export async function saveParticle(req: {
+  id: string
+  textures: string[]
+  emitter?: Record<string, any>
+  namespace?: string
+}): Promise<any> {
+  const res = await fetch(`${API_BASE}/v1/assets/creative/particles`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(req),
+  })
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}))
+    throw new Error(err.detail || 'Failed to save particle')
+  }
+  return res.json()
+}
+
+export async function deleteParticle(id: string): Promise<void> {
+  const res = await fetch(`${API_BASE}/v1/assets/creative/particles/${id}`, { method: 'DELETE' })
+  if (!res.ok) throw new Error('Failed to delete particle')
 }
 
 

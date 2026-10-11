@@ -60,7 +60,14 @@ CraftLab automates the assembly of multi-version Minecraft resource packs with z
 - **Pre-Flight Conflict Auditor**: Validates CustomModelData collisions, missing physical texture references, core shader overlaps across layers, power-of-two mipmap dimensions, and animated vertical spritesheets missing `.png.mcmeta`.
 - **Hermetic ZIP Packaging & Determinism**: Builds bit-identical ZIP archives with normalized timestamps and SHA-1 checksums for client verification and hot distribution via WebSocket notifications.
 
-### 3. Role-Based Access Control (RBAC)
+### 3. Creative Assets Lab Domain Services
+CraftLab provides dedicated backend domain services for custom client visual and audio assets:
+- **PUA Font & Glyph Allocator (`GlyphService`)**: Manages Private Use Area codepoints (`\uE000`–`\uF8FF`), scans workspace fonts for free slots, validates manual hex overrides against active collisions, and synthesizes `font/*.json` bitmap providers.
+- **Equipment Models 1.21.2+ (`EquipmentService`)**: Validates layer hierarchies (`humanoid`, `humanoid_leggings`, `wings`, `horse`, etc.), manages dyeable overlay tint masks, and synthesizes `models/equipment/<id>.json` across root and `overlay_v1_21_2`.
+- **Sound Events & Spatial Mono Downmixer (`SoundEventService`)**: Manages `sounds.json` audio event catalogs, probes Vorbis binary headers to verify channel topology (Mono vs. Stereo), and provides automated `(L+R)/2` downmixing to single-channel Mono `.ogg` for 3D positional distance attenuation in Minecraft.
+- **Particle VFX Engine (`ParticleService`)**: Validates sprite texture paths, synthesizes `particles/<id>.json` descriptors, and generates executable in-game `/particle` commands.
+
+### 4. Role-Based Access Control (RBAC)
 - **Password Hashing**: Employs industry-standard Argon2id hashing algorithms.
 - **Granular Roles**: Supports `admin`, `operator`, and `viewer` permissions.
 - **Session Tokens**: Issues secure JWT authentication tokens with configurable expiration.
@@ -75,6 +82,12 @@ CraftLab automates the assembly of multi-version Minecraft resource packs with z
 | `/api/v1/items` | GET / POST | Lists and creates custom item definitions. |
 | `/api/v1/items/{id}` | GET / PUT / DELETE | Retrieves, updates, or deletes an item definition. |
 | `/api/v1/props` | GET / POST | Lists and creates custom virtual block/prop definitions with multi-state machine support. |
+| `/api/v1/assets/creative/glyphs` | GET / POST / DELETE | Manages PUA unicode glyph registrations and font allocations. |
+| `/api/v1/assets/creative/equipment` | GET / POST / DELETE | Manages 1.21.2+ equipment model descriptors and layer stacks. |
+| `/api/v1/assets/creative/sounds` | GET / POST / DELETE | Manages sounds.json events and audio probe inspections. |
+| `/api/v1/assets/creative/sounds/convert-mono` | POST | Downmixes stereo audio samples into single-channel Mono `.ogg`. |
+| `/api/v1/assets/creative/particles` | GET / POST / DELETE | Manages custom particle definitions and command generation. |
 | `/api/v1/packs/build` | POST | Triggers resource pack compilation and generates distribution ZIP. |
 | `/api/v1/packs/download` | GET | Serves the active compiled resource pack archive. |
 | `/api/v1/targets` | GET / POST | Manages registered Paper game servers in the fleet. |
+

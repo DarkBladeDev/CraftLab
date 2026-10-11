@@ -405,7 +405,7 @@ class SemanticMerger:
 
     @staticmethod
     def merge_sounds_json(base: Dict[str, Any], overlay: Dict[str, Any]) -> Dict[str, Any]:
-        """Deep merges sounds.json dictionaries by sound event key."""
+        """Deep merges sounds.json dictionaries by sound event key and combines sound variants."""
         merged = dict(base)
         for key, value in overlay.items():
             if key not in merged:
@@ -414,6 +414,17 @@ class SemanticMerger:
                 if isinstance(merged[key], dict) and isinstance(value, dict):
                     merged_event = dict(merged[key])
                     merged_event.update(value)
+                    base_sounds = merged[key].get("sounds", [])
+                    overlay_sounds = value.get("sounds", [])
+                    if isinstance(base_sounds, list) and isinstance(overlay_sounds, list):
+                        combined = list(base_sounds)
+                        seen_names = {s.get("name") if isinstance(s, dict) else s for s in base_sounds}
+                        for s in overlay_sounds:
+                            s_name = s.get("name") if isinstance(s, dict) else s
+                            if s_name not in seen_names:
+                                combined.append(s)
+                                seen_names.add(s_name)
+                        merged_event["sounds"] = combined
                     merged[key] = merged_event
                 else:
                     merged[key] = value
@@ -421,20 +432,51 @@ class SemanticMerger:
 
     @staticmethod
     def merge_font_json(base: Dict[str, Any], overlay: Dict[str, Any]) -> Dict[str, Any]:
-        """Merges font JSON files by concatenating and deduplicating providers."""
+        """Merges font JSON files by concatenating and deduplicating providers by character."""
         merged = dict(base)
         base_providers = list(base.get("providers", []))
         overlay_providers = list(overlay.get("providers", []))
 
-        seen = set()
+        overlay_chars = set()
+        for p in overlay_providers:
+            for row in p.get("chars", []):
+                for ch in row:
+                    if ch:
+                        overlay_chars.add(ch)
+
         merged_providers = []
-        for p in base_providers + overlay_providers:
-            key = json.dumps(p, sort_keys=True)
-            if key not in seen:
-                seen.add(key)
+        for p in base_providers:
+            chars = p.get("chars", [])
+            has_conflict = any(ch in overlay_chars for row in chars for ch in row if ch)
+            if not has_conflict:
                 merged_providers.append(p)
 
+        merged_providers.extend(overlay_providers)
         merged["providers"] = merged_providers
+        return merged
+
+    @staticmethod
+    def merge_particles_json(base: Dict[str, Any], overlay: Dict[str, Any]) -> Dict[str, Any]:
+        """Merges particle definition JSONs combining texture lists."""
+        merged = dict(base)
+        base_textures = list(base.get("textures", []))
+        overlay_textures = list(overlay.get("textures", []))
+        seen = set(base_textures)
+        combined = list(base_textures)
+        for t in overlay_textures:
+            if t not in seen:
+                combined.append(t)
+                seen.add(t)
+        merged["textures"] = combined
+        if "_emitter" in overlay:
+            merged["_emitter"] = overlay["_emitter"]
+        return merged
+
+    @staticmethod
+    def merge_equipment_json(base: Dict[str, Any], overlay: Dict[str, Any]) -> Dict[str, Any]:
+        """Merges 1.21.2+ equipment model descriptors."""
+        merged = dict(base)
+        merged.update(overlay)
         return merged
 
     @staticmethod
@@ -804,6 +846,26 @@ class SemanticMerger:
             except Exception:
                 pass
 
+        elif parent_name == "particles" and rel_path.endswith(".json"):
+            try:
+                base_data = json.loads(dest_file.read_text(encoding="utf-8"))
+                overlay_data = json.loads(src_file.read_text(encoding="utf-8"))
+                merged = cls.merge_particles_json(base_data, overlay_data)
+                dest_file.write_text(json.dumps(merged, indent=2), encoding="utf-8")
+                return
+            except Exception:
+                pass
+
+        elif parent_name == "equipment" and rel_path.endswith(".json"):
+            try:
+                base_data = json.loads(dest_file.read_text(encoding="utf-8"))
+                overlay_data = json.loads(src_file.read_text(encoding="utf-8"))
+                merged = cls.merge_equipment_json(base_data, overlay_data)
+                dest_file.write_text(json.dumps(merged, indent=2), encoding="utf-8")
+                return
+            except Exception:
+                pass
+
         # Default fallback: overwrite with higher priority overlay
         shutil.copy2(src_file, dest_file)
 
@@ -840,6 +902,15 @@ class SemanticMerger:
         # 4. Auto-synthesize texture atlases (blocks.json and gui.json)
         cls.auto_synthesize_atlases(output_dir)
 
+        # Stage equipment models into overlay_v1_21_2 if present
+        overlay_eq_dir = output_dir / "overlay_v1_21_2"
+        for eq_file in output_dir.glob("assets/*/models/equipment/*.json"):
+            rel_eq = eq_file.relative_to(output_dir)
+            target_overlay_file = overlay_eq_dir / rel_eq
+            target_overlay_file.parent.mkdir(parents=True, exist_ok=True)
+            if not target_overlay_file.exists():
+                shutil.copy2(eq_file, target_overlay_file)
+
         # 4. Ensure multi-version pack.mcmeta exists
         from app.domain.pack_compiler import DeterministicPackCompiler
         DeterministicPackCompiler.write_multiversion_mcmeta(
@@ -859,6 +930,8 @@ class SemanticMerger:
         )
         total_sounds = len(list(output_dir.glob("assets/*/sounds/**/*.ogg")))
         total_fonts = len(list(output_dir.glob("assets/*/font/**/*.json")))
+        total_equipment = len(list(output_dir.glob("assets/*/models/equipment/*.json")))
+        total_particles = len(list(output_dir.glob("assets/*/particles/*.json")))
 
         return {
             "total_textures": total_textures,
@@ -866,6 +939,8 @@ class SemanticMerger:
             "total_items_definitions": total_items_definitions,
             "total_sounds": total_sounds,
             "total_fonts": total_fonts,
+            "total_equipment": total_equipment,
+            "total_particles": total_particles,
             "pack_format": pack_format,
             "is_hybrid_multiversion": True
         }

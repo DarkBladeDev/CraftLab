@@ -195,3 +195,42 @@ def test_backward_compatibility_empty_states():
     canonical = block.to_canonical_dict()
     assert canonical["states"] == {}
 
+
+def test_prop_state_particle_and_sound_triggers():
+    block = BlockDefinition(
+        id="mystic_cauldron",
+        display_name="Mystic Cauldron",
+        default_state="idle",
+        states={
+            "idle": {
+                "name": "Idle",
+                "block_model": "studio:props/cauldron_idle",
+                "next_state": "bubbling"
+            },
+            "bubbling": {
+                "name": "Bubbling",
+                "block_model": "studio:props/cauldron_active",
+                "light_level": 7,
+                "sound": {
+                    "key": "block.brewing_stand.brew",
+                    "volume": 0.9,
+                    "pitch": 1.2
+                },
+                "particle": {
+                    "key": "minecraft:bubble_pop",
+                    "count": 12,
+                    "offset": [0.0, 0.8, 0.0]
+                },
+                "next_state": "idle"
+            }
+        }
+    )
+    assert block.states["bubbling"].particle.key == "minecraft:bubble_pop"
+    assert block.states["bubbling"].particle.count == 12
+    assert block.states["bubbling"].particle.offset == [0.0, 0.8, 0.0]
+    canonical = block.to_canonical_dict()
+    assert canonical["states"]["bubbling"]["particle"]["key"] == "minecraft:bubble_pop"
+    assert canonical["states"]["bubbling"]["particle"]["count"] == 12
+    assert canonical["states"]["bubbling"]["particle"]["offset"] == [0.0, 0.8, 0.0]
+
+

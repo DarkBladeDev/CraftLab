@@ -25,6 +25,10 @@ import {
   deleteBlock,
   fetchItems,
   createRevision,
+  fetchSoundEvents,
+  fetchParticles,
+  SoundEventItem,
+  ParticleItem,
 } from '../../api/client'
 
 const DEFAULT_BLOCK: Block = {
@@ -57,6 +61,8 @@ const PRESET_HITBOXES = [
 export function BlockStudio({ onRevisionCreated }: { onRevisionCreated?: () => void }) {
   const [blocks, setBlocks] = useState<Block[]>([])
   const [items, setItems] = useState<Item[]>([])
+  const [soundEvents, setSoundEvents] = useState<SoundEventItem[]>([])
+  const [particles, setParticles] = useState<ParticleItem[]>([])
   const [selectedBlock, setSelectedBlock] = useState<Block>(DEFAULT_BLOCK)
   const [isEditing, setIsEditing] = useState(false)
   const [isLoading, setIsLoading] = useState(false)
@@ -65,12 +71,16 @@ export function BlockStudio({ onRevisionCreated }: { onRevisionCreated?: () => v
   const loadData = async () => {
     setIsLoading(true)
     try {
-      const [loadedBlocks, loadedItems] = await Promise.all([
+      const [loadedBlocks, loadedItems, loadedSounds, loadedParticles] = await Promise.all([
         fetchBlocks(),
         fetchItems().catch(() => []),
+        fetchSoundEvents().catch(() => []),
+        fetchParticles().catch(() => []),
       ])
       setBlocks(loadedBlocks)
       setItems(loadedItems)
+      setSoundEvents(loadedSounds)
+      setParticles(loadedParticles)
       if (loadedBlocks.length > 0 && !isEditing) {
         setSelectedBlock(loadedBlocks[0])
       }
@@ -758,6 +768,15 @@ export function BlockStudio({ onRevisionCreated }: { onRevisionCreated?: () => v
                         <span className={`text-[10px] px-1 rounded ${isSelected ? 'bg-emerald-700 text-emerald-100' : 'bg-[#23232b] text-gray-400'}`}>
                           {key}
                         </span>
+                        {currentStates[key]?.sound?.key && (
+                          <Volume2 className="w-3 h-3 text-emerald-300 opacity-90" />
+                        )}
+                        {currentStates[key]?.particle?.key && (
+                          <Sparkles className="w-3 h-3 text-pink-300 opacity-90" />
+                        )}
+                        {(currentStates[key]?.light_level || 0) > 0 && (
+                          <Lightbulb className="w-3 h-3 text-amber-300 opacity-90" />
+                        )}
                         {isDefault && (
                           <span className="text-[9px] px-1 rounded bg-amber-400/20 text-amber-300 font-bold">
                             DEFAULT
@@ -777,6 +796,18 @@ export function BlockStudio({ onRevisionCreated }: { onRevisionCreated?: () => v
                         <span className="px-2 py-0.5 rounded text-xs font-mono bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
                           {activeStateKey}
                         </span>
+                        {currentStates[activeStateKey]?.sound?.key && (
+                          <span className="px-1.5 py-0.5 rounded text-[10px] bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 flex items-center space-x-1">
+                            <Volume2 className="w-2.5 h-2.5" />
+                            <span>Audio Linked</span>
+                          </span>
+                        )}
+                        {currentStates[activeStateKey]?.particle?.key && (
+                          <span className="px-1.5 py-0.5 rounded text-[10px] bg-pink-500/10 text-pink-400 border border-pink-500/20 flex items-center space-x-1">
+                            <Sparkles className="w-2.5 h-2.5" />
+                            <span>VFX Linked</span>
+                          </span>
+                        )}
                         {selectedBlock.default_state !== activeStateKey && (
                           <button
                             type="button"
@@ -886,9 +917,10 @@ export function BlockStudio({ onRevisionCreated }: { onRevisionCreated?: () => v
                           <span>Entry Sound Effect</span>
                         </label>
                         <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                          <div className="sm:col-span-2">
+                          <div className="sm:col-span-3">
                             <input
                               type="text"
+                              list="prop-sound-options"
                               value={currentStates[activeStateKey]?.sound?.key || ''}
                               onChange={(e) => {
                                 const keyVal = e.target.value.trim()
@@ -904,35 +936,201 @@ export function BlockStudio({ onRevisionCreated }: { onRevisionCreated?: () => v
                                   })
                                 }
                               }}
-                              placeholder="e.g. block.wooden_button.click_on, block.wooden_door.open"
+                              placeholder="e.g. block.wooden_button.click_on, custom:effects/gate_open"
                               className="w-full px-3 py-2 bg-[#141418] border border-[#23232b] rounded-lg text-xs font-mono text-gray-200 focus:border-emerald-500 outline-none"
                             />
+                            <datalist id="prop-sound-options">
+                              {soundEvents.map((s) => (
+                                <option key={s.id} value={s.id} />
+                              ))}
+                              <option value="block.wooden_button.click_on" />
+                              <option value="block.wooden_button.click_off" />
+                              <option value="block.wooden_door.open" />
+                              <option value="block.wooden_door.close" />
+                              <option value="block.chest.open" />
+                              <option value="block.chest.close" />
+                              <option value="block.lever.click" />
+                              <option value="entity.experience_orb.pickup" />
+                            </datalist>
                           </div>
-                          <div className="flex items-center space-x-2">
-                            <div className="flex-1">
-                              <span className="block text-[10px] text-gray-400 mb-0.5">Pitch ({currentStates[activeStateKey]?.sound?.pitch ?? 1.0})</span>
+                          <div>
+                            <span className="block text-[10px] text-gray-400 mb-0.5">
+                              Volume ({currentStates[activeStateKey]?.sound?.volume ?? 1.0})
+                            </span>
+                            <input
+                              type="range"
+                              min="0.1"
+                              max="2.0"
+                              step="0.1"
+                              disabled={!currentStates[activeStateKey]?.sound}
+                              value={currentStates[activeStateKey]?.sound?.volume ?? 1.0}
+                              onChange={(e) => {
+                                if (currentStates[activeStateKey]?.sound) {
+                                  handleUpdateCurrentState({
+                                    sound: {
+                                      ...currentStates[activeStateKey]!.sound!,
+                                      volume: parseFloat(e.target.value) || 1.0,
+                                    },
+                                  })
+                                }
+                              }}
+                              className="w-full accent-emerald-500 cursor-pointer disabled:opacity-40"
+                            />
+                          </div>
+                          <div>
+                            <span className="block text-[10px] text-gray-400 mb-0.5">
+                              Pitch ({currentStates[activeStateKey]?.sound?.pitch ?? 1.0})
+                            </span>
+                            <input
+                              type="range"
+                              min="0.5"
+                              max="2.0"
+                              step="0.1"
+                              disabled={!currentStates[activeStateKey]?.sound}
+                              value={currentStates[activeStateKey]?.sound?.pitch ?? 1.0}
+                              onChange={(e) => {
+                                if (currentStates[activeStateKey]?.sound) {
+                                  handleUpdateCurrentState({
+                                    sound: {
+                                      ...currentStates[activeStateKey]!.sound!,
+                                      pitch: parseFloat(e.target.value) || 1.0,
+                                    },
+                                  })
+                                }
+                              }}
+                              className="w-full accent-emerald-500 cursor-pointer disabled:opacity-40"
+                            />
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Particle VFX Trigger Setting */}
+                      <div className="md:col-span-2 pt-2 border-t border-[#1e1e26] space-y-3">
+                        <label className="text-xs font-medium text-gray-300 flex items-center space-x-1.5">
+                          <Sparkles className="w-3.5 h-3.5 text-pink-400" />
+                          <span>Entry Particle VFX Trigger</span>
+                        </label>
+                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                          <div className="sm:col-span-2">
+                            <input
+                              type="text"
+                              list="prop-particle-options"
+                              value={currentStates[activeStateKey]?.particle?.key || ''}
+                              onChange={(e) => {
+                                const keyVal = e.target.value.trim()
+                                if (!keyVal) {
+                                  handleUpdateCurrentState({ particle: null })
+                                } else {
+                                  handleUpdateCurrentState({
+                                    particle: {
+                                      key: keyVal,
+                                      count: currentStates[activeStateKey]?.particle?.count ?? 8,
+                                      offset: currentStates[activeStateKey]?.particle?.offset ?? [0.0, 0.5, 0.0],
+                                    },
+                                  })
+                                }
+                              }}
+                              placeholder="e.g. minecraft:flame, custom:magic_burst"
+                              className="w-full px-3 py-2 bg-[#141418] border border-[#23232b] rounded-lg text-xs font-mono text-gray-200 focus:border-pink-500 outline-none"
+                            />
+                            <datalist id="prop-particle-options">
+                              {particles.map((p) => (
+                                <option key={p.id} value={p.id} />
+                              ))}
+                              <option value="minecraft:flame" />
+                              <option value="minecraft:smoke" />
+                              <option value="minecraft:heart" />
+                              <option value="minecraft:portal" />
+                              <option value="minecraft:crit" />
+                              <option value="minecraft:enchant" />
+                              <option value="minecraft:soul_fire_flame" />
+                              <option value="minecraft:bubble_pop" />
+                            </datalist>
+                          </div>
+                          <div>
+                            <span className="block text-[10px] text-gray-400 mb-0.5">
+                              Count ({currentStates[activeStateKey]?.particle?.count ?? 8})
+                            </span>
+                            <input
+                              type="range"
+                              min="1"
+                              max="50"
+                              step="1"
+                              disabled={!currentStates[activeStateKey]?.particle}
+                              value={currentStates[activeStateKey]?.particle?.count ?? 8}
+                              onChange={(e) => {
+                                if (currentStates[activeStateKey]?.particle) {
+                                  handleUpdateCurrentState({
+                                    particle: {
+                                      ...currentStates[activeStateKey]!.particle!,
+                                      count: parseInt(e.target.value, 10) || 8,
+                                    },
+                                  })
+                                }
+                              }}
+                              className="w-full accent-pink-500 cursor-pointer disabled:opacity-40"
+                            />
+                          </div>
+                        </div>
+
+                        {currentStates[activeStateKey]?.particle && (
+                          <div className="grid grid-cols-3 gap-2 pt-1">
+                            <div>
+                              <label className="block text-[10px] text-gray-500 mb-0.5">Spawn Offset X</label>
                               <input
-                                type="range"
-                                min="0.5"
-                                max="2.0"
+                                type="number"
                                 step="0.1"
-                                disabled={!currentStates[activeStateKey]?.sound}
-                                value={currentStates[activeStateKey]?.sound?.pitch ?? 1.0}
+                                value={currentStates[activeStateKey]?.particle?.offset?.[0] ?? 0.0}
                                 onChange={(e) => {
-                                  if (currentStates[activeStateKey]?.sound) {
-                                    handleUpdateCurrentState({
-                                      sound: {
-                                        ...currentStates[activeStateKey]!.sound!,
-                                        pitch: parseFloat(e.target.value) || 1.0,
-                                      },
-                                    })
-                                  }
+                                  const cur = currentStates[activeStateKey]?.particle?.offset ?? [0, 0, 0]
+                                  handleUpdateCurrentState({
+                                    particle: {
+                                      ...currentStates[activeStateKey]!.particle!,
+                                      offset: [parseFloat(e.target.value) || 0, cur[1] ?? 0, cur[2] ?? 0],
+                                    },
+                                  })
                                 }}
-                                className="w-full accent-emerald-500 cursor-pointer disabled:opacity-40"
+                                className="w-full px-2 py-1 bg-[#141418] border border-[#23232b] rounded text-xs font-mono text-gray-200 outline-none focus:border-pink-500"
+                              />
+                            </div>
+                            <div>
+                              <label className="block text-[10px] text-gray-500 mb-0.5">Spawn Offset Y</label>
+                              <input
+                                type="number"
+                                step="0.1"
+                                value={currentStates[activeStateKey]?.particle?.offset?.[1] ?? 0.5}
+                                onChange={(e) => {
+                                  const cur = currentStates[activeStateKey]?.particle?.offset ?? [0, 0, 0]
+                                  handleUpdateCurrentState({
+                                    particle: {
+                                      ...currentStates[activeStateKey]!.particle!,
+                                      offset: [cur[0] ?? 0, parseFloat(e.target.value) || 0, cur[2] ?? 0],
+                                    },
+                                  })
+                                }}
+                                className="w-full px-2 py-1 bg-[#141418] border border-[#23232b] rounded text-xs font-mono text-gray-200 outline-none focus:border-pink-500"
+                              />
+                            </div>
+                            <div>
+                              <label className="block text-[10px] text-gray-500 mb-0.5">Spawn Offset Z</label>
+                              <input
+                                type="number"
+                                step="0.1"
+                                value={currentStates[activeStateKey]?.particle?.offset?.[2] ?? 0.0}
+                                onChange={(e) => {
+                                  const cur = currentStates[activeStateKey]?.particle?.offset ?? [0, 0, 0]
+                                  handleUpdateCurrentState({
+                                    particle: {
+                                      ...currentStates[activeStateKey]!.particle!,
+                                      offset: [cur[0] ?? 0, cur[1] ?? 0, parseFloat(e.target.value) || 0],
+                                    },
+                                  })
+                                }}
+                                className="w-full px-2 py-1 bg-[#141418] border border-[#23232b] rounded text-xs font-mono text-gray-200 outline-none focus:border-pink-500"
                               />
                             </div>
                           </div>
-                        </div>
+                        )}
                       </div>
                     </div>
                   </div>
