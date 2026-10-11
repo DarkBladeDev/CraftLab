@@ -51,6 +51,11 @@ async def test_creative_api_endpoints():
         del_g = await client.delete("/api/v1/assets/creative/glyphs/E001")
         assert del_g.status_code == 200
 
+        # --- Namespaces Endpoint ---
+        res_ns = await client.get("/api/v1/assets/creative/namespaces")
+        assert res_ns.status_code == 200
+        assert "craftlab" in res_ns.json()
+
         # --- 2. Equipment Models ---
         eq_req = {
             "id": "paladin_chest",
@@ -74,6 +79,26 @@ async def test_creative_api_endpoints():
 
         del_eq = await client.delete("/api/v1/assets/creative/equipment/paladin_chest")
         assert del_eq.status_code == 200
+
+        # Custom namespace & colon decomposition
+        eq_req_custom = {
+            "id": "dev_studio:shadow_boots",
+            "layers": [{"texture": "dev_studio:shadow", "type": "humanoid"}],
+            "namespace": "craftlab"
+        }
+        res_custom = await client.post("/api/v1/assets/creative/equipment", json=eq_req_custom)
+        assert res_custom.status_code == 200
+        assert res_custom.json()["id"] == "shadow_boots"
+        assert res_custom.json()["namespace"] == "dev_studio"
+
+        get_custom = await client.get("/api/v1/assets/creative/equipment/dev_studio:shadow_boots")
+        assert get_custom.status_code == 200
+        assert get_custom.json()["id"] == "shadow_boots"
+        assert get_custom.json()["namespace"] == "dev_studio"
+
+        del_custom = await client.delete("/api/v1/assets/creative/equipment/dev_studio:shadow_boots")
+        assert del_custom.status_code == 200
+        assert del_custom.json()["namespace"] == "dev_studio"
 
         # --- 3. Sound Events & Probe ---
         sound_req = {

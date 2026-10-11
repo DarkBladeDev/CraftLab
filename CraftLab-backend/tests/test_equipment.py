@@ -76,3 +76,37 @@ def test_save_get_list_delete_equipment_models(tmp_path: Path):
     del_res = delete_equipment_model(workspace, "paladin_armor", "craftlab")
     assert del_res is True
     assert get_equipment_model(workspace, "paladin_armor", "craftlab") is None
+
+
+def test_save_equipment_model_custom_namespace_and_colon(tmp_path: Path):
+    workspace = tmp_path / "workspace"
+    layers = [{"texture": "dev_studio:test_tex", "type": "humanoid"}]
+
+    # Save using colon in ID
+    saved = save_equipment_model(
+        workspace_dir=workspace,
+        equipment_id="dev_studio:shadow_plate",
+        layers=layers,
+        namespace="craftlab"
+    )
+    assert saved["id"] == "shadow_plate"
+    assert saved["namespace"] == "dev_studio"
+    assert saved["resource_location"] == "dev_studio:shadow_plate"
+
+    expected_file = workspace / "assets" / "dev_studio" / "models" / "equipment" / "shadow_plate.json"
+    assert expected_file.exists()
+
+    # Query with colon in ID
+    item = get_equipment_model(workspace, "dev_studio:shadow_plate")
+    assert item is not None
+    assert item["id"] == "shadow_plate"
+    assert item["namespace"] == "dev_studio"
+
+    # Equippable generation with colon
+    comp = generate_equippable_component("dev_studio:shadow_plate", slot="chest")
+    assert comp["minecraft:equippable"]["model"] == "dev_studio:shadow_plate"
+
+    # Delete with colon
+    deleted = delete_equipment_model(workspace, "dev_studio:shadow_plate")
+    assert deleted is True
+    assert not expected_file.exists()

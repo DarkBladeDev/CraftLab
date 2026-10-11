@@ -68,6 +68,12 @@ def list_particles(workspace_dir: Path, namespace: Optional[str] = None) -> List
 
 
 def get_particle(workspace_dir: Path, particle_id: str, namespace: str = "craftlab") -> Optional[Dict[str, Any]]:
+    if ":" in particle_id:
+        parsed_ns, parsed_id = particle_id.split(":", 1)
+        if parsed_ns.strip():
+            namespace = parsed_ns.strip()
+        particle_id = parsed_id.strip()
+
     path = get_particle_path(workspace_dir, particle_id, namespace)
     if not path.exists():
         return None
@@ -96,6 +102,14 @@ def save_particle(
     emitter_params: Optional[Dict[str, Any]] = None,
     namespace: str = "craftlab"
 ) -> Dict[str, Any]:
+    if ":" in particle_id:
+        parsed_ns, parsed_id = particle_id.split(":", 1)
+        if parsed_ns.strip():
+            namespace = parsed_ns.strip()
+        particle_id = parsed_id.strip()
+
+    if not validate_identifier(namespace):
+        raise ValueError(f"Invalid namespace '{namespace}'. Must be lowercase letters, numbers, underscores, dots, hyphens.")
     if not validate_identifier(particle_id):
         raise ValueError(f"Invalid particle identifier '{particle_id}'. Must be lowercase letters, numbers, underscores, dots, hyphens.")
 
@@ -122,6 +136,12 @@ def save_particle(
 
 
 def delete_particle(workspace_dir: Path, particle_id: str, namespace: str = "craftlab") -> bool:
+    if ":" in particle_id:
+        parsed_ns, parsed_id = particle_id.split(":", 1)
+        if parsed_ns.strip():
+            namespace = parsed_ns.strip()
+        particle_id = parsed_id.strip()
+
     target_path = get_particle_path(workspace_dir, particle_id, namespace)
     if target_path.exists():
         target_path.unlink()
@@ -136,5 +156,11 @@ def generate_particle_command(
     spread: Tuple[float, float, float] = (0.3, 0.5, 0.3),
     namespace: str = "craftlab"
 ) -> str:
+    if ":" in particle_id:
+        parsed_ns, parsed_id = particle_id.split(":", 1)
+        if parsed_ns.strip():
+            namespace = parsed_ns.strip()
+        particle_id = parsed_id.strip()
+
     sx, sy, sz = spread
     return f"/particle {namespace}:{particle_id} ~ ~1 ~ {sx:.1f} {sy:.1f} {sz:.1f} {speed} {count}"

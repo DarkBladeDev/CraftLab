@@ -4,6 +4,7 @@ import {
   fetchEquipmentModels,
   saveEquipmentModel,
   deleteEquipmentModel,
+  fetchCreativeNamespaces,
   EquipmentModelItem,
   EquipmentLayer,
 } from '../../../api/client'
@@ -17,6 +18,10 @@ export function EquipmentStudioTab() {
   const [loading, setLoading] = useState(false)
   const [errorMsg, setErrorMsg] = useState<string | null>(null)
 
+  // Namespace support
+  const [namespace, setNamespace] = useState('craftlab')
+  const [availableNamespaces, setAvailableNamespaces] = useState<string[]>(['craftlab'])
+
   // Form
   const [modelId, setModelId] = useState('')
   const [targetSlot, setTargetSlot] = useState('chest')
@@ -29,7 +34,13 @@ export function EquipmentStudioTab() {
     setLoading(true)
     setErrorMsg(null)
     try {
-      const data = await fetchEquipmentModels()
+      const [nsList, data] = await Promise.all([
+        fetchCreativeNamespaces().catch(() => ['craftlab']),
+        fetchEquipmentModels(),
+      ])
+      if (nsList && nsList.length > 0) {
+        setAvailableNamespaces(nsList)
+      }
       setModels(data)
       if (data.length > 0 && !selectedModel) {
         selectItem(data[0])
@@ -50,12 +61,14 @@ export function EquipmentStudioTab() {
   const selectItem = (item: EquipmentModelItem) => {
     setSelectedModel(item)
     setModelId(item.id)
-    setLayers(item.layers.length > 0 ? item.layers : [{ texture: `craftlab:${item.id}`, type: 'humanoid' }])
+    setNamespace(item.namespace || 'craftlab')
+    setLayers(item.layers.length > 0 ? item.layers : [{ texture: `${item.namespace || 'craftlab'}:${item.id}`, type: 'humanoid' }])
   }
 
   const resetForm = () => {
     setSelectedModel(null)
     setModelId('paladin_set')
+    setNamespace('craftlab')
     setTargetSlot('chest')
     setLayers([
       { texture: 'craftlab:paladin', type: 'humanoid' },
@@ -63,8 +76,19 @@ export function EquipmentStudioTab() {
     ])
   }
 
+  const handleModelIdChange = (val: string) => {
+    if (val.includes(':')) {
+      const parts = val.split(':')
+      if (parts[0].trim()) setNamespace(parts[0].trim())
+      setModelId(parts.slice(1).join(':'))
+    } else {
+      setModelId(val)
+    }
+  }
+
   const addLayer = () => {
-    setLayers([...layers, { texture: `craftlab:layer_${layers.length + 1}`, type: 'humanoid' }])
+    const currentNs = namespace.trim() || 'craftlab'
+    setLayers([...layers, { texture: `${currentNs}:layer_${layers.length + 1}`, type: 'humanoid' }])
   }
 
   const updateLayer = (idx: number, patch: Partial<EquipmentLayer>) => {
@@ -81,11 +105,12 @@ export function EquipmentStudioTab() {
   const handleSave = async () => {
     if (!modelId.trim() || layers.length === 0) return
     setErrorMsg(null)
+    const effectiveNs = namespace.trim() || 'craftlab'
     try {
       await saveEquipmentModel({
         id: modelId.trim(),
         layers: layers,
-        namespace: 'craftlab',
+        namespace: effectiveNs,
       })
       await loadData()
     } catch (e: any) {
@@ -93,10 +118,11 @@ export function EquipmentStudioTab() {
     }
   }
 
-  const handleDelete = async (id: string) => {
-    if (!confirm(`Delete equipment model '${id}'?`)) return
+  const handleDelete = async (id: string, ns?: string) => {
+    const fullId = ns ? `${ns}:${id}` : id
+    if (!confirm(`Delete equipment model '${fullId}'?`)) return
     try {
-      await deleteEquipmentModel(id)
+      await deleteEquipmentModel(id, ns)
       setSelectedModel(null)
       await loadData()
     } catch (e: any) {
@@ -104,10 +130,17 @@ export function EquipmentStudioTab() {
     }
   }
 
-  const equippableSnippet = `"minecraft:equippable": { "slot": "${targetSlot}", "model": "craftlab:${modelId}" }`
+  const effectiveNs = namespace.trim() || 'craftlab'
+  const equippableSnippet = `"minecraft:equippable": { "slot": "${targetSlot}", "model": "${effectiveNs}:${modelId}" }`
 
   return (
     <div className="grid grid-cols-1 lg:grid-cols-12 gap-5">
+      <datalist id="equipment-namespaces-list">
+        {availableNamespaces.map((ns) => (
+          <option key={ns} value={ns} />
+        ))}
+      </datalist>
+
       {/* Sidebar List */}
       <div className="lg:col-span-4 bg-[#141418] border border-[#23232b] rounded-xl p-4 flex flex-col space-y-3">
         <div className="flex items-center justify-between pb-2 border-b border-[#23232b]">
@@ -126,10 +159,10 @@ export function EquipmentStudioTab() {
             <div className="text-xs text-gray-500 py-6 text-center">No equipment models found.</div>
           ) : (
             models.map((m) => {
-              const isSelected = selectedModel?.id === m.id
+              const isSelected = selectedModel?.id === m.id && (selectedModel?.namespace || 'craftlab') === (m.namespace || 'craftlab')
               return (
                 <div
-                  key={m.id}
+                  key={`${m.namespace || 'craftlab'}:${m.id}`}
                   onClick={() => selectItem(m)}
                   className={`flex items-center justify-between p-2.5 rounded-lg border cursor-pointer transition text-xs ${
                     isSelected
@@ -140,14 +173,17 @@ export function EquipmentStudioTab() {
                   <div className="flex items-center space-x-2.5 min-w-0">
                     <Shield className="w-4 h-4 text-blue-400 shrink-0" />
                     <div className="truncate">
-                      <div className="font-semibold truncate">{m.id}</div>
+                      <div className="font-semibold truncate">
+                        <span className="text-blue-400 font-mono text-[11px]">{m.namespace || 'craftlab'}:</span>
+                        {m.id}
+                      </div>
                       <div className="text-gray-500 text-[11px] font-mono">{m.layers.length} layers</div>
                     </div>
                   </div>
                   <button
                     onClick={(e) => {
                       e.stopPropagation()
-                      handleDelete(m.id)
+                      handleDelete(m.id, m.namespace)
                     }}
                     className="text-gray-500 hover:text-red-400 p-1 transition"
                   >
@@ -172,23 +208,34 @@ export function EquipmentStudioTab() {
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4 bg-[#141418] border border-[#23232b] rounded-xl p-4">
           {/* Controls */}
           <div className="space-y-3 text-xs">
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-3 gap-2">
               <div>
-                <label className="block text-gray-400 mb-1">Model Identifier</label>
+                <label className="block text-gray-400 mb-1">Namespace</label>
                 <input
                   type="text"
-                  value={modelId}
-                  onChange={(e) => setModelId(e.target.value)}
-                  placeholder="e.g. paladin_set"
-                  className="w-full bg-[#1c1c22] border border-[#2b2b35] rounded-lg px-2.5 py-1.5 text-xs text-gray-100 focus:outline-none focus:border-blue-500"
+                  list="equipment-namespaces-list"
+                  value={namespace}
+                  onChange={(e) => setNamespace(e.target.value.toLowerCase().trim())}
+                  placeholder="craftlab"
+                  className="w-full bg-[#1c1c22] border border-[#2b2b35] rounded-lg px-2 py-1.5 text-xs text-blue-300 font-mono focus:outline-none focus:border-blue-500"
                 />
               </div>
               <div>
-                <label className="block text-gray-400 mb-1">Target Slot</label>
+                <label className="block text-gray-400 mb-1">Model ID</label>
+                <input
+                  type="text"
+                  value={modelId}
+                  onChange={(e) => handleModelIdChange(e.target.value)}
+                  placeholder="e.g. paladin_set"
+                  className="w-full bg-[#1c1c22] border border-[#2b2b35] rounded-lg px-2 py-1.5 text-xs text-gray-100 focus:outline-none focus:border-blue-500"
+                />
+              </div>
+              <div>
+                <label className="block text-gray-400 mb-1">Slot</label>
                 <select
                   value={targetSlot}
                   onChange={(e) => setTargetSlot(e.target.value)}
-                  className="w-full bg-[#1c1c22] border border-[#2b2b35] rounded-lg px-2.5 py-1.5 text-xs text-gray-100 focus:outline-none focus:border-blue-500"
+                  className="w-full bg-[#1c1c22] border border-[#2b2b35] rounded-lg px-2 py-1.5 text-xs text-gray-100 focus:outline-none focus:border-blue-500"
                 >
                   {SLOTS.map((s) => (
                     <option key={s} value={s}>

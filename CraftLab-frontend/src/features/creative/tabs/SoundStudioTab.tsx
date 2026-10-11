@@ -6,6 +6,7 @@ import {
   deleteSoundEvent,
   probeAudioFile,
   convertAudioToMono,
+  fetchCreativeNamespaces,
   SoundEventItem,
   AudioProbeResult,
 } from '../../../api/client'
@@ -17,6 +18,10 @@ export function SoundStudioTab() {
   const [selectedEvent, setSelectedEvent] = useState<SoundEventItem | null>(null)
   const [loading, setLoading] = useState(false)
   const [errorMsg, setErrorMsg] = useState<string | null>(null)
+
+  // Namespace support
+  const [namespace, setNamespace] = useState('craftlab')
+  const [availableNamespaces, setAvailableNamespaces] = useState<string[]>(['craftlab'])
 
   // Form
   const [eventId, setEventId] = useState('')
@@ -35,7 +40,13 @@ export function SoundStudioTab() {
     setLoading(true)
     setErrorMsg(null)
     try {
-      const data = await fetchSoundEvents()
+      const [nsList, data] = await Promise.all([
+        fetchCreativeNamespaces().catch(() => ['craftlab']),
+        fetchSoundEvents(),
+      ])
+      if (nsList && nsList.length > 0) {
+        setAvailableNamespaces(nsList)
+      }
       setSoundEvents(data)
       if (data.length > 0 && !selectedEvent) {
         selectItem(data[0])
@@ -56,6 +67,7 @@ export function SoundStudioTab() {
   const selectItem = (item: SoundEventItem) => {
     setSelectedEvent(item)
     setEventId(item.id)
+    setNamespace(item.namespace || 'craftlab')
     setCategory(item.category || 'blocks')
     setSubtitle(item.subtitle || '')
     const firstSound = item.sounds[0]
@@ -74,6 +86,7 @@ export function SoundStudioTab() {
   const resetForm = () => {
     setSelectedEvent(null)
     setEventId('prop.mystic_door.open')
+    setNamespace('craftlab')
     setCategory('blocks')
     setSubtitle('subtitles.craftlab.door_creak')
     setSampleName('craftlab:prop/door_open_1')
@@ -82,13 +95,27 @@ export function SoundStudioTab() {
     setProbeResult(null)
   }
 
+  const handleEventIdChange = (val: string) => {
+    if (val.includes(':')) {
+      const parts = val.split(':')
+      if (parts[0].trim()) {
+        const ns = parts[0].trim()
+        setNamespace(ns)
+        setSampleName(`${ns}:prop/${parts.slice(1).join(':')}_1`)
+      }
+      setEventId(parts.slice(1).join(':'))
+    } else {
+      setEventId(val)
+    }
+  }
+
   const handleProbe = async () => {
     if (!sampleName) return
     setProbing(true)
     setErrorMsg(null)
-    // Map resource location to relative path: craftlab:prop/door_open_1 -> assets/craftlab/sounds/prop/door_open_1.ogg
+    const effectiveNs = namespace.trim() || 'craftlab'
     const parts = sampleName.split(':')
-    const ns = parts.length > 1 ? parts[0] : 'craftlab'
+    const ns = parts.length > 1 ? parts[0] : effectiveNs
     const pathPart = parts.length > 1 ? parts[1] : parts[0]
     const relativePath = `assets/${ns}/sounds/${pathPart}.ogg`
 
@@ -106,8 +133,9 @@ export function SoundStudioTab() {
     if (!sampleName) return
     setConverting(true)
     setErrorMsg(null)
+    const effectiveNs = namespace.trim() || 'craftlab'
     const parts = sampleName.split(':')
-    const ns = parts.length > 1 ? parts[0] : 'craftlab'
+    const ns = parts.length > 1 ? parts[0] : effectiveNs
     const pathPart = parts.length > 1 ? parts[1] : parts[0]
     const relativePath = `assets/${ns}/sounds/${pathPart}.ogg`
 
@@ -124,6 +152,7 @@ export function SoundStudioTab() {
   const handleSave = async () => {
     if (!eventId.trim() || !sampleName.trim()) return
     setErrorMsg(null)
+    const effectiveNs = namespace.trim() || 'craftlab'
     try {
       await saveSoundEvent({
         id: eventId.trim(),
@@ -136,7 +165,7 @@ export function SoundStudioTab() {
             pitch: Number(pitch),
           },
         ],
-        namespace: 'craftlab',
+        namespace: effectiveNs,
       })
       await loadData()
     } catch (e: any) {
@@ -144,10 +173,11 @@ export function SoundStudioTab() {
     }
   }
 
-  const handleDelete = async (id: string) => {
-    if (!confirm(`Delete sound event '${id}'?`)) return
+  const handleDelete = async (id: string, ns?: string) => {
+    const fullId = ns ? `${ns}:${id}` : id
+    if (!confirm(`Delete sound event '${fullId}'?`)) return
     try {
-      await deleteSoundEvent(id)
+      await deleteSoundEvent(id, ns)
       setSelectedEvent(null)
       await loadData()
     } catch (e: any) {
@@ -155,8 +185,16 @@ export function SoundStudioTab() {
     }
   }
 
+  const effectiveNs = namespace.trim() || 'craftlab'
+
   return (
     <div className="grid grid-cols-1 lg:grid-cols-12 gap-5">
+      <datalist id="sound-namespaces-list">
+        {availableNamespaces.map((ns) => (
+          <option key={ns} value={ns} />
+        ))}
+      </datalist>
+
       {/* Sidebar List */}
       <div className="lg:col-span-4 bg-[#141418] border border-[#23232b] rounded-xl p-4 flex flex-col space-y-3">
         <div className="flex items-center justify-between pb-2 border-b border-[#23232b]">
@@ -175,10 +213,10 @@ export function SoundStudioTab() {
             <div className="text-xs text-gray-500 py-6 text-center">No sound events registered yet.</div>
           ) : (
             soundEvents.map((s) => {
-              const isSelected = selectedEvent?.id === s.id
+              const isSelected = selectedEvent?.id === s.id && (selectedEvent?.namespace || 'craftlab') === (s.namespace || 'craftlab')
               return (
                 <div
-                  key={s.id}
+                  key={`${s.namespace || 'craftlab'}:${s.id}`}
                   onClick={() => selectItem(s)}
                   className={`flex items-center justify-between p-2.5 rounded-lg border cursor-pointer transition text-xs ${
                     isSelected
@@ -189,14 +227,17 @@ export function SoundStudioTab() {
                   <div className="flex items-center space-x-2.5 min-w-0">
                     <Volume2 className="w-4 h-4 text-purple-400 shrink-0" />
                     <div className="truncate">
-                      <div className="font-semibold truncate">{s.id}</div>
+                      <div className="font-semibold truncate">
+                        <span className="text-purple-400 font-mono text-[11px]">{s.namespace || 'craftlab'}:</span>
+                        {s.id}
+                      </div>
                       <div className="text-gray-500 text-[11px] font-mono">{s.category}</div>
                     </div>
                   </div>
                   <button
                     onClick={(e) => {
                       e.stopPropagation()
-                      handleDelete(s.id)
+                      handleDelete(s.id, s.namespace)
                     }}
                     className="text-gray-500 hover:text-red-400 p-1 transition"
                   >
@@ -221,15 +262,26 @@ export function SoundStudioTab() {
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4 bg-[#141418] border border-[#23232b] rounded-xl p-4">
           {/* Controls */}
           <div className="space-y-3 text-xs">
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-3 gap-2">
               <div>
-                <label className="block text-gray-400 mb-1">Event Identifier</label>
+                <label className="block text-gray-400 mb-1">Namespace</label>
+                <input
+                  type="text"
+                  list="sound-namespaces-list"
+                  value={namespace}
+                  onChange={(e) => setNamespace(e.target.value.toLowerCase().trim())}
+                  placeholder="craftlab"
+                  className="w-full bg-[#1c1c22] border border-[#2b2b35] rounded-lg px-2 py-1.5 text-xs text-purple-300 font-mono focus:outline-none focus:border-purple-500"
+                />
+              </div>
+              <div>
+                <label className="block text-gray-400 mb-1">Event ID</label>
                 <input
                   type="text"
                   value={eventId}
-                  onChange={(e) => setEventId(e.target.value)}
+                  onChange={(e) => handleEventIdChange(e.target.value)}
                   placeholder="e.g. prop.door.open"
-                  className="w-full bg-[#1c1c22] border border-[#2b2b35] rounded-lg px-2.5 py-1.5 text-xs text-gray-100 focus:outline-none focus:border-purple-500"
+                  className="w-full bg-[#1c1c22] border border-[#2b2b35] rounded-lg px-2 py-1.5 text-xs text-gray-100 focus:outline-none focus:border-purple-500"
                 />
               </div>
               <div>
@@ -237,7 +289,7 @@ export function SoundStudioTab() {
                 <select
                   value={category}
                   onChange={(e) => setCategory(e.target.value)}
-                  className="w-full bg-[#1c1c22] border border-[#2b2b35] rounded-lg px-2.5 py-1.5 text-xs text-gray-100 focus:outline-none focus:border-purple-500"
+                  className="w-full bg-[#1c1c22] border border-[#2b2b35] rounded-lg px-2 py-1.5 text-xs text-gray-100 focus:outline-none focus:border-purple-500"
                 >
                   {CATEGORIES.map((c) => (
                     <option key={c} value={c}>
@@ -371,7 +423,7 @@ export function SoundStudioTab() {
             </div>
 
             <div className="p-3 bg-[#1c1c22]/50 border border-[#23232b] rounded-lg text-[11px] text-gray-400">
-              Sound events are compiled into <code className="text-purple-400">assets/craftlab/sounds.json</code> and automatically linked with Block Studio prop states.
+              Sound events are compiled into <code className="text-purple-400">assets/{effectiveNs}/sounds.json</code> and automatically linked with Block Studio prop states.
             </div>
           </div>
         </div>

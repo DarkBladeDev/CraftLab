@@ -704,9 +704,18 @@ export async function validateGlyphHex(hex: string): Promise<{ valid: boolean; h
   return res.json()
 }
 
-export async function deleteGlyph(hex: string): Promise<void> {
-  const res = await fetch(`${API_BASE}/v1/assets/creative/glyphs/${hex}`, { method: 'DELETE' })
+export async function deleteGlyph(hex: string, namespace?: string): Promise<void> {
+  const url = namespace
+    ? `${API_BASE}/v1/assets/creative/glyphs/${encodeURIComponent(hex)}?namespace=${encodeURIComponent(namespace)}`
+    : `${API_BASE}/v1/assets/creative/glyphs/${encodeURIComponent(hex)}`
+  const res = await fetch(url, { method: 'DELETE' })
   if (!res.ok) throw new Error('Failed to delete glyph')
+}
+
+export async function fetchCreativeNamespaces(): Promise<string[]> {
+  const res = await fetch(`${API_BASE}/v1/assets/creative/namespaces`)
+  if (!res.ok) throw new Error('Failed to fetch creative namespaces')
+  return res.json()
 }
 
 export async function fetchEquipmentModels(namespace?: string): Promise<EquipmentModelItem[]> {
@@ -735,8 +744,11 @@ export async function saveEquipmentModel(req: {
   return res.json()
 }
 
-export async function deleteEquipmentModel(id: string): Promise<void> {
-  const res = await fetch(`${API_BASE}/v1/assets/creative/equipment/${id}`, { method: 'DELETE' })
+export async function deleteEquipmentModel(id: string, namespace?: string): Promise<void> {
+  const url = namespace
+    ? `${API_BASE}/v1/assets/creative/equipment/${encodeURIComponent(id)}?namespace=${encodeURIComponent(namespace)}`
+    : `${API_BASE}/v1/assets/creative/equipment/${encodeURIComponent(id)}`
+  const res = await fetch(url, { method: 'DELETE' })
   if (!res.ok) throw new Error('Failed to delete equipment model')
 }
 
@@ -768,8 +780,11 @@ export async function saveSoundEvent(req: {
   return res.json()
 }
 
-export async function deleteSoundEvent(id: string): Promise<void> {
-  const res = await fetch(`${API_BASE}/v1/assets/creative/sounds/${id}`, { method: 'DELETE' })
+export async function deleteSoundEvent(id: string, namespace?: string): Promise<void> {
+  const url = namespace
+    ? `${API_BASE}/v1/assets/creative/sounds/${encodeURIComponent(id)}?namespace=${encodeURIComponent(namespace)}`
+    : `${API_BASE}/v1/assets/creative/sounds/${encodeURIComponent(id)}`
+  const res = await fetch(url, { method: 'DELETE' })
   if (!res.ok) throw new Error('Failed to delete sound event')
 }
 
@@ -826,8 +841,11 @@ export async function saveParticle(req: {
   return res.json()
 }
 
-export async function deleteParticle(id: string): Promise<void> {
-  const res = await fetch(`${API_BASE}/v1/assets/creative/particles/${id}`, { method: 'DELETE' })
+export async function deleteParticle(id: string, namespace?: string): Promise<void> {
+  const url = namespace
+    ? `${API_BASE}/v1/assets/creative/particles/${encodeURIComponent(id)}?namespace=${encodeURIComponent(namespace)}`
+    : `${API_BASE}/v1/assets/creative/particles/${encodeURIComponent(id)}`
+  const res = await fetch(url, { method: 'DELETE' })
   if (!res.ok) throw new Error('Failed to delete particle')
 }
 

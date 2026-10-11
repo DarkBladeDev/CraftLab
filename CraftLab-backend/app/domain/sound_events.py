@@ -202,6 +202,12 @@ def save_sound_event(
     event_data: Dict[str, Any],
     namespace: str = "craftlab"
 ) -> Dict[str, Any]:
+    if ":" in event_id:
+        parsed_ns, parsed_id = event_id.split(":", 1)
+        if parsed_ns.strip():
+            namespace = parsed_ns.strip()
+        event_id = parsed_id.strip()
+
     sounds = load_sounds_json(workspace_dir, namespace)
 
     category = event_data.get("category", "master")
@@ -227,6 +233,12 @@ def save_sound_event(
 
 
 def delete_sound_event(workspace_dir: Path, event_id: str, namespace: str = "craftlab") -> bool:
+    if ":" in event_id:
+        parsed_ns, parsed_id = event_id.split(":", 1)
+        if parsed_ns.strip():
+            namespace = parsed_ns.strip()
+        event_id = parsed_id.strip()
+
     sounds = load_sounds_json(workspace_dir, namespace)
     if event_id in sounds:
         del sounds[event_id]

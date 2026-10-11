@@ -126,6 +126,20 @@ async def remove_glyph(hex_code: str, namespace: str = "craftlab", font_name: st
     return {"status": "deleted", "hex": hex_code}
 
 
+# --- Namespaces Endpoint ---
+
+@router.get("/namespaces")
+async def get_creative_namespaces():
+    workspace = get_default_workspace_dir()
+    assets_dir = workspace / "assets"
+    if not assets_dir.exists():
+        return ["craftlab"]
+    discovered = [d.name for d in assets_dir.iterdir() if d.is_dir() and not d.name.startswith(".")]
+    if "craftlab" not in discovered:
+        discovered.insert(0, "craftlab")
+    return sorted(list(set(discovered)))
+
+
 # --- Equipment Models Endpoints ---
 
 @router.get("/equipment")
@@ -135,9 +149,15 @@ async def get_all_equipment_models(namespace: Optional[str] = None):
 
 
 @router.get("/equipment/{equipment_id}")
-async def get_single_equipment_model(equipment_id: str, namespace: str = "craftlab"):
+async def get_single_equipment_model(equipment_id: str, namespace: Optional[str] = None):
     workspace = get_default_workspace_dir()
-    item = get_equipment_model(workspace, equipment_id, namespace)
+    effective_ns = namespace or "craftlab"
+    if ":" in equipment_id:
+        parsed_ns, parsed_id = equipment_id.split(":", 1)
+        if parsed_ns.strip():
+            effective_ns = parsed_ns.strip()
+        equipment_id = parsed_id.strip()
+    item = get_equipment_model(workspace, equipment_id, effective_ns)
     if not item:
         raise HTTPException(status_code=404, detail="Equipment model not found")
     return item
@@ -147,11 +167,18 @@ async def get_single_equipment_model(equipment_id: str, namespace: str = "craftl
 async def create_or_update_equipment_model(req: EquipmentModelRequest):
     workspace = get_default_workspace_dir()
     try:
+        ns = req.namespace
+        eq_id = req.id
+        if ":" in req.id:
+            parsed_ns, parsed_id = req.id.split(":", 1)
+            if parsed_ns.strip():
+                ns = parsed_ns.strip()
+            eq_id = parsed_id.strip()
         saved = save_equipment_model(
             workspace_dir=workspace,
-            equipment_id=req.id,
+            equipment_id=eq_id,
             layers=req.layers,
-            namespace=req.namespace
+            namespace=ns
         )
         return saved
     except ValueError as e:
@@ -159,12 +186,18 @@ async def create_or_update_equipment_model(req: EquipmentModelRequest):
 
 
 @router.delete("/equipment/{equipment_id}")
-async def remove_equipment_model(equipment_id: str, namespace: str = "craftlab"):
+async def remove_equipment_model(equipment_id: str, namespace: Optional[str] = None):
     workspace = get_default_workspace_dir()
-    deleted = delete_equipment_model(workspace, equipment_id, namespace)
+    effective_ns = namespace or "craftlab"
+    if ":" in equipment_id:
+        parsed_ns, parsed_id = equipment_id.split(":", 1)
+        if parsed_ns.strip():
+            effective_ns = parsed_ns.strip()
+        equipment_id = parsed_id.strip()
+    deleted = delete_equipment_model(workspace, equipment_id, effective_ns)
     if not deleted:
         raise HTTPException(status_code=404, detail="Equipment model not found")
-    return {"status": "deleted", "id": equipment_id}
+    return {"status": "deleted", "id": equipment_id, "namespace": effective_ns}
 
 
 # --- Sound Events Endpoints ---
@@ -179,15 +212,22 @@ async def get_all_sound_events(namespace: Optional[str] = None):
 async def create_or_update_sound_event(req: SoundEventRequest):
     workspace = get_default_workspace_dir()
     try:
+        ns = req.namespace
+        snd_id = req.id
+        if ":" in req.id:
+            parsed_ns, parsed_id = req.id.split(":", 1)
+            if parsed_ns.strip():
+                ns = parsed_ns.strip()
+            snd_id = parsed_id.strip()
         saved = save_sound_event(
             workspace_dir=workspace,
-            event_id=req.id,
+            event_id=snd_id,
             event_data={
                 "category": req.category,
                 "subtitle": req.subtitle,
                 "sounds": req.sounds
             },
-            namespace=req.namespace
+            namespace=ns
         )
         return saved
     except Exception as e:
@@ -195,12 +235,18 @@ async def create_or_update_sound_event(req: SoundEventRequest):
 
 
 @router.delete("/sounds/{event_id}")
-async def remove_sound_event(event_id: str, namespace: str = "craftlab"):
+async def remove_sound_event(event_id: str, namespace: Optional[str] = None):
     workspace = get_default_workspace_dir()
-    deleted = delete_sound_event(workspace, event_id, namespace)
+    effective_ns = namespace or "craftlab"
+    if ":" in event_id:
+        parsed_ns, parsed_id = event_id.split(":", 1)
+        if parsed_ns.strip():
+            effective_ns = parsed_ns.strip()
+        event_id = parsed_id.strip()
+    deleted = delete_sound_event(workspace, event_id, effective_ns)
     if not deleted:
         raise HTTPException(status_code=404, detail="Sound event not found")
-    return {"status": "deleted", "id": event_id}
+    return {"status": "deleted", "id": event_id, "namespace": effective_ns}
 
 
 class AudioPathRequest(BaseModel):
@@ -246,9 +292,15 @@ async def get_all_particles(namespace: Optional[str] = None):
 
 
 @router.get("/particles/{particle_id}")
-async def get_single_particle(particle_id: str, namespace: str = "craftlab"):
+async def get_single_particle(particle_id: str, namespace: Optional[str] = None):
     workspace = get_default_workspace_dir()
-    item = get_particle(workspace, particle_id, namespace)
+    effective_ns = namespace or "craftlab"
+    if ":" in particle_id:
+        parsed_ns, parsed_id = particle_id.split(":", 1)
+        if parsed_ns.strip():
+            effective_ns = parsed_ns.strip()
+        particle_id = parsed_id.strip()
+    item = get_particle(workspace, particle_id, effective_ns)
     if not item:
         raise HTTPException(status_code=404, detail="Particle definition not found")
     return item
@@ -258,12 +310,19 @@ async def get_single_particle(particle_id: str, namespace: str = "craftlab"):
 async def create_or_update_particle(req: ParticleRequest):
     workspace = get_default_workspace_dir()
     try:
+        ns = req.namespace
+        part_id = req.id
+        if ":" in req.id:
+            parsed_ns, parsed_id = req.id.split(":", 1)
+            if parsed_ns.strip():
+                ns = parsed_ns.strip()
+            part_id = parsed_id.strip()
         saved = save_particle(
             workspace_dir=workspace,
-            particle_id=req.id,
+            particle_id=part_id,
             textures=req.textures,
             emitter_params=req.emitter,
-            namespace=req.namespace
+            namespace=ns
         )
         return saved
     except ValueError as e:
@@ -271,9 +330,15 @@ async def create_or_update_particle(req: ParticleRequest):
 
 
 @router.delete("/particles/{particle_id}")
-async def remove_particle(particle_id: str, namespace: str = "craftlab"):
+async def remove_particle(particle_id: str, namespace: Optional[str] = None):
     workspace = get_default_workspace_dir()
-    deleted = delete_particle(workspace, particle_id, namespace)
+    effective_ns = namespace or "craftlab"
+    if ":" in particle_id:
+        parsed_ns, parsed_id = particle_id.split(":", 1)
+        if parsed_ns.strip():
+            effective_ns = parsed_ns.strip()
+        particle_id = parsed_id.strip()
+    deleted = delete_particle(workspace, particle_id, effective_ns)
     if not deleted:
         raise HTTPException(status_code=404, detail="Particle definition not found")
-    return {"status": "deleted", "id": particle_id}
+    return {"status": "deleted", "id": particle_id, "namespace": effective_ns}

@@ -4,6 +4,7 @@ import {
   fetchParticles,
   saveParticle,
   deleteParticle,
+  fetchCreativeNamespaces,
   ParticleItem,
 } from '../../../api/client'
 
@@ -12,6 +13,10 @@ export function ParticleStudioTab() {
   const [selectedParticle, setSelectedParticle] = useState<ParticleItem | null>(null)
   const [loading, setLoading] = useState(false)
   const [errorMsg, setErrorMsg] = useState<string | null>(null)
+
+  // Namespace support
+  const [namespace, setNamespace] = useState('craftlab')
+  const [availableNamespaces, setAvailableNamespaces] = useState<string[]>(['craftlab'])
 
   // Form State
   const [particleId, setParticleId] = useState('')
@@ -28,7 +33,13 @@ export function ParticleStudioTab() {
     setLoading(true)
     setErrorMsg(null)
     try {
-      const data = await fetchParticles()
+      const [nsList, data] = await Promise.all([
+        fetchCreativeNamespaces().catch(() => ['craftlab']),
+        fetchParticles(),
+      ])
+      if (nsList && nsList.length > 0) {
+        setAvailableNamespaces(nsList)
+      }
       setParticles(data)
       if (data.length > 0 && !selectedParticle) {
         selectItem(data[0])
@@ -49,7 +60,8 @@ export function ParticleStudioTab() {
   const selectItem = (item: ParticleItem) => {
     setSelectedParticle(item)
     setParticleId(item.id)
-    setTextureRef(item.textures[0] || `craftlab:particle/${item.id}`)
+    setNamespace(item.namespace || 'craftlab')
+    setTextureRef(item.textures[0] || `${item.namespace || 'craftlab'}:particle/${item.id}`)
     if (item.emitter) {
       setSpeed(item.emitter.speed ?? 4)
       setSpread(item.emitter.spread ?? 5)
@@ -60,21 +72,37 @@ export function ParticleStudioTab() {
   const resetForm = () => {
     setSelectedParticle(null)
     setParticleId('mystic_spark')
+    setNamespace('craftlab')
     setTextureRef('craftlab:particle/spark')
     setSpeed(4)
     setSpread(5)
     setRate(8)
   }
 
+  const handleParticleIdChange = (val: string) => {
+    if (val.includes(':')) {
+      const parts = val.split(':')
+      if (parts[0].trim()) {
+        const ns = parts[0].trim()
+        setNamespace(ns)
+        setTextureRef(`${ns}:particle/${parts.slice(1).join(':')}`)
+      }
+      setParticleId(parts.slice(1).join(':'))
+    } else {
+      setParticleId(val)
+    }
+  }
+
   const handleSave = async () => {
     if (!particleId.trim() || !textureRef.trim()) return
     setErrorMsg(null)
+    const effectiveNs = namespace.trim() || 'craftlab'
     try {
       await saveParticle({
         id: particleId.trim(),
         textures: [textureRef.trim()],
         emitter: { speed, spread, rate },
-        namespace: 'craftlab',
+        namespace: effectiveNs,
       })
       await loadData()
     } catch (e: any) {
@@ -82,10 +110,11 @@ export function ParticleStudioTab() {
     }
   }
 
-  const handleDelete = async (id: string) => {
-    if (!confirm(`Delete particle definition '${id}'?`)) return
+  const handleDelete = async (id: string, ns?: string) => {
+    const fullId = ns ? `${ns}:${id}` : id
+    if (!confirm(`Delete particle definition '${fullId}'?`)) return
     try {
-      await deleteParticle(id)
+      await deleteParticle(id, ns)
       setSelectedParticle(null)
       await loadData()
     } catch (e: any) {
@@ -167,10 +196,17 @@ export function ParticleStudioTab() {
     }
   }, [speed, spread, rate])
 
-  const command = `/particle craftlab:${particleId || 'spark'} ~ ~1 ~ 0.3 0.5 0.3 0.05 15`
+  const effectiveNs = namespace.trim() || 'craftlab'
+  const command = `/particle ${effectiveNs}:${particleId || 'spark'} ~ ~1 ~ 0.3 0.5 0.3 0.05 15`
 
   return (
     <div className="grid grid-cols-1 lg:grid-cols-12 gap-5">
+      <datalist id="particle-namespaces-list">
+        {availableNamespaces.map((ns) => (
+          <option key={ns} value={ns} />
+        ))}
+      </datalist>
+
       {/* Sidebar List */}
       <div className="lg:col-span-4 bg-[#141418] border border-[#23232b] rounded-xl p-4 flex flex-col space-y-3">
         <div className="flex items-center justify-between pb-2 border-b border-[#23232b]">
@@ -189,10 +225,10 @@ export function ParticleStudioTab() {
             <div className="text-xs text-gray-500 py-6 text-center">No particles registered yet.</div>
           ) : (
             particles.map((p) => {
-              const isSelected = selectedParticle?.id === p.id
+              const isSelected = selectedParticle?.id === p.id && (selectedParticle?.namespace || 'craftlab') === (p.namespace || 'craftlab')
               return (
                 <div
-                  key={p.id}
+                  key={`${p.namespace || 'craftlab'}:${p.id}`}
                   onClick={() => selectItem(p)}
                   className={`flex items-center justify-between p-2.5 rounded-lg border cursor-pointer transition text-xs ${
                     isSelected
@@ -203,14 +239,17 @@ export function ParticleStudioTab() {
                   <div className="flex items-center space-x-2.5 min-w-0">
                     <Sparkles className="w-4 h-4 text-amber-400 shrink-0" />
                     <div className="truncate">
-                      <div className="font-semibold truncate">{p.id}</div>
+                      <div className="font-semibold truncate">
+                        <span className="text-amber-400 font-mono text-[11px]">{p.namespace || 'craftlab'}:</span>
+                        {p.id}
+                      </div>
                       <div className="text-gray-500 text-[11px] font-mono">{p.textures[0]}</div>
                     </div>
                   </div>
                   <button
                     onClick={(e) => {
                       e.stopPropagation()
-                      handleDelete(p.id)
+                      handleDelete(p.id, p.namespace)
                     }}
                     className="text-gray-500 hover:text-red-400 p-1 transition"
                   >
@@ -235,15 +274,28 @@ export function ParticleStudioTab() {
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4 bg-[#141418] border border-[#23232b] rounded-xl p-4">
           {/* Controls */}
           <div className="space-y-3 text-xs">
-            <div>
-              <label className="block text-gray-400 mb-1">Particle Identifier</label>
-              <input
-                type="text"
-                value={particleId}
-                onChange={(e) => setParticleId(e.target.value)}
-                placeholder="e.g. mystic_spark"
-                className="w-full bg-[#1c1c22] border border-[#2b2b35] rounded-lg px-2.5 py-1.5 text-xs text-gray-100 focus:outline-none focus:border-amber-500"
-              />
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="block text-gray-400 mb-1">Namespace</label>
+                <input
+                  type="text"
+                  list="particle-namespaces-list"
+                  value={namespace}
+                  onChange={(e) => setNamespace(e.target.value.toLowerCase().trim())}
+                  placeholder="craftlab"
+                  className="w-full bg-[#1c1c22] border border-[#2b2b35] rounded-lg px-2.5 py-1.5 text-xs text-amber-300 font-mono focus:outline-none focus:border-amber-500"
+                />
+              </div>
+              <div>
+                <label className="block text-gray-400 mb-1">Particle Identifier</label>
+                <input
+                  type="text"
+                  value={particleId}
+                  onChange={(e) => handleParticleIdChange(e.target.value)}
+                  placeholder="e.g. mystic_spark"
+                  className="w-full bg-[#1c1c22] border border-[#2b2b35] rounded-lg px-2.5 py-1.5 text-xs text-gray-100 focus:outline-none focus:border-amber-500"
+                />
+              </div>
             </div>
 
             <div>

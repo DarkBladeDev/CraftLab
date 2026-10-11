@@ -104,6 +104,12 @@ def list_equipment_models(workspace_dir: Path, namespace: Optional[str] = None) 
 
 
 def get_equipment_model(workspace_dir: Path, equipment_id: str, namespace: str = "craftlab") -> Optional[Dict[str, Any]]:
+    if ":" in equipment_id:
+        parsed_ns, parsed_id = equipment_id.split(":", 1)
+        if parsed_ns.strip():
+            namespace = parsed_ns.strip()
+        equipment_id = parsed_id.strip()
+
     target_path = get_equipment_model_path(workspace_dir, equipment_id, namespace)
     if not target_path.exists():
         return None
@@ -130,6 +136,14 @@ def save_equipment_model(
     layers: List[Dict[str, Any]],
     namespace: str = "craftlab"
 ) -> Dict[str, Any]:
+    if ":" in equipment_id:
+        parsed_ns, parsed_id = equipment_id.split(":", 1)
+        if parsed_ns.strip():
+            namespace = parsed_ns.strip()
+        equipment_id = parsed_id.strip()
+
+    if not validate_identifier(namespace):
+        raise ValueError(f"Invalid namespace '{namespace}'. Must be lowercase, numbers, underscores, dots, hyphens.")
     if not validate_identifier(equipment_id):
         raise ValueError(f"Invalid equipment identifier '{equipment_id}'. Must be lowercase, numbers, underscores, dots, hyphens.")
 
@@ -155,6 +169,12 @@ def save_equipment_model(
 
 
 def delete_equipment_model(workspace_dir: Path, equipment_id: str, namespace: str = "craftlab") -> bool:
+    if ":" in equipment_id:
+        parsed_ns, parsed_id = equipment_id.split(":", 1)
+        if parsed_ns.strip():
+            namespace = parsed_ns.strip()
+        equipment_id = parsed_id.strip()
+
     target_path = get_equipment_model_path(workspace_dir, equipment_id, namespace)
     if target_path.exists():
         target_path.unlink()
@@ -167,6 +187,12 @@ def generate_equippable_component(
     slot: str = "chest",
     namespace: str = "craftlab"
 ) -> Dict[str, Any]:
+    if ":" in equipment_id:
+        parsed_ns, parsed_id = equipment_id.split(":", 1)
+        if parsed_ns.strip():
+            namespace = parsed_ns.strip()
+        equipment_id = parsed_id.strip()
+
     if slot not in VALID_EQUIPMENT_SLOTS:
         raise ValueError(f"Invalid equipment slot '{slot}'. Valid slots: {sorted(list(VALID_EQUIPMENT_SLOTS))}")
 
