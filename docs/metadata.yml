@@ -58,6 +58,15 @@ versions:
   # -------------------------------------------------------------
   # CURRENT VERSION (LATEST) -> Always the first entry [0]
   # -------------------------------------------------------------
+  - version: "0.11.0"
+    releaseDate: "2026-10-11"
+    reference: "v0.11.0"
+    downloadUrl: "https://github.com/DarkBladeDev/CraftLab/releases/tag/v0.11.0"
+    changelog: "Creative Assets Lab, 1.21.2+ equipment models, sound mono downmixing, and particle VFX"
+    minecraft:
+      - "1.21.1"
+      - "1.21.x"
+
   - version: "0.10.0"
     releaseDate: "2026-10-11"
     reference: "v0.10.0"
