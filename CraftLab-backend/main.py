@@ -42,7 +42,7 @@ async def lifespan(app: FastAPI):
     logger.info("Graceful shutdown complete.")
 
 
-app = FastAPI(title="Minecraft Content Platform", version="0.11.0", lifespan=lifespan)
+app = FastAPI(title="Minecraft Content Platform", version="0.11.1", lifespan=lifespan)
 
 app.add_middleware(
     CORSMiddleware,
