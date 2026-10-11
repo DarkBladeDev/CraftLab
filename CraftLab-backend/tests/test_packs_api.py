@@ -70,10 +70,11 @@ async def test_packs_api_full_workflow():
         sources_list = resp_list.json()
         assert any(s["id"] == source_id for s in sources_list)
 
-        # 4. Build pack
+        # 4. Build pack with configurable max_format
         build_payload = {
             "target_id": "target-pack-test",
             "pack_format": 34,
+            "max_format": 75,
             "description": "Test Compiled Pack"
         }
         resp_build = await client.post("/api/v1/packs/build", json=build_payload)
@@ -84,12 +85,20 @@ async def test_packs_api_full_workflow():
         assert build_data["file_size"] > 0
         sha1_hash = build_data["sha1_hash"]
 
-        # 5. Download pack
+        # 5. Download pack and verify pack.mcmeta contents
         resp_dl = await client.get("/api/v1/packs/target-pack-test/download")
         assert resp_dl.status_code == 200
         assert resp_dl.headers.get("etag") == f'"{sha1_hash}"'
         assert "application/zip" in resp_dl.headers.get("content-type")
         assert len(resp_dl.content) == build_data["file_size"]
+
+        with zipfile.ZipFile(io.BytesIO(resp_dl.content), "r") as zf:
+            mcmeta_bytes = zf.read("pack.mcmeta")
+            mcmeta_obj = json.loads(mcmeta_bytes.decode("utf-8"))
+            assert mcmeta_obj["pack"]["supported_formats"]["max_inclusive"] == 75
+            entries = mcmeta_obj["overlays"]["entries"]
+            assert any(e["directory"] == "overlay_v1_21_2" and e["formats"]["max_inclusive"] == 75 for e in entries)
+            assert any(e["directory"] == "overlay_v1_21_4" and e["formats"]["max_inclusive"] == 75 for e in entries)
 
         # 6. Conditional GET with matching ETag (304 Not Modified)
         resp_304 = await client.get(

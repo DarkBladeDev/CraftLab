@@ -54,9 +54,11 @@ Author custom furniture, 3D decorative blocks, and props without registering til
 
 ### 3. Pack Manager
 Comprehensive workspace for packaging visual assets:
-- **Asset Hierarchy Tree**: Inspect textures, block models, item models, and localization strings.
-- **Pack Manifest Configurator**: Define `pack_format`, description strings, and custom pack icons.
-- **One-Click Build**: Trigger server-side compilation, review SHA-1 digests, and verify player download links.
+- **Universal Multi-Version Matrix**: Real-time visualization of the 4-layer packaging architecture: Base Layer (1.21.0 - 1.21.1, formats 34..41), Items V2 (1.21.2+, formats 42..max), Modern Shaders (1.21.4+, formats 46..max), and auto-synthesized texture atlases.
+- **Layer Precedence Manager**: Drag-and-drop or configure layer evaluation priority for Studio assets, workspace files, and ingested third-party pack sources.
+- **Pre-Flight Conflict Auditor**: Interactive diagnostic modal displaying blocking CustomModelData collisions, missing physical texture references, core shader overlaps, and mipmap/animation safety warnings.
+- **Pack Manifest Configurator**: Define base format, operator-configurable maximum format boundaries (`max_inclusive`), and description metadata.
+- **One-Click Build**: Trigger server-side compilation, review deterministic SHA-1 digests, and verify player download links.
 
 ### 4. Target Management
 Centralized fleet dashboard for all linked Paper servers:

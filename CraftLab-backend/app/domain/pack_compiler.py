@@ -70,12 +70,9 @@ class DeterministicPackCompiler:
         pack_format: int = 34,
         min_inclusive: int = 34,
         max_inclusive: int = 65,
-        overlay_min: int = 42,
-        overlay_max: int = 65,
-        overlay_dir: str = "overlay_v1_21_2",
         description: str = "Universal Multi-Version Resource Pack (1.21.1 - 1.21.11)"
     ) -> Dict[str, Any]:
-        """Generates pack.mcmeta with overlays for multi-version client compatibility."""
+        """Generates pack.mcmeta with cumulative overlays for multi-version client compatibility."""
         return {
             "pack": {
                 "pack_format": pack_format,
@@ -91,12 +88,21 @@ class DeterministicPackCompiler:
                 "entries": [
                     {
                         "formats": {
-                            "min_inclusive": overlay_min,
-                            "max_inclusive": overlay_max
+                            "min_inclusive": 42,
+                            "max_inclusive": max_inclusive
                         },
-                        "min_format": overlay_min,
-                        "max_format": overlay_max,
-                        "directory": overlay_dir
+                        "min_format": 42,
+                        "max_format": max_inclusive,
+                        "directory": "overlay_v1_21_2"
+                    },
+                    {
+                        "formats": {
+                            "min_inclusive": 46,
+                            "max_inclusive": max_inclusive
+                        },
+                        "min_format": 46,
+                        "max_format": max_inclusive,
+                        "directory": "overlay_v1_21_4"
                     }
                 ]
             }
@@ -107,11 +113,18 @@ class DeterministicPackCompiler:
         cls,
         target_dir: Path,
         pack_format: int = 34,
+        min_inclusive: int = 34,
+        max_inclusive: int = 65,
         description: str = "Universal Multi-Version Resource Pack (1.21.1 - 1.21.11)"
     ) -> Path:
         """Writes multi-version pack.mcmeta into target_dir."""
         mcmeta_path = target_dir / "pack.mcmeta"
-        content = cls.generate_multiversion_mcmeta(pack_format=pack_format, description=description)
+        content = cls.generate_multiversion_mcmeta(
+            pack_format=pack_format,
+            min_inclusive=min_inclusive,
+            max_inclusive=max_inclusive,
+            description=description
+        )
         mcmeta_path.write_text(json.dumps(content, indent=2), encoding="utf-8")
         return mcmeta_path
 

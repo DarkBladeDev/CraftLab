@@ -6,11 +6,11 @@ Provides automated resource pack management, semantic JSON merging of multi-sour
 ## Requirements
 
 ### Requirement: Pack Source Storage and Ingestion
-The system SHALL maintain a repository of pack sources comprising Studio project assets, uploaded third-party zip archives, and automated plugin pack snapshots synchronized from connected server agents, structured with an explicit layer priority hierarchy, and SHALL support updating layer metadata (name, priority, active state) and deleting registered pack sources.
+The system SHALL maintain a repository of pack sources comprising Studio project assets, uploaded third-party zip archives, and automated plugin pack snapshots synchronized from connected server agents, structured with an explicit layer priority hierarchy, SHALL parse `pack.mcmeta` manifests on imported archives to normalize external overlay directories and format bounds into canonical CraftLab overlay targets (`root`, `overlay_v1_21_2`, and `overlay_v1_21_4`), and SHALL support updating layer metadata (name, priority, active state) and deleting registered pack sources.
 
 #### Scenario: Ingest external zip archive
 - **WHEN** an operator uploads a valid resource pack `.zip` file via the web management interface
-- **THEN** the system extracts and registers the pack source with metadata, layer precedence, and namespaces in the pack repository
+- **THEN** the system extracts and registers the pack source, parses `pack.mcmeta` to normalize foreign overlay directories to canonical targets (`root`, `overlay_v1_21_2`, `overlay_v1_21_4`), and stores layer precedence and namespaces in the pack repository
 
 #### Scenario: Ingest agent synchronized pack
 - **WHEN** an agent uploads an extracted plugin pack snapshot from its local filesystem
@@ -25,30 +25,46 @@ The system SHALL maintain a repository of pack sources comprising Studio project
 - **THEN** the system removes the source record and associated storage files from disk
 
 ### Requirement: Pre-Flight Collision Detection
-The system MUST perform pre-flight conflict analysis across all active pack layers prior to compilation, detecting CustomModelData overlaps on identical item materials, conflicting item model definitions, conflicting binary asset paths, and conflicting `item_model` component identifiers.
+The system MUST perform pre-flight conflict analysis across all active pack layers prior to compilation, detecting CustomModelData overlaps on identical item materials, conflicting item model definitions, conflicting binary asset paths, conflicting `item_model` component identifiers, overlapping core shader programs across layers, missing physical texture files referenced by JSON models, non-power-of-two texture dimensions violating mipmap safety, and animated textures lacking `.png.mcmeta` declarations.
 
 #### Scenario: CustomModelData collision detected
 - **WHEN** a Studio item definition and an ingested plugin pack define the same CustomModelData integer on the same base Minecraft item material
 - **THEN** the pre-flight check returns a validation error reporting the collision, both conflicting resource identifiers, and direct navigation links to the items
 
 #### Scenario: Clean pre-flight validation
-- **WHEN** all active layers contain non-overlapping CustomModelData indices and valid resource structures
-- **THEN** the pre-flight check returns success with a summary of total textures, models, sound events, and font definitions
+- **WHEN** all active layers contain non-overlapping CustomModelData indices, valid resource structures, matching texture files, and non-conflicting shaders
+- **THEN** the pre-flight check returns success with a summary of total textures, models, sound events, font definitions, and shader programs
 
 #### Scenario: Item model identifier collision detected
 - **WHEN** two distinct items across active layers declare identical `item_model` identifiers
 - **THEN** the pre-flight check flags an error with the colliding identifier and layer names
 
+#### Scenario: Core shader collision detected
+- **WHEN** two active layers provide differing implementations of the same core shader program (e.g. `shaders/core/rendertype_text.vsh`)
+- **THEN** the pre-flight check generates a collision warning detailing both source layers and identifying which layer takes precedence
+
+#### Scenario: Missing texture reference detected
+- **WHEN** a JSON model references a texture path (e.g. `studio:item/ruby_dagger`) that does not exist on disk in any active layer
+- **THEN** the pre-flight check flags a validation error detailing the missing texture path and the referencing model
+
+#### Scenario: Mipmap dimension and animation metadata warning
+- **WHEN** an ingested PNG texture has dimensions that are not powers of two, or has a vertical aspect ratio indicating an animated spritesheet without an accompanying `.png.mcmeta` file
+- **THEN** the pre-flight check returns a warning specifying the texture path and recommended correction
+
 ### Requirement: Universal Hybrid Pack Overlays Compilation
-The resource pack compiler MUST construct a unified, backwards- and forwards-compatible resource pack archive with `pack_format: 34`, `supported_formats: {"min_inclusive": 34, "max_inclusive": 65}`, and versioned `overlays` targeting Minecraft 1.21.2 through 1.21.11 (`overlay_v1_21_2`), housing common assets in the root namespace and version-specific model dispatches inside the overlay directory.
+The resource pack compiler MUST construct a unified, backwards- and forwards-compatible resource pack archive with `pack_format: 34`, dynamic operator-configurable `supported_formats: {"min_inclusive": 34, "max_inclusive": <max_format>}` (defaulting to 65), and an ordered, cumulative overlay chain comprising `overlay_v1_21_2` (formats 42 to `max_inclusive`) for Item Definition V2 model dispatches and `overlay_v1_21_4` (formats 46 to `max_inclusive`) for modernized shader pipelines and render passes, while preserving common textures, sounds, and fonts strictly in the root namespace without duplication.
 
 #### Scenario: Compile universal multi-version pack archive
-- **WHEN** the compiler builds a resource pack for distribution
-- **THEN** the root `pack.mcmeta` includes `supported_formats` spanning 34 to 65 and an overlay entry mapping format range 42 to 65 to directory `overlay_v1_21_2`
+- **WHEN** the compiler builds a resource pack for distribution with operator-configured format boundaries
+- **THEN** the root `pack.mcmeta` includes `supported_formats` spanning format 34 to `max_inclusive` (default 65), `overlay_v1_21_2` mapping formats 42 to `max_inclusive`, and `overlay_v1_21_4` mapping formats 46 to `max_inclusive`
 
 #### Scenario: Shared assets asset placement
 - **WHEN** the compiler packages textures, sound files, font providers, and atlas definitions
 - **THEN** these assets are written strictly to the root `assets/` directory without duplication inside the overlay directory
+
+#### Scenario: Overlay evaluation ordering
+- **WHEN** a Minecraft 1.21.4 client (format 46) loads the compiled resource pack
+- **THEN** the client sequentially evaluates root assets, applies `overlay_v1_21_2` for modern item definitions, and applies `overlay_v1_21_4` for updated shader pipelines
 
 ### Requirement: Dual-Projection Item Model Synthesizer
 The compiler and merger engine MUST synthesize dual model projections from an intermediate canonical model mapping: generating legacy `models/item/<material>.json` predicate overrides for 1.21.0 - 1.21.1 clients, and modern `items/<material>.json` Item Definition V2 select structures inside `overlay_v1_21_2` for 1.21.2+ clients.
@@ -62,7 +78,7 @@ The compiler and merger engine MUST synthesize dual model projections from an in
 - **THEN** the compiler synthesizes the corresponding `overrides` array inside `assets/minecraft/models/item/diamond_sword.json` in the base layer
 
 ### Requirement: Semantic JSON Configuration Merging
-The merger engine MUST perform deep semantic merging for core Minecraft configuration files rather than raw file overwrites, specifically merging `sounds.json` audio event keys, concatenating `font/*.json` provider entries, and concatenating `atlases/*.json` sources.
+The merger engine MUST perform deep semantic merging for core Minecraft configuration files rather than raw file overwrites, specifically merging `sounds.json` audio event keys, concatenating `font/*.json` provider entries, synthesizing texture atlas definitions in `atlases/blocks.json` and `atlases/gui.json` via namespace induction, merging `lang/*.json` translation mappings, and merging item model definitions and overrides.
 
 #### Scenario: Merging multiple sound definitions
 - **WHEN** two pack layers define entries in `assets/minecraft/sounds.json`
@@ -71,6 +87,10 @@ The merger engine MUST perform deep semantic merging for core Minecraft configur
 #### Scenario: Merging item model overrides
 - **WHEN** multiple layers define model overrides for a vanilla item like `diamond_sword.json`
 - **THEN** the compiled item model merges all `overrides` entries sorted in ascending order of their `custom_model_data` values
+
+#### Scenario: Merging translation mappings
+- **WHEN** multiple pack layers supply translations in `assets/*/lang/*.json`
+- **THEN** the compiled language files contain the union of translation keys with higher priority layers overriding lower priority ones
 
 ### Requirement: Deterministic Zip Compilation and SHA-1 Hashing
 The compiler MUST build resource pack `.zip` archives with deterministic entry ordering, normalized timestamps, and fixed compression levels so that byte-identical archives produce identical 40-character hexadecimal SHA-1 checksums across builds.
@@ -105,3 +125,28 @@ The resource pack compiler and merger engine MUST incorporate the local workspac
 - **WHEN** an operator updates the workspace pack description or supported format bounds in the management interface
 - **THEN** the system updates `pack.mcmeta` in the workspace directory and uses the updated metadata on subsequent builds
 
+### Requirement: Shader Pipeline Routing and Version Isolation
+The compiler and merger engine MUST route shader programs according to target Minecraft client version compatibility, ensuring legacy core shaders targeting 1.21.0 - 1.21.3 are staged in root assets and modern 1.21.4+ shader pipelines are isolated within `overlay_v1_21_4`.
+
+#### Scenario: Modern shader routing to overlay
+- **WHEN** an active pack layer provides core shaders compatible with 1.21.4+ vertex formats
+- **THEN** the compiler stages those shader programs inside `overlay_v1_21_4/assets/minecraft/shaders/core/`, preserving legacy shaders in root assets for older clients
+
+#### Scenario: Legacy client shader isolation
+- **WHEN** a Minecraft 1.21.1 client connects
+- **THEN** the client does not load shaders from `overlay_v1_21_4`, preventing GLSL vertex format compilation errors
+
+### Requirement: Texture Atlas Auto-Synthesis and Namespace Induction
+The merger engine MUST scan all texture resource locations across compiled models and item definitions, discover all custom namespaces and directory prefixes, and automatically inject deduplicated directory and single sources into `assets/minecraft/atlases/blocks.json` and `assets/minecraft/atlases/gui.json` to prevent client missing sprite rendering failures.
+
+#### Scenario: Custom namespace blocks atlas induction
+- **WHEN** Studio models reference textures in `studio:item/*` and `studio:props/*`
+- **THEN** the compiled `assets/minecraft/atlases/blocks.json` includes directory sources for `studio:item` with prefix `item/` and `studio:props` with prefix `props/`
+
+#### Scenario: GUI sprites atlas induction
+- **WHEN** pack layers contain GUI textures under `assets/*/textures/gui/sprites/**`
+- **THEN** the compiled `assets/minecraft/atlases/gui.json` includes corresponding directory sources ensuring custom UI sprites are loaded into the Minecraft 1.20.2+ GUI texture atlas
+
+#### Scenario: Deduplication and source consolidation
+- **WHEN** multiple layers define single and directory sources covering overlapping paths in an atlas
+- **THEN** the synthesizer consolidates entries to eliminate redundant single sprite entries covered by directory prefixes

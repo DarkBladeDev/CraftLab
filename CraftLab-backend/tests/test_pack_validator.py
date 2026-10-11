@@ -158,3 +158,78 @@ def test_preflight_modern_item_definition_collision(tmp_path: Path):
     assert report.is_valid is False
     assert any(c.custom_model_data == 7007 for c in report.conflicts)
 
+
+def test_preflight_shader_collision(tmp_path: Path):
+    src1 = tmp_path / "src1"
+    src2 = tmp_path / "src2"
+
+    sh1 = src1 / "assets" / "minecraft" / "shaders" / "core" / "rendertype_text.vsh"
+    sh1.parent.mkdir(parents=True)
+    sh1.write_text("// shader 1", encoding="utf-8")
+
+    sh2 = src2 / "assets" / "minecraft" / "shaders" / "core" / "rendertype_text.vsh"
+    sh2.parent.mkdir(parents=True)
+    sh2.write_text("// shader 2", encoding="utf-8")
+
+    sources = [
+        {"name": "ShaderPackA", "storage_path": str(src1), "layer_priority": 10},
+        {"name": "ShaderPackB", "storage_path": str(src2), "layer_priority": 20}
+    ]
+
+    report = PreflightValidator.validate([], sources=sources)
+    assert report.has_warnings is True
+    shader_warns = [w for w in report.warnings if w.type == "shader_collision"]
+    assert len(shader_warns) == 1
+    assert "ShaderPackB" in shader_warns[0].message
+
+
+def test_preflight_missing_texture_reference(tmp_path: Path):
+    src = tmp_path / "src"
+    model_file = src / "assets" / "studio" / "models" / "item" / "ruby_dagger.json"
+    model_file.parent.mkdir(parents=True)
+    model_file.write_text(json.dumps({
+        "parent": "item/handheld",
+        "textures": {
+            "layer0": "studio:item/non_existent_ruby"
+        }
+    }), encoding="utf-8")
+
+    sources = [{"name": "StudioSource", "storage_path": str(src), "layer_priority": 10}]
+    report = PreflightValidator.validate([], sources=sources)
+    assert report.is_valid is False
+    tex_conflicts = [c for c in report.conflicts if c.type == "missing_texture_reference"]
+    assert len(tex_conflicts) == 1
+    assert "studio:item/non_existent_ruby" in tex_conflicts[0].path
+
+
+def test_preflight_texture_dimension_and_animation_warnings(tmp_path: Path):
+    import struct, zlib
+
+    def make_dummy_png(w: int, h: int) -> bytes:
+        header = b"\x89PNG\r\n\x1a\n"
+        ihdr_data = struct.pack(">IIBBBBB", w, h, 8, 6, 0, 0, 0)
+        ihdr_crc = struct.pack(">I", zlib.crc32(b"IHDR" + ihdr_data))
+        return header + struct.pack(">I", 13) + b"IHDR" + ihdr_data + ihdr_crc
+
+    src = tmp_path / "src"
+    tex_dir = src / "assets" / "studio" / "textures" / "item"
+    tex_dir.mkdir(parents=True)
+
+    # 1. Non-power-of-two (15x15)
+    (tex_dir / "odd.png").write_bytes(make_dummy_png(15, 15))
+
+    # 2. Animated strip (16x32) without .png.mcmeta
+    (tex_dir / "animated.png").write_bytes(make_dummy_png(16, 32))
+
+    # 3. Animated strip (16x48) WITH .png.mcmeta (should not warn)
+    (tex_dir / "valid_anim.png").write_bytes(make_dummy_png(16, 48))
+    (tex_dir / "valid_anim.png.mcmeta").write_text('{"animation": {}}', encoding="utf-8")
+
+    sources = [{"name": "TextureSource", "storage_path": str(src), "layer_priority": 10}]
+    report = PreflightValidator.validate([], sources=sources)
+
+    warn_types = [w.type for w in report.warnings]
+    assert "texture_dimension_warning" in warn_types
+    assert "texture_animation_warning" in warn_types
+
+

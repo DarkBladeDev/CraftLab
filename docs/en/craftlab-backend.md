@@ -51,12 +51,14 @@ The gateway establishes a persistent bi-directional link with in-game servers ru
 - **Dynamic Command Dispatch**: Sends deployment envelopes (`item:deploy`, `prop:deploy`, `resource_pack_ready`) immediately when assets change in Web Studio.
 - **Heartbeats & State Tracking**: Monitors server connection state, Paper version, and loaded packs.
 
-### 2. Resource Pack Pipeline (`PackCompiler` & `PackMerger`)
-CraftLab automates the tedious assembly of Minecraft resource packs:
-- **Asset Collection**: Gathers textures, custom model JSONs, sound definitions, and modern 1.21 item definitions.
-- **Hermetic ZIP Packaging**: Compiles the pack into standard Minecraft pack formats (`pack.mcmeta` version 34+ for 1.21.1+).
-- **Automated SHA-1 Calculation**: Generates the exact hexadecimal SHA-1 checksum required by Minecraft clients to verify pack integrity.
-- **Hot Distribution**: Automatically dispatches a `resource_pack_ready` notification to connected servers to prompt online players.
+### 2. Resource Pack Pipeline (`PackCompiler`, `PackMerger` & `PreflightValidator`)
+CraftLab automates the assembly of multi-version Minecraft resource packs with zero asset bloat:
+- **Cumulative Multi-Version Overlays**: Produces packs compatible across Minecraft 1.21.0 to 1.21.4+ via root assets (formats 34..41), `overlay_v1_21_2` (formats 42..max) for Item Definition V2, and `overlay_v1_21_4` (formats 46..max) for modern core shader pipelines.
+- **Shader Routing Engine (`ShaderRouter`)**: Automatically classifies core shader programs (`.vsh`, `.fsh`, `.json`), isolating 1.21.4+ vertex formats in `overlay_v1_21_4` while preserving legacy shaders in root assets for older clients.
+- **Texture Atlas Auto-Synthesis (`AtlasSynthesizer`)**: Scans custom namespaces and GUI sprites, automatically generating minimal, grouped `directory` entries in `assets/minecraft/atlases/blocks.json` and `gui.json` to eliminate missing sprite checkerboards.
+- **Dual-Projection Synthesis**: Simultaneously synthesizes legacy `models/item/*.json` predicate overrides and modern `items/*.json` select definitions from unified mappings.
+- **Pre-Flight Conflict Auditor**: Validates CustomModelData collisions, missing physical texture references, core shader overlaps across layers, power-of-two mipmap dimensions, and animated vertical spritesheets missing `.png.mcmeta`.
+- **Hermetic ZIP Packaging & Determinism**: Builds bit-identical ZIP archives with normalized timestamps and SHA-1 checksums for client verification and hot distribution via WebSocket notifications.
 
 ### 3. Role-Based Access Control (RBAC)
 - **Password Hashing**: Employs industry-standard Argon2id hashing algorithms.

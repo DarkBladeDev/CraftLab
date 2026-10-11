@@ -1,7 +1,8 @@
 import json
 import os
+import struct
 from pathlib import Path
-from typing import List, Dict, Any, Optional, Tuple
+from typing import List, Dict, Any, Optional, Tuple, Set
 from pydantic import BaseModel, Field
 
 
@@ -83,6 +84,35 @@ class PreflightValidator:
             pass
         return results
 
+    @staticmethod
+    def get_png_dimensions(data: bytes) -> Optional[Tuple[int, int]]:
+        """Parses width and height from PNG IHDR chunk without external dependencies."""
+        if len(data) >= 24 and data[:8] == b"\x89PNG\r\n\x1a\n":
+            width, height = struct.unpack(">II", data[16:24])
+            return width, height
+        return None
+
+    @staticmethod
+    def is_power_of_two(n: int) -> bool:
+        """Returns True if integer n is a power of 2 greater than 0."""
+        return n > 0 and (n & (n - 1)) == 0
+
+    @classmethod
+    def extract_textures_from_model_json(cls, file_path: Path) -> List[str]:
+        """Extracts texture resource locations declared in a model JSON."""
+        textures: List[str] = []
+        try:
+            with open(file_path, "r", encoding="utf-8") as f:
+                data = json.load(f)
+                tex_dict = data.get("textures", {})
+                if isinstance(tex_dict, dict):
+                    for val in tex_dict.values():
+                        if isinstance(val, str) and not val.startswith("#"):
+                            textures.append(val.strip())
+        except Exception:
+            pass
+        return textures
+
     @classmethod
     def validate(
         cls,
@@ -97,6 +127,16 @@ class PreflightValidator:
         cmd_index: Dict[Tuple[str, int], List[ConflictItemInfo]] = {}
         # Map item_model -> list of occurrences
         item_model_index: Dict[str, List[ConflictItemInfo]] = {}
+
+        # Shader tracking: rel_path -> list of (src_name, layer_priority)
+        shader_index: Dict[str, List[Tuple[str, int]]] = {}
+
+        # Physical textures: rel_path -> (file_path, src_name)
+        existing_texture_paths: Set[str] = set()
+        texture_file_map: Dict[str, Tuple[Path, str]] = {}
+
+        # Model texture references: list of (tex_ref, model_id, src_name)
+        model_texture_refs: List[Tuple[str, str, str]] = []
 
         # 1. Index Studio items
         for item in studio_items:
@@ -140,6 +180,7 @@ class PreflightValidator:
             for src in sources:
                 src_name = getattr(src, "name", None) or (src.get("name") if isinstance(src, dict) else "Unknown Source")
                 src_path_str = getattr(src, "storage_path", None) or (src.get("storage_path") if isinstance(src, dict) else None)
+                src_priority = getattr(src, "layer_priority", None) or (src.get("layer_priority") if isinstance(src, dict) else 10)
                 if not src_path_str:
                     continue
 
@@ -148,6 +189,30 @@ class PreflightValidator:
                     src_path = base_dir / src_path
 
                 if not src_path.exists() or not src_path.is_dir():
+                    continue
+
+                # Scan physical files in src_path for shaders, textures, and models
+                for root, _, files in os.walk(src_path):
+                    root_p = Path(root)
+                    for f in files:
+                        f_lower = f.lower()
+                        file_p = root_p / f
+                        rel_parts = file_p.relative_to(src_path).parts
+                        if rel_parts and (rel_parts[0].startswith("overlay") or rel_parts[0] == "overlays"):
+                            norm_parts = rel_parts[1:] if rel_parts[0] != "overlays" else rel_parts[2:]
+                        else:
+                            norm_parts = rel_parts
+                        norm_rel = "/".join(norm_parts).lower()
+
+                        if f_lower.endswith(".png"):
+                            existing_texture_paths.add(norm_rel)
+                            texture_file_map.setdefault(norm_rel, (file_p, src_name))
+                        elif "shaders" in norm_parts and "core" in norm_parts and (f_lower.endswith(".vsh") or f_lower.endswith(".fsh") or f_lower.endswith(".json")):
+                            shader_index.setdefault(norm_rel, []).append((src_name, src_priority))
+                        elif f_lower.endswith(".json") and "models" in norm_parts:
+                            model_id = f"{src_name}:{file_p.stem}"
+                            for t in cls.extract_textures_from_model_json(file_p):
+                                model_texture_refs.append((t, model_id, src_name))
                     continue
 
                 # Check legacy assets/minecraft/models/item/*.json
@@ -244,6 +309,67 @@ class PreflightValidator:
                 )
                 conflicts.append(collision)
 
+        # 5. Detect Shader Collisions
+        for shader_path, src_list in shader_index.items():
+            if len(src_list) > 1:
+                src_list_sorted = sorted(src_list, key=lambda x: x[1], reverse=True)
+                sources_involved = [s[0] for s in src_list_sorted]
+                winner = src_list_sorted[0][0]
+                warnings.append(CollisionDetail(
+                    type="shader_collision",
+                    severity="warning",
+                    material="SHADER",
+                    path=shader_path,
+                    message=f"Core shader '{shader_path}' is provided by {len(src_list)} sources ({', '.join(sources_involved)}). Source '{winner}' takes precedence."
+                ))
+
+        # 6. Detect Missing Textures referenced by models
+        for tex_ref, model_id, src_name in model_texture_refs:
+            if ":" in tex_ref:
+                ns, path_part = tex_ref.split(":", 1)
+            else:
+                ns, path_part = "minecraft", tex_ref
+
+            if ns != "minecraft":
+                expected_rel = f"assets/{ns}/textures/{path_part}.png".lower()
+                if expected_rel not in existing_texture_paths:
+                    conflicts.append(CollisionDetail(
+                        type="missing_texture_reference",
+                        severity="error",
+                        material=ns.upper(),
+                        path=tex_ref,
+                        message=f"Model '{model_id}' in '{src_name}' references texture '{tex_ref}' which does not exist on disk in any active layer"
+                    ))
+
+        # 7. Check texture dimensions and animation metadata
+        for norm_rel, (file_p, src_name) in texture_file_map.items():
+            try:
+                data = file_p.read_bytes()
+                dims = cls.get_png_dimensions(data)
+                if dims:
+                    w, h = dims
+                    if h > w and (h % w == 0):
+                        mcmeta_p = file_p.with_name(file_p.name + ".mcmeta")
+                        if not mcmeta_p.exists():
+                            warnings.append(CollisionDetail(
+                                type="texture_animation_warning",
+                                severity="warning",
+                                material="TEXTURE",
+                                path=norm_rel,
+                                message=f"Texture '{file_p.name}' in '{src_name}' ({w}x{h}) appears to be an animated spritesheet (height > width) but lacks a companion .png.mcmeta file"
+                            ))
+                    else:
+                        if not (cls.is_power_of_two(w) and cls.is_power_of_two(h)):
+                            warnings.append(CollisionDetail(
+                                type="texture_dimension_warning",
+                                severity="warning",
+                                material="TEXTURE",
+                                path=norm_rel,
+                                message=f"Texture '{file_p.name}' in '{src_name}' dimensions ({w}x{h}) are not powers of two, which may cause mipmap rendering artifacts"
+                            ))
+            except Exception:
+                pass
+
         total_cmd_entries = sum(len(items) for items in cmd_index.values())
         total_item_models = sum(len(items) for items in item_model_index.values())
 
@@ -256,6 +382,8 @@ class PreflightValidator:
             "total_items_checked": total_cmd_entries + total_item_models,
             "unique_material_cmd_pairs": len(cmd_index),
             "unique_item_models": len(item_model_index),
+            "total_shaders_checked": len(shader_index),
+            "total_textures_checked": len(texture_file_map),
             "collisions_count": len(conflicts),
             "warnings_count": len(warnings)
         }

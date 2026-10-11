@@ -1,3 +1,4 @@
+from pathlib import Path
 from typing import List, Optional, Dict, Any
 from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -31,6 +32,15 @@ class CompiledPackSchema(BaseModel):
 
 
 class PackRepository:
+    @staticmethod
+    def normalize_source_directory(storage_path: str) -> List[Dict[str, Any]]:
+        """Invokes PackManifestInspector on storage_path if it exists to ensure overlays are canonical."""
+        from app.domain.pack_merger import PackManifestInspector
+        p = Path(storage_path)
+        if p.exists() and p.is_dir():
+            return PackManifestInspector.normalize_extracted_pack(p)
+        return []
+
     @staticmethod
     async def create_or_update_source(
         db: AsyncSession,

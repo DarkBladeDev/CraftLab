@@ -51,12 +51,14 @@ El gateway establece una conexión bidireccional continua con los servidores Min
 - **Despacho Dinámico de Acciones**: Emite paquetes de despliegue (`item:deploy`, `prop:deploy`, `resource_pack_ready`) de inmediato ante cambios realizados en el Web Studio.
 - **Latidos y Monitorización de Estado**: Rastrea el estado de conexión del servidor, la versión de Paper y los packs cargados.
 
-### 2. Pipeline de Resource Packs (`PackCompiler` y `PackMerger`)
-Automatiza el complejo ensamblado de paquetes de texturas y modelos para Minecraft:
-- **Recolección de Recursos**: Agrupa texturas, archivos JSON de modelos personalizados, metadatos de audio y definiciones de ítems modernas para 1.21.
-- **Empaquetado ZIP Hermético**: Compila el archivo respetando la estructura oficial (`pack.mcmeta` versión 34+ para Paper 1.21.1+).
-- **Cálculo Automático de Hash SHA-1**: Genera el checksum hexadecimal requerido por los clientes de Minecraft para validar la integridad del paquete.
-- **Distribución en Caliente**: Emite el evento `resource_pack_ready` a los servidores vinculados para solicitar la descarga automática a los usuarios en línea.
+### 2. Pipeline de Resource Packs (`PackCompiler`, `PackMerger` y `PreflightValidator`)
+Automatiza el ensamblado de paquetes de recursos multi-versión para Minecraft con cero duplicación de assets:
+- **Overlays Acumulativos Multi-Versión**: Genera paquetes compatibles desde 1.21.0 hasta 1.21.4+ mediante la raíz (formatos 34..41), `overlay_v1_21_2` (formatos 42..max) para Item Definition V2 y `overlay_v1_21_4` (formatos 46..max) para shaders modernos de 1.21.4+.
+- **Motor de Enrutamiento de Shaders (`ShaderRouter`)**: Clasifica automáticamente programas de shaders (`.vsh`, `.fsh`, `.json`), aislando formatos de vértices modernos de 1.21.4+ en `overlay_v1_21_4` y preservando shaders legacy en la raíz para clientes antiguos.
+- **Auto-Síntesis de Atlas de Texturas (`AtlasSynthesizer`)**: Escanea namespaces personalizados y sprites de interfaz, inyectando entradas `directory` agrupadas en `assets/minecraft/atlases/blocks.json` y `gui.json` para evitar errores de renderizado.
+- **Proyección Dual de Modelos**: Genera en paralelo overrides de predicados para 1.21.0 - 1.21.1 (`models/item/*.json`) y definiciones modernas para 1.21.2+ (`items/*.json`).
+- **Auditor Pre-Flight de Conflictos**: Detecta colisiones de CustomModelData, referencias a texturas inexistentes en disco, colisiones de shaders entre capas con precedencia, validación de dimensiones potencia de dos (mipmaps) y detección de animaciones sin `.png.mcmeta`.
+- **Empaquetado ZIP Hermético y Determinista**: Compila archivos ZIP idénticos bit a bit con timestamps normalizados y checksum SHA-1 para distribución inmediata mediante WebSocket.
 
 ### 3. Control de Acceso Basado en Roles (RBAC)
 - **Hasheo Seguro de Contraseñas**: Utiliza algoritmos de derivación de claves Argon2id.

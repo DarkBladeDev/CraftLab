@@ -58,10 +58,12 @@ async def test_pack_repository_crud():
         assert fetched is not None
         assert fetched.plugin == "oraxen"
 
+        import uuid
+        test_pid = f"pack-test-{uuid.uuid4().hex[:6]}"
         # Record compiled pack
         pack = await PackRepository.record_compiled_pack(
             db=session,
-            pack_id="pack-test-1",
+            pack_id=test_pid,
             pack_name="resourcepack-main.zip",
             storage_path="/data/packs/dist/resourcepack-main.zip",
             file_size=1024,
@@ -69,16 +71,29 @@ async def test_pack_repository_crud():
             pack_format=34,
             build_summary={"textures": 10, "models": 5}
         )
-        assert pack.id == "pack-test-1"
+        assert pack.id == test_pid
         assert pack.sha1_hash == "a9993e364706816aba3e25717850c26c9cd0d89d"
 
         # Fetch latest compiled pack
         latest = await PackRepository.get_latest_compiled_pack(db=session)
         assert latest is not None
-        assert latest.id == "pack-test-1"
+        assert latest.id == test_pid
 
         # Cleanup
         del_res = await PackRepository.delete_source(db=session, source_id="src-test-studio")
         assert del_res is True
         del_res2 = await PackRepository.delete_source(db=session, source_id="src-test-plugin")
         assert del_res2 is True
+
+
+def test_normalize_source_directory(tmp_path):
+    pack_dir = tmp_path / "imported_layer"
+    pack_dir.mkdir()
+    (pack_dir / "pack.mcmeta").write_text('{"overlays": {"entries": [{"formats": [42, 43], "directory": "v2_items"}]}}', encoding="utf-8")
+    (pack_dir / "v2_items" / "assets" / "minecraft" / "items").mkdir(parents=True)
+    (pack_dir / "v2_items" / "assets" / "minecraft" / "items" / "bow.json").write_text("{}", encoding="utf-8")
+
+    actions = PackRepository.normalize_source_directory(str(pack_dir))
+    assert len(actions) == 1
+    assert (pack_dir / "overlay_v1_21_2" / "assets" / "minecraft" / "items" / "bow.json").exists()
+

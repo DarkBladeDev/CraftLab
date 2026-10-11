@@ -295,6 +295,7 @@ export interface PreflightConflict {
   material?: string
   custom_model_data?: number | null
   item_model?: string | null
+  path?: string | null
   items: ConflictItem[]
   message: string
 }

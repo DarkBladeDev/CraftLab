@@ -54,9 +54,11 @@ Diseña mobiliario, bloques decorativos y props 3D sin registrar tile entities n
 
 ### 3. Gestor de Packs (Pack Manager)
 Panel integral para organizar y compilar recursos visuales:
-- **Explorador Jerárquico**: Inspecciona carpetas de texturas, modelos de bloques, definiciones de ítems y cadenas de traducción.
-- **Configuración de Manifiesto**: Define `pack_format`, descripción y el ícono personalizado del paquete.
-- **Compilación en un Clic**: Dispara el empaquetado en el backend, revisa el digest SHA-1 y valida los enlaces de descarga.
+- **Matriz Multi-Versión Universal**: Visualización en tiempo real de la arquitectura de 4 capas: Capa Base (1.21.0 - 1.21.1, formatos 34..41), Items V2 (1.21.2+, formatos 42..max), Shaders Modernos (1.21.4+, formatos 46..max) y atlas de texturas auto-sintetizados.
+- **Gestión de Precedencia de Capas**: Ajusta la prioridad de capas entre assets de Studio, workspace y paquetes de terceros importados.
+- **Auditor de Conflictos Pre-Flight**: Modal de diagnóstico interactivo que alerta sobre colisiones de CustomModelData, texturas faltantes en disco, solapamiento de shaders con resolución de precedencia y advertencias de seguridad para mipmaps y animaciones.
+- **Configuración de Manifiesto**: Define el formato base, límites máximos configurables por el operador (`max_inclusive`) y descripción.
+- **Compilación en un Clic**: Dispara el empaquetado en el backend, revisa el digest SHA-1 determinista y valida los enlaces de descarga.
 
 ### 4. Gestión de Servidores Objetivo (Targets)
 Consola centralizada para supervisar los servidores Paper vinculados:

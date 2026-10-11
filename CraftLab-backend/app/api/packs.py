@@ -18,7 +18,7 @@ from app.core.database import get_db
 from app.models.entities import ItemModel, TargetModel, BlockModel
 from app.domain.pack_sources import PackRepository, PackSourceSchema, CompiledPackSchema
 from app.domain.pack_validator import PreflightValidator, PreflightReport
-from app.domain.pack_merger import SemanticMerger, ItemModelMapping
+from app.domain.pack_merger import SemanticMerger, ItemModelMapping, PackManifestInspector
 from app.domain.pack_compiler import DeterministicPackCompiler
 from app.gateway.manager import gateway_manager
 from app.domain.workspace import (
@@ -56,6 +56,7 @@ def safe_extract_zip(zip_file_path: Path, target_dir: Path):
 class BuildPackRequest(BaseModel):
     target_id: Optional[str] = None
     pack_format: int = 34
+    max_format: int = 65
     description: str = "Minecraft Content Platform Resource Pack"
     force: bool = False
 
@@ -135,7 +136,9 @@ async def upload_source_zip(
     sha1_hex = sha1.hexdigest()
 
     try:
-        safe_extract_zip(temp_zip, source_storage_dir / "contents")
+        contents_dir = source_storage_dir / "contents"
+        safe_extract_zip(temp_zip, contents_dir)
+        normalization_actions = PackManifestInspector.normalize_extracted_pack(contents_dir)
     except Exception as e:
         shutil.rmtree(source_storage_dir, ignore_errors=True)
         raise HTTPException(status_code=400, detail=f"Invalid or corrupted zip archive: {str(e)}")
@@ -150,7 +153,11 @@ async def upload_source_zip(
         plugin=plugin,
         layer_priority=layer_priority,
         sha1_hash=sha1_hex,
-        meta_info={"filename": file.filename, "file_size": temp_zip.stat().st_size}
+        meta_info={
+            "filename": file.filename,
+            "file_size": temp_zip.stat().st_size,
+            "normalization_actions": normalization_actions
+        }
     )
 
     return {
@@ -648,6 +655,7 @@ async def build_resource_pack(
             ordered_source_dirs=source_dirs,
             output_dir=merged_dir,
             pack_format=request_data.pack_format,
+            max_inclusive=request_data.max_format,
             description=request_data.description
         )
 

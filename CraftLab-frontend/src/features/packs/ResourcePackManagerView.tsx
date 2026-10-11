@@ -110,13 +110,15 @@ export const ResourcePackManagerView: React.FC<ResourcePackManagerViewProps> = (
     setStatusMessage(null)
     try {
       const report = await runPackPreflight(selectedTargetId)
-      if (!report.is_valid) {
+      if (!report.is_valid || (report.has_warnings && report.warnings.length > 0)) {
         setConflictReport(report)
         setIsConflictModalOpen(true)
       } else {
+        const modelsCount = report.summary.total_cmd_indexed || 0
+        const shadersCount = report.summary.total_shaders_checked || 0
         setStatusMessage({
           type: 'success',
-          text: `Pre-flight passed! ${report.summary.total_cmd_indexed || 0} models checked, 0 collisions.`,
+          text: `Pre-flight passed! ${modelsCount} models and ${shadersCount} shaders verified, 0 collisions.`,
         })
       }
     } catch (err: any) {
@@ -397,23 +399,29 @@ export const ResourcePackManagerView: React.FC<ResourcePackManagerViewProps> = (
               </span>
             </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 pt-1 text-[11px]">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2 pt-1 text-[11px]">
               <div className="p-2.5 rounded-lg bg-[#141419] border border-[#242430]">
-                <div className="text-gray-400 font-medium">Base Layer (1.21.1)</div>
-                <div className="text-purple-300 font-mono text-[10px] mt-0.5">Format 34</div>
+                <div className="text-gray-400 font-medium">Base Layer (1.21.0 - 1.21.1)</div>
+                <div className="text-purple-300 font-mono text-[10px] mt-0.5">Formats 34..41</div>
                 <div className="text-gray-500 text-[10px] mt-0.5">models/item/*.json overrides</div>
               </div>
 
               <div className="p-2.5 rounded-lg bg-[#141419] border border-[#242430]">
-                <div className="text-gray-400 font-medium">Overlay Layer (1.21.2 – 1.21.11)</div>
-                <div className="text-cyan-300 font-mono text-[10px] mt-0.5">Formats 42..65</div>
+                <div className="text-gray-400 font-medium">Items V2 (1.21.2+)</div>
+                <div className="text-cyan-300 font-mono text-[10px] mt-0.5">Formats 42..max</div>
                 <div className="text-gray-500 text-[10px] mt-0.5">overlay_v1_21_2/items/*.json</div>
               </div>
 
               <div className="p-2.5 rounded-lg bg-[#141419] border border-[#242430]">
-                <div className="text-gray-400 font-medium">Deduplicated Assets</div>
-                <div className="text-emerald-300 font-mono text-[10px] mt-0.5">Zero Bloat</div>
-                <div className="text-gray-500 text-[10px] mt-0.5">Root textures & audio shared</div>
+                <div className="text-gray-400 font-medium">Modern Shaders (1.21.4+)</div>
+                <div className="text-amber-300 font-mono text-[10px] mt-0.5">Formats 46..max</div>
+                <div className="text-gray-500 text-[10px] mt-0.5">overlay_v1_21_4/shaders/core/</div>
+              </div>
+
+              <div className="p-2.5 rounded-lg bg-[#141419] border border-[#242430]">
+                <div className="text-gray-400 font-medium">Atlases & Zero Bloat</div>
+                <div className="text-emerald-300 font-mono text-[10px] mt-0.5">Auto-Synthesized</div>
+                <div className="text-gray-500 text-[10px] mt-0.5">blocks.json & gui.json</div>
               </div>
             </div>
           </div>
