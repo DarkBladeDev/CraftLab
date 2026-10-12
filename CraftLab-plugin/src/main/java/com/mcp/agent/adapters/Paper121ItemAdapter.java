@@ -13,8 +13,34 @@ import org.bukkit.inventory.meta.ItemMeta;
 import java.util.ArrayList;
 import java.util.List;
 
+import com.mcp.agent.adapters.components.AttributeModifiersComponentApplier;
+import com.mcp.agent.adapters.components.EnchantmentsComponentApplier;
+import com.mcp.agent.adapters.components.EquippableComponentApplier;
+import com.mcp.agent.adapters.components.ItemComponentRegistry;
+
 public class Paper121ItemAdapter implements ItemAdapter {
     private final MiniMessage miniMessage = MiniMessage.miniMessage();
+    private final ItemComponentRegistry componentRegistry;
+
+    public Paper121ItemAdapter() {
+        this(createDefaultRegistry());
+    }
+
+    public static ItemComponentRegistry createDefaultRegistry() {
+        ItemComponentRegistry registry = new ItemComponentRegistry();
+        registry.register(new EquippableComponentApplier());
+        registry.register(new AttributeModifiersComponentApplier());
+        registry.register(new EnchantmentsComponentApplier());
+        return registry;
+    }
+
+    public Paper121ItemAdapter(ItemComponentRegistry componentRegistry) {
+        this.componentRegistry = componentRegistry != null ? componentRegistry : new ItemComponentRegistry();
+    }
+
+    public ItemComponentRegistry getComponentRegistry() {
+        return componentRegistry;
+    }
 
     @Override
     public ItemStack compile(JsonObject itemJson) {
@@ -71,6 +97,11 @@ public class Paper121ItemAdapter implements ItemAdapter {
                     // Ignore unrecognized flag
                 }
             }
+        }
+
+        // Modern Data Components Pipeline
+        if (itemJson.has("components") && itemJson.get("components").isJsonObject()) {
+            componentRegistry.applyAll(stack, meta, itemJson.getAsJsonObject("components"));
         }
 
         stack.setItemMeta(meta);

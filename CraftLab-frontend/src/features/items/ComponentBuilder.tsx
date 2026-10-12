@@ -58,6 +58,9 @@ export function ComponentBuilder({ components, onChangeComponents }: ComponentBu
   const [selectedEnch, setSelectedEnch] = useState(POPULAR_ENCHANTMENTS[0])
   const [enchLevel, setEnchLevel] = useState('5')
 
+  // Advanced Equippable state
+  const [showAdvancedEquippable, setShowAdvancedEquippable] = useState(false)
+
   const attributeModifiers: Array<{ type: string; amount: number; slot: string }> =
     components['minecraft:attribute_modifiers'] || []
 
@@ -428,6 +431,163 @@ export function ComponentBuilder({ components, onChangeComponents }: ComponentBu
                       ))}
                     </datalist>
                   </div>
+                </div>
+
+                {/* Advanced Equippable Options Toggle */}
+                <div className="pt-1 border-t border-[#232332]">
+                  <button
+                    type="button"
+                    onClick={() => setShowAdvancedEquippable(!showAdvancedEquippable)}
+                    className="flex items-center space-x-1.5 text-[11px] text-gray-400 hover:text-gray-200 transition font-medium"
+                  >
+                    {showAdvancedEquippable ? (
+                      <ChevronDown className="w-3.5 h-3.5 text-gray-400" />
+                    ) : (
+                      <ChevronRight className="w-3.5 h-3.5 text-gray-400" />
+                    )}
+                    <span>Advanced Equippable Properties (Sound, Overlay, Entities, Flags)</span>
+                  </button>
+
+                  {showAdvancedEquippable && (
+                    <div className="mt-2.5 p-2.5 bg-[#161620] border border-[#272738] rounded-lg space-y-3">
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                        <div>
+                          <label className="block text-gray-400 text-[10px] mb-1 font-mono">
+                            Camera Overlay
+                          </label>
+                          <input
+                            type="text"
+                            value={components['minecraft:equippable'].camera_overlay || ''}
+                            onChange={(e) => {
+                              const val = e.target.value.trim()
+                              const updated = { ...components['minecraft:equippable'] }
+                              if (val) {
+                                updated.camera_overlay = val
+                              } else {
+                                delete updated.camera_overlay
+                              }
+                              onChangeComponents({
+                                ...components,
+                                'minecraft:equippable': updated,
+                              })
+                            }}
+                            placeholder="misc/blur or dev:overlay"
+                            className="w-full px-2 py-1 text-xs bg-[#1a1a24] border border-[#303040] rounded text-gray-200 font-mono"
+                          />
+                        </div>
+
+                        <div>
+                          <label className="block text-gray-400 text-[10px] mb-1 font-mono">
+                            Equip Sound
+                          </label>
+                          <input
+                            type="text"
+                            value={components['minecraft:equippable'].equip_sound || ''}
+                            onChange={(e) => {
+                              const val = e.target.value.trim()
+                              const updated = { ...components['minecraft:equippable'] }
+                              if (val) {
+                                updated.equip_sound = val
+                              } else {
+                                delete updated.equip_sound
+                              }
+                              onChangeComponents({
+                                ...components,
+                                'minecraft:equippable': updated,
+                              })
+                            }}
+                            placeholder="item.armor.equip_diamond"
+                            className="w-full px-2 py-1 text-xs bg-[#1a1a24] border border-[#303040] rounded text-gray-200 font-mono"
+                          />
+                        </div>
+                      </div>
+
+                      <div>
+                        <label className="block text-gray-400 text-[10px] mb-1 font-mono">
+                          Allowed Entities (comma separated)
+                        </label>
+                        <input
+                          type="text"
+                          value={
+                            Array.isArray(components['minecraft:equippable'].allowed_entities)
+                              ? components['minecraft:equippable'].allowed_entities.join(', ')
+                              : components['minecraft:equippable'].allowed_entities || ''
+                          }
+                          onChange={(e) => {
+                            const val = e.target.value
+                            const updated = { ...components['minecraft:equippable'] }
+                            if (val.trim()) {
+                              updated.allowed_entities = val.split(',').map((s: string) => s.trim()).filter(Boolean)
+                            } else {
+                              delete updated.allowed_entities
+                            }
+                            onChangeComponents({
+                              ...components,
+                              'minecraft:equippable': updated,
+                            })
+                          }}
+                          placeholder="player, zombie, armor_stand"
+                          className="w-full px-2 py-1 text-xs bg-[#1a1a24] border border-[#303040] rounded text-gray-200 font-mono"
+                        />
+                      </div>
+
+                      <div className="grid grid-cols-3 gap-2 pt-1 border-t border-[#232332]">
+                        <label className="flex items-center space-x-1.5 cursor-pointer text-[11px] text-gray-300">
+                          <input
+                            type="checkbox"
+                            checked={components['minecraft:equippable'].dispensable !== false}
+                            onChange={(e) => {
+                              onChangeComponents({
+                                ...components,
+                                'minecraft:equippable': {
+                                  ...components['minecraft:equippable'],
+                                  dispensable: e.target.checked,
+                                },
+                              })
+                            }}
+                            className="rounded bg-[#1a1a24] border-[#303040] text-blue-500 focus:ring-0"
+                          />
+                          <span>Dispensable</span>
+                        </label>
+
+                        <label className="flex items-center space-x-1.5 cursor-pointer text-[11px] text-gray-300">
+                          <input
+                            type="checkbox"
+                            checked={components['minecraft:equippable'].swappable !== false}
+                            onChange={(e) => {
+                              onChangeComponents({
+                                ...components,
+                                'minecraft:equippable': {
+                                  ...components['minecraft:equippable'],
+                                  swappable: e.target.checked,
+                                },
+                              })
+                            }}
+                            className="rounded bg-[#1a1a24] border-[#303040] text-blue-500 focus:ring-0"
+                          />
+                          <span>Swappable</span>
+                        </label>
+
+                        <label className="flex items-center space-x-1.5 cursor-pointer text-[11px] text-gray-300">
+                          <input
+                            type="checkbox"
+                            checked={components['minecraft:equippable'].damage_on_hurt !== false}
+                            onChange={(e) => {
+                              onChangeComponents({
+                                ...components,
+                                'minecraft:equippable': {
+                                  ...components['minecraft:equippable'],
+                                  damage_on_hurt: e.target.checked,
+                                },
+                              })
+                            }}
+                            className="rounded bg-[#1a1a24] border-[#303040] text-blue-500 focus:ring-0"
+                          />
+                          <span>Damage on Hurt</span>
+                        </label>
+                      </div>
+                    </div>
+                  )}
                 </div>
               </div>
             ) : (

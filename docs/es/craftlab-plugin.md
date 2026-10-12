@@ -45,10 +45,21 @@ sidebar:
 +---------------------------------------------------------------------------------+
 ```
 
-### 1. Adaptador de Ítems (`Paper121ItemAdapter`)
-- Aplica Data Components modernos de Minecraft 1.21 (`item_model`) mediante reflexión al ejecutarse en Paper 1.21.2+.
-- Mantiene compatibilidad aplicando simultáneamente `CustomModelData` para packs y configuraciones anteriores.
-- Persiste las definiciones de ítems localmente en el servidor para que sigan funcionando incluso si se interrumpe la conexión con el backend.
+### 1. Adaptador de Ítems (`Paper121ItemAdapter`) y Pipeline Extensible de Data Components
+- **Registro Extensible de Componentes (`ItemComponentRegistry`)**: Implementa un patrón Strategy extensible (`ItemComponentApplier`) que despacha dinámicamente todas las entradas del mapa `components` de un ítem durante la compilación y entrega con `/mcp give`.
+- **Componente Equippable (`minecraft:equippable`)**:
+  - Soporte integral para componentes `minecraft:equippable` de Minecraft 1.21.2 - 1.21.4+.
+  - Soporta atributos principales: `slot` (`head`, `chest`, `legs`, `feet`, `body`, `mainhand`, `offhand`, `saddle`) y el identificador canónico `asset_id` (con fallback retrocompatible `model`).
+  - Soporta todos los atributos opcionales: `camera_overlay` (overlay de textura en pantalla), `equip_sound` (sonidos Bukkit o identificadores de sonido personalizados), `allowed_entities` (filtrado por tipos de entidades) y banderas booleanas de comportamiento (`dispensable`, `swappable`, `damage_on_hurt`, `can_be_sheared`).
+  - Emplea detección reflectiva de capacidades (`isSupported()`) que garantiza compatibilidad binaria segura entre Paper 1.21.0 y 1.21.4+ sin generar errores `NoClassDefFoundError`.
+- **Modificadores de Atributos (`minecraft:attribute_modifiers`)**:
+  - Compila listas y objetos de atributos a instancias nativas de Bukkit `AttributeModifier`.
+  - Soporta la API moderna 1.21 de `NamespacedKey` y `EquipmentSlotGroup` con fallback seguro para UUIDs en servidores anteriores.
+- **Encantamientos (`minecraft:enchantments`)**:
+  - Aplica niveles de encantamiento sin restricción de topes (`ignoreLevelRestriction = true`), soportando armas y armaduras RPG avanzadas.
+- **Modelos de Ítems y CustomModelData**:
+  - Aplica reflectivamente `item_model` nativo en Paper 1.21.2+ manteniendo en paralelo `CustomModelData` para packs tradicionales.
+- **Persistencia**: Persiste las definiciones de ítems localmente en `items.json` para que sigan funcionando incluso si se interrumpe la conexión con el backend.
 
 ### 2. Motor de Props, Máquina de Estados y Displays Virtuales (`PropManager`)
 - **Cero Lag de Ticks**: En lugar de sobrecargar el mundo con ArmorStands pesados o entidades de bloque, los props se renderizan a nivel de cliente mediante paquetes de display entities emitidos por PacketEvents.

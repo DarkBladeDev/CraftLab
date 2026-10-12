@@ -39,7 +39,7 @@ sidebar:
 ### 1. Item Studio
 Design custom items with full fidelity for modern Minecraft versions:
 - **Minecraft 1.21 Data Components**: Configure native `item_model` keys pointing to custom definitions.
-- **Equippable Components (1.21.2+)**: Configure native `minecraft:equippable` data components with canonical `asset_id` (and backward-compatible `model` key ingestion), expanded slot selection (`head`, `chest`, `legs`, `feet`, `body`, `mainhand`, `offhand`, `saddle`), and autocompletion populated directly from Creative Assets Lab.
+- **Equippable Components (1.21.2+)**: Configure native `minecraft:equippable` data components with canonical `asset_id` (and backward-compatible `model` key ingestion), expanded slot selection (`head`, `chest`, `legs`, `feet`, `body`, `mainhand`, `offhand`, `saddle`), autocompletion populated directly from Creative Assets Lab, and collapsible advanced controls for vignette camera overlays, custom equip sounds, allowed entity filters, and behavioral flags (`dispensable`, `swappable`, `damage_on_hurt`).
 - **CustomModelData Support**: Provide fallback numeric IDs for legacy resource packs and plugins.
 - **Visual Attributes Editor**: Customize item names, colorized lore formatting (MiniMessage / legacy colors), rarity, enchantments, and item flags.
 - **Real-Time Deployment**: Push modified item definitions directly into active Paper servers with a single click.

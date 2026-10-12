@@ -91,4 +91,45 @@ public class Paper121ItemAdapterTest {
         assertDoesNotThrow(() -> adapter.applyItemModel(null, "studio:items/test"));
         assertDoesNotThrow(() -> adapter.applyItemModel(null, null));
     }
+
+    @Test
+    public void testComponentRegistryDispatch() {
+        com.mcp.agent.adapters.components.ItemComponentRegistry registry = new com.mcp.agent.adapters.components.ItemComponentRegistry();
+        AtomicReference<String> dispatchedKey = new AtomicReference<>();
+
+        registry.register(new com.mcp.agent.adapters.components.ItemComponentApplier() {
+            @Override
+            public String getComponentKey() {
+                return "minecraft:custom_test";
+            }
+
+            @Override
+            public boolean isSupported() {
+                return true;
+            }
+
+            @Override
+            public void apply(org.bukkit.inventory.ItemStack stack, ItemMeta meta, com.google.gson.JsonElement componentData) {
+                dispatchedKey.set(componentData.getAsJsonObject().get("value").getAsString());
+            }
+        });
+
+        Paper121ItemAdapter adapter = new Paper121ItemAdapter(registry);
+        com.google.gson.JsonObject itemJson = new com.google.gson.JsonObject();
+        itemJson.addProperty("material", "DIAMOND");
+        com.google.gson.JsonObject components = new com.google.gson.JsonObject();
+        com.google.gson.JsonObject testComp = new com.google.gson.JsonObject();
+        testComp.addProperty("value", "hello_world");
+        components.add("minecraft:custom_test", testComp);
+        itemJson.add("components", components);
+
+        // In unit test without Bukkit.getItemFactory initialized, test with proxy ItemMeta
+        ItemMeta dummyMeta = (ItemMeta) Proxy.newProxyInstance(
+                getClass().getClassLoader(),
+                new Class<?>[]{ItemMeta.class},
+                (proxy, method, args) -> null
+        );
+        registry.applyAll(null, dummyMeta, components);
+        assertEquals("hello_world", dispatchedKey.get());
+    }
 }

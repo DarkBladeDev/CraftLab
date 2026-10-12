@@ -39,7 +39,7 @@ sidebar:
 ### 1. Item Studio
 Crea y modifica ítems personalizados con compatibilidad completa para versiones modernas de Minecraft:
 - **Data Components de Minecraft 1.21**: Configura identificadores `item_model` nativos vinculados a tus modelos personalizados.
-- **Componentes de Equipamiento (1.21.2+)**: Configura componentes nativos `minecraft:equippable` con la propiedad canónica `asset_id` (y migración transparente de la clave legacy `model`), selección extendida de ranuras (`head`, `chest`, `legs`, `feet`, `body`, `mainhand`, `offhand`, `saddle`) y autocompletado cargado directamente desde el Creative Assets Lab.
+- **Componentes de Equipamiento (1.21.2+)**: Configura componentes nativos `minecraft:equippable` con la propiedad canónica `asset_id` (y migración transparente de la clave legacy `model`), selección extendida de ranuras (`head`, `chest`, `legs`, `feet`, `body`, `mainhand`, `offhand`, `saddle`), autocompletado cargado directamente desde el Creative Assets Lab, y controles avanzados desplegables para overlays de cámara (vignettes), sonidos personalizados al equipar, filtros de entidades permitidas y banderas de comportamiento (`dispensable`, `swappable`, `damage_on_hurt`).
 - **Soporte de CustomModelData**: Define IDs numéricos para retrocompatibilidad con resource packs clásicos.
 - **Editor Visual de Atributos**: Modifica nombres en pantalla, descripciones formateadas (MiniMessage y códigos de color clásicos), rarezas y encantamientos.
 - **Despliegue Inmediato**: Aplica cambios en los servidores Paper conectados con un solo clic.

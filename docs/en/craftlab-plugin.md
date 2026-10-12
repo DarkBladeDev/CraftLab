@@ -45,10 +45,21 @@ sidebar:
 +---------------------------------------------------------------------------------+
 ```
 
-### 1. Item Adapter (`Paper121ItemAdapter`)
-- Applies modern Minecraft 1.21 Data Components (`item_model`) reflectively when running on Paper 1.21.2+.
-- Concurrently applies `CustomModelData` to maintain compatibility with legacy resource pack configurations.
-- Persists all deployed item definitions locally so they remain accessible even if the server is offline from the backend.
+### 1. Item Adapter (`Paper121ItemAdapter`) & Extensible Data Components Pipeline
+- **Extensible Component Registry (`ItemComponentRegistry`)**: Implements an extensible Strategy pattern (`ItemComponentApplier`) that dynamically dispatches all entries declared in an item's `components` definition map during compilation and `/mcp give`.
+- **Equippable Component (`minecraft:equippable`)**:
+  - Full support for Minecraft 1.21.2 - 1.21.4+ `minecraft:equippable` components.
+  - Supports core attributes: `slot` (`head`, `chest`, `legs`, `feet`, `body`, `mainhand`, `offhand`, `saddle`) and canonical `asset_id` (with backwards-compatible `model` fallback).
+  - Supports all optional fields: `camera_overlay` (vignette texture overlay), `equip_sound` (Bukkit sound enums and custom sound keys), `allowed_entities` (entity type filtering), and boolean behavioral flags (`dispensable`, `swappable`, `damage_on_hurt`, `can_be_sheared`).
+  - Employs reflective capability detection (`isSupported()`) to run safely across Paper 1.21.0 - 1.21.4+ servers without causing `NoClassDefFoundError` or classloader linking exceptions.
+- **Attribute Modifiers (`minecraft:attribute_modifiers`)**:
+  - Compiles attribute modifier arrays and objects into native Bukkit `AttributeModifier` instances.
+  - Supports modern 1.21 `NamespacedKey` and `EquipmentSlotGroup` semantics while maintaining graceful fallback for legacy UUID-based servers.
+- **Enchantments (`minecraft:enchantments`)**:
+  - Compiles enchantment levels with unrestricted caps (`ignoreLevelRestriction = true`), supporting custom and high-level RPG equipment.
+- **Item Models & CustomModelData**:
+  - Reflectively applies native `item_model` on Paper 1.21.2+ while concurrently setting `CustomModelData` for legacy pack compatibility.
+- **Persistence**: Persists all deployed item definitions locally in `items.json` so they remain accessible even if the server is offline from the backend.
 
 ### 2. Virtual Display Entity Engine & State Machine (`PropManager`)
 - **Zero-Tick Lag**: Rather than creating resource-heavy ArmorStands or tile entities, props are rendered as client-side Display Entities via PacketEvents packets.
