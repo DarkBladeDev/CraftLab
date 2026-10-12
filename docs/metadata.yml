@@ -58,6 +58,15 @@ versions:
   # -------------------------------------------------------------
   # CURRENT VERSION (LATEST) -> Always the first entry [0]
   # -------------------------------------------------------------
+  - version: "0.11.3"
+    releaseDate: "2026-10-12"
+    reference: "v0.11.3"
+    downloadUrl: "https://github.com/DarkBladeDev/CraftLab/releases/tag/v0.11.3"
+    changelog: "Extensible item data components pipeline (ItemComponentRegistry) and full in-game support for minecraft:equippable, attribute_modifiers, and enchantments"
+    minecraft:
+      - "1.21.1"
+      - "1.21.x"
+
   - version: "0.11.2"
     releaseDate: "2026-10-12"
     reference: "v0.11.2"
