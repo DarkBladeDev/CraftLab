@@ -617,17 +617,22 @@ export interface GlyphItem {
   placeholder?: string
 }
 
+export interface EquipmentLayerDyeable {
+  color_when_undyed?: number
+}
+
 export interface EquipmentLayer {
   texture: string
   type?: string
-  dyeable?: boolean
+  dyeable?: EquipmentLayerDyeable | boolean
+  use_player_texture?: boolean
 }
 
 export interface EquipmentModelItem {
   id: string
   namespace: string
   resource_location: string
-  layers: EquipmentLayer[]
+  layers: Record<string, EquipmentLayer[]>
   is_valid?: boolean
   file_path?: string
   raw_json?: string
@@ -729,7 +734,7 @@ export async function fetchEquipmentModels(namespace?: string): Promise<Equipmen
 
 export async function saveEquipmentModel(req: {
   id: string
-  layers: EquipmentLayer[]
+  layers: Record<string, EquipmentLayer[]> | EquipmentLayer[]
   namespace?: string
 }): Promise<any> {
   const res = await fetch(`${API_BASE}/v1/assets/creative/equipment`, {

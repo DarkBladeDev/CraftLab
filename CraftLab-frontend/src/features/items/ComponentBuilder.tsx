@@ -363,9 +363,9 @@ export function ComponentBuilder({ components, onChangeComponents }: ComponentBu
                     <span className="text-blue-400 font-semibold">
                       {components['minecraft:equippable'].slot}
                     </span>
-                    <span className="text-gray-400 ml-3">Model: </span>
+                    <span className="text-gray-400 ml-3">Asset ID: </span>
                     <span className="text-purple-300 font-semibold">
-                      {components['minecraft:equippable'].model}
+                      {components['minecraft:equippable'].asset_id || components['minecraft:equippable'].model}
                     </span>
                   </div>
                   <button
@@ -397,7 +397,7 @@ export function ComponentBuilder({ components, onChangeComponents }: ComponentBu
                       }}
                       className="w-full px-2 py-1 text-xs bg-[#1a1a24] border border-[#303040] rounded text-gray-200"
                     >
-                      {['head', 'chest', 'legs', 'feet', 'mainhand', 'offhand'].map((s) => (
+                      {['head', 'chest', 'legs', 'feet', 'body', 'mainhand', 'offhand', 'saddle'].map((s) => (
                         <option key={s} value={s}>
                           {s}
                         </option>
@@ -406,18 +406,17 @@ export function ComponentBuilder({ components, onChangeComponents }: ComponentBu
                   </div>
 
                   <div>
-                    <label className="block text-gray-400 text-[11px] mb-1">Equipment Model</label>
+                    <label className="block text-gray-400 text-[11px] mb-1">Equipment Model (asset_id)</label>
                     <input
                       type="text"
                       list="eq-models-datalist"
-                      value={components['minecraft:equippable'].model || ''}
+                      value={components['minecraft:equippable'].asset_id || components['minecraft:equippable'].model || ''}
                       onChange={(e) => {
+                        const updatedEq = { ...components['minecraft:equippable'], asset_id: e.target.value }
+                        delete updatedEq.model
                         onChangeComponents({
                           ...components,
-                          'minecraft:equippable': {
-                            ...components['minecraft:equippable'],
-                            model: e.target.value,
-                          },
+                          'minecraft:equippable': updatedEq,
                         })
                       }}
                       placeholder="craftlab:paladin_set"
@@ -434,7 +433,7 @@ export function ComponentBuilder({ components, onChangeComponents }: ComponentBu
             ) : (
               <div className="flex items-center justify-between text-xs">
                 <span className="text-gray-400">
-                  Enable custom armor rendering using Minecraft 1.21.2+ equipment models.
+                  Enable custom armor rendering using Minecraft 1.21.4+ equipment models.
                 </span>
                 <button
                   type="button"
@@ -445,7 +444,7 @@ export function ComponentBuilder({ components, onChangeComponents }: ComponentBu
                       ...components,
                       'minecraft:equippable': {
                         slot: 'chest',
-                        model: defaultModel,
+                        asset_id: defaultModel,
                       },
                     })
                   }}

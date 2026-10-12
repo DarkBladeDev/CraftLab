@@ -64,7 +64,8 @@ Automatiza el ensamblado de paquetes de recursos multi-versión para Minecraft c
 CraftLab proporciona servicios especializados para la creación y gestión de assets visuales y de audio para el cliente con soporte dinámico multi-namespace y descomposición de dos puntos:
 - **Arquitectura Dinámica Multi-Namespace**: Analiza automáticamente identificadores con prefijo de namespace (`<namespace>:<id>`) en todos los servicios de dominio y enruta los assets a sus carpetas correspondientes (`assets/<namespace>/...`), descubriendo dinámicamente los namespaces del workspace mediante `/api/v1/assets/creative/namespaces`.
 - **Asignador de Glifos y Fuentes PUA (`GlyphService`)**: Administra puntos de código en el área de uso privado (`\uE000`–`\uF8FF`), escanea fuentes del workspace en busca de espacios libres, valida anulaciones hexadecimales manuales contra colisiones activas y sintetiza proveedores bitmap en `font/*.json`.
-- **Modelos de Equipamiento 1.21.2+ (`EquipmentService`)**: Valida jerarquías de capas (`humanoid`, `humanoid_leggings`, `wings`, `horse`, etc.), gestiona máscaras de tinte teñibles (`dyeable`) y sintetiza `models/equipment/<id>.json` en la raíz y en `overlay_v1_21_2`.
+- **Estándar de Modelos de Equipamiento 1.21.4+ (`EquipmentService`)**: Valida diccionarios oficiales de capas asignados por tipo canónico (`humanoid`, `humanoid_leggings`, `wings`, `wolf_body`, `horse_body`, `llama_body`), gestiona máscaras de teñido `dyeable` (entero RGB `color_when_undyed`) y `use_player_texture`. Almacena descriptores canónicamente en `assets/<namespace>/equipment/<id>.json`, ingiriendo de forma transparente workspaces legacy con `models/equipment/*.json`.
+- **Síntesis Híbrida de Overlays**: Ensambla automáticamente los descriptores canónicos en la raíz del pack y en `overlay_v1_21_4`, sintetizando un espejo retrocompatible en `overlay_v1_21_2` bajo `assets/<namespace>/models/equipment/<id>.json` para clientes 1.21.2–1.21.3. La generación de componentes produce definiciones oficiales `minecraft:equippable` con `asset_id` vinculando a `<namespace>:<id>`.
 - **Eventos de Sonido y Downmixing Mono Espacial (`SoundEventService`)**: Administra el catálogo `sounds.json`, analiza encabezados binarios Vorbis para verificar la topología de canales (Mono vs. Estéreo) y proporciona downmixing automático `(L+R)/2` a Mono `.ogg` para atenuación posicional 3D en Minecraft.
 - **Motor de Partículas VFX (`ParticleService`)**: Valida rutas de texturas de sprites, genera descriptores `particles/<id>.json` y sintetiza comandos ejecutables `/particle` para el juego.
 
@@ -85,7 +86,7 @@ CraftLab proporciona servicios especializados para la creación y gestión de as
 | `/api/v1/props` | GET / POST | Lista y crea definiciones de bloques/props virtuales con soporte para máquinas de estados. |
 | `/api/v1/assets/creative/namespaces` | GET | Descubre y devuelve todos los namespaces creativos disponibles en el workspace. |
 | `/api/v1/assets/creative/glyphs` | GET / POST / DELETE | Gestiona el registro de glifos PUA y asignación de fuentes. |
-| `/api/v1/assets/creative/equipment` | GET / POST / DELETE | Gestiona descriptores de modelos de equipamiento 1.21.2+ y capas. |
+| `/api/v1/assets/creative/equipment` | GET / POST / DELETE | Gestiona descriptores canónicos de modelos de equipamiento 1.21.4+, mapas de capas y snippets equippable con asset_id. |
 | `/api/v1/assets/creative/sounds` | GET / POST / DELETE | Gestiona eventos de sounds.json y diagnósticos de audio. |
 | `/api/v1/assets/creative/sounds/convert-mono` | POST | Convierte pistas de audio estéreo a un canal mono simétrico `.ogg`. |
 | `/api/v1/assets/creative/particles` | GET / POST / DELETE | Gestiona definiciones de partículas y comandos `/particle`. |

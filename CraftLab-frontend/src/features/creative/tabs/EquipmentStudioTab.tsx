@@ -9,8 +9,16 @@ import {
   EquipmentLayer,
 } from '../../../api/client'
 
-const LAYER_TYPES = ['humanoid', 'humanoid_leggings', 'wings', 'horse', 'wolf', 'llama']
-const SLOTS = ['head', 'chest', 'legs', 'feet', 'mainhand', 'offhand']
+const LAYER_CATEGORIES = [
+  { id: 'humanoid', label: 'Humanoid', desc: 'Helmet, Chestplate, Boots' },
+  { id: 'humanoid_leggings', label: 'Leggings', desc: 'Legs slot' },
+  { id: 'wings', label: 'Wings', desc: 'Elytra / Glider' },
+  { id: 'wolf_body', label: 'Wolf Body', desc: 'Wolf Armor' },
+  { id: 'horse_body', label: 'Horse Body', desc: 'Horse Armor' },
+  { id: 'llama_body', label: 'Llama Body', desc: 'Llama Carpet' },
+]
+
+const SLOTS = ['head', 'chest', 'legs', 'feet', 'body', 'mainhand', 'offhand', 'saddle']
 
 export function EquipmentStudioTab() {
   const [models, setModels] = useState<EquipmentModelItem[]>([])
@@ -22,12 +30,14 @@ export function EquipmentStudioTab() {
   const [namespace, setNamespace] = useState('craftlab')
   const [availableNamespaces, setAvailableNamespaces] = useState<string[]>(['craftlab'])
 
-  // Form
+  // Form State
   const [modelId, setModelId] = useState('')
   const [targetSlot, setTargetSlot] = useState('chest')
-  const [layers, setLayers] = useState<EquipmentLayer[]>([
-    { texture: 'craftlab:paladin', type: 'humanoid' },
-  ])
+  const [activeCategory, setActiveCategory] = useState('humanoid')
+  const [layersMap, setLayersMap] = useState<Record<string, EquipmentLayer[]>>({
+    humanoid: [{ texture: 'craftlab:paladin_set' }],
+    humanoid_leggings: [{ texture: 'craftlab:paladin_set' }],
+  })
   const [copied, setCopied] = useState(false)
 
   const loadData = async () => {
@@ -62,7 +72,30 @@ export function EquipmentStudioTab() {
     setSelectedModel(item)
     setModelId(item.id)
     setNamespace(item.namespace || 'craftlab')
-    setLayers(item.layers.length > 0 ? item.layers : [{ texture: `${item.namespace || 'craftlab'}:${item.id}`, type: 'humanoid' }])
+
+    // Handle dictionary layers or fallback legacy list
+    let normalized: Record<string, EquipmentLayer[]> = {}
+    if (item.layers && typeof item.layers === 'object' && !Array.isArray(item.layers)) {
+      normalized = { ...item.layers }
+    } else if (Array.isArray(item.layers)) {
+      item.layers.forEach((l: any) => {
+        const cat = l.type || 'humanoid'
+        if (!normalized[cat]) normalized[cat] = []
+        normalized[cat].push({
+          texture: l.texture,
+          dyeable: l.dyeable,
+          use_player_texture: l.use_player_texture,
+        })
+      })
+    }
+
+    if (Object.keys(normalized).length === 0) {
+      normalized = { humanoid: [{ texture: `${item.namespace || 'craftlab'}:${item.id}` }] }
+    }
+
+    setLayersMap(normalized)
+    const firstCat = Object.keys(normalized)[0] || 'humanoid'
+    setActiveCategory(firstCat)
   }
 
   const resetForm = () => {
@@ -70,10 +103,17 @@ export function EquipmentStudioTab() {
     setModelId('paladin_set')
     setNamespace('craftlab')
     setTargetSlot('chest')
-    setLayers([
-      { texture: 'craftlab:paladin', type: 'humanoid' },
-      { texture: 'craftlab:paladin_overlay', type: 'humanoid', dyeable: true },
-    ])
+    setLayersMap({
+      humanoid: [
+        { texture: 'craftlab:paladin_set' },
+        { texture: 'craftlab:paladin_set_overlay', dyeable: { color_when_undyed: 10511680 } },
+      ],
+      humanoid_leggings: [
+        { texture: 'craftlab:paladin_set' },
+        { texture: 'craftlab:paladin_set_overlay', dyeable: { color_when_undyed: 10511680 } },
+      ],
+    })
+    setActiveCategory('humanoid')
   }
 
   const handleModelIdChange = (val: string) => {
@@ -86,30 +126,53 @@ export function EquipmentStudioTab() {
     }
   }
 
-  const addLayer = () => {
+  const activeLayers = layersMap[activeCategory] || []
+
+  const addLayerToActiveCategory = () => {
     const currentNs = namespace.trim() || 'craftlab'
-    setLayers([...layers, { texture: `${currentNs}:layer_${layers.length + 1}`, type: 'humanoid' }])
+    const newLayer: EquipmentLayer = {
+      texture: `${currentNs}:${modelId || 'armor'}_layer_${activeLayers.length + 1}`,
+    }
+    setLayersMap({
+      ...layersMap,
+      [activeCategory]: [...activeLayers, newLayer],
+    })
   }
 
-  const updateLayer = (idx: number, patch: Partial<EquipmentLayer>) => {
-    const next = [...layers]
-    next[idx] = { ...next[idx], ...patch }
-    setLayers(next)
+  const updateActiveLayer = (idx: number, patch: Partial<EquipmentLayer>) => {
+    const nextList = [...activeLayers]
+    nextList[idx] = { ...nextList[idx], ...patch }
+    setLayersMap({
+      ...layersMap,
+      [activeCategory]: nextList,
+    })
   }
 
-  const removeLayer = (idx: number) => {
-    if (layers.length <= 1) return
-    setLayers(layers.filter((_, i) => i !== idx))
+  const removeActiveLayer = (idx: number) => {
+    const remaining = activeLayers.filter((_, i) => i !== idx)
+    const nextMap = { ...layersMap }
+    if (remaining.length === 0) {
+      delete nextMap[activeCategory]
+    } else {
+      nextMap[activeCategory] = remaining
+    }
+    setLayersMap(nextMap)
   }
 
   const handleSave = async () => {
-    if (!modelId.trim() || layers.length === 0) return
+    if (!modelId.trim()) return
+    const totalCount = Object.values(layersMap).reduce((acc, cur) => acc + cur.length, 0)
+    if (totalCount === 0) {
+      setErrorMsg('Equipment model must define at least one layer')
+      return
+    }
+
     setErrorMsg(null)
     const effectiveNs = namespace.trim() || 'craftlab'
     try {
       await saveEquipmentModel({
         id: modelId.trim(),
-        layers: layers,
+        layers: layersMap,
         namespace: effectiveNs,
       })
       await loadData()
@@ -131,7 +194,13 @@ export function EquipmentStudioTab() {
   }
 
   const effectiveNs = namespace.trim() || 'craftlab'
-  const equippableSnippet = `"minecraft:equippable": { "slot": "${targetSlot}", "model": "${effectiveNs}:${modelId}" }`
+  const equippableSnippet = `"minecraft:equippable": { "slot": "${targetSlot}", "asset_id": "${effectiveNs}:${modelId}" }`
+
+  const getTotalLayersCount = (item: EquipmentModelItem) => {
+    if (!item.layers) return 0
+    if (Array.isArray(item.layers)) return item.layers.length
+    return Object.values(item.layers).reduce((acc, cur) => acc + (cur?.length || 0), 0)
+  }
 
   return (
     <div className="grid grid-cols-1 lg:grid-cols-12 gap-5">
@@ -159,7 +228,10 @@ export function EquipmentStudioTab() {
             <div className="text-xs text-gray-500 py-6 text-center">No equipment models found.</div>
           ) : (
             models.map((m) => {
-              const isSelected = selectedModel?.id === m.id && (selectedModel?.namespace || 'craftlab') === (m.namespace || 'craftlab')
+              const isSelected =
+                selectedModel?.id === m.id &&
+                (selectedModel?.namespace || 'craftlab') === (m.namespace || 'craftlab')
+              const count = getTotalLayersCount(m)
               return (
                 <div
                   key={`${m.namespace || 'craftlab'}:${m.id}`}
@@ -174,10 +246,12 @@ export function EquipmentStudioTab() {
                     <Shield className="w-4 h-4 text-blue-400 shrink-0" />
                     <div className="truncate">
                       <div className="font-semibold truncate">
-                        <span className="text-blue-400 font-mono text-[11px]">{m.namespace || 'craftlab'}:</span>
+                        <span className="text-blue-400 font-mono text-[11px]">
+                          {m.namespace || 'craftlab'}:
+                        </span>
                         {m.id}
                       </div>
-                      <div className="text-gray-500 text-[11px] font-mono">{m.layers.length} layers</div>
+                      <div className="text-gray-500 text-[11px] font-mono">{count} layers</div>
                     </div>
                   </div>
                   <button
@@ -246,86 +320,172 @@ export function EquipmentStudioTab() {
               </div>
             </div>
 
-            {/* Layers */}
-            <div className="space-y-2">
+            {/* Target Category Pills */}
+            <div>
+              <label className="block text-gray-400 mb-1 font-semibold">Layer Target Group</label>
+              <div className="grid grid-cols-3 gap-1.5">
+                {LAYER_CATEGORIES.map((cat) => {
+                  const hasLayers = (layersMap[cat.id]?.length || 0) > 0
+                  const isCurrent = activeCategory === cat.id
+                  return (
+                    <button
+                      key={cat.id}
+                      type="button"
+                      onClick={() => setActiveCategory(cat.id)}
+                      className={`px-2 py-1.5 rounded-lg border text-left transition ${
+                        isCurrent
+                          ? 'bg-blue-600/20 border-blue-500 text-blue-300 font-medium'
+                          : 'bg-[#1c1c22] border-[#2b2b35] text-gray-400 hover:text-gray-200'
+                      }`}
+                    >
+                      <div className="font-semibold flex items-center justify-between">
+                        <span>{cat.label}</span>
+                        {hasLayers && (
+                          <span className="text-[10px] bg-blue-500/20 px-1 rounded text-blue-300">
+                            {layersMap[cat.id]?.length}
+                          </span>
+                        )}
+                      </div>
+                      <div className="text-[10px] text-gray-500 truncate">{cat.desc}</div>
+                    </button>
+                  )
+                })}
+              </div>
+            </div>
+
+            {/* Active Category Layers */}
+            <div className="space-y-2 pt-1">
               <div className="flex items-center justify-between text-gray-400 font-semibold">
-                <span>Model Layers</span>
-                <button onClick={addLayer} className="text-blue-400 hover:text-blue-300">
+                <span className="capitalize">{activeCategory} Layers ({activeLayers.length})</span>
+                <button
+                  type="button"
+                  onClick={addLayerToActiveCategory}
+                  className="text-blue-400 hover:text-blue-300 text-xs font-medium"
+                >
                   + Add Layer
                 </button>
               </div>
 
-              {layers.map((layer, idx) => (
-                <div key={idx} className="p-2.5 bg-[#1c1c22] border border-[#2b2b35] rounded-lg space-y-2">
-                  <div className="flex items-center justify-between">
-                    <span className="text-[11px] font-mono text-gray-400">Layer {idx + 1}</span>
-                    {layers.length > 1 && (
-                      <button onClick={() => removeLayer(idx)} className="text-gray-500 hover:text-red-400">
-                        <Trash2 className="w-3 h-3" />
-                      </button>
-                    )}
-                  </div>
-                  <div>
-                    <input
-                      type="text"
-                      value={layer.texture}
-                      onChange={(e) => updateLayer(idx, { texture: e.target.value })}
-                      placeholder="craftlab:entity/equipment/paladin"
-                      className="w-full bg-[#141418] border border-[#2b2b35] rounded px-2 py-1 text-xs text-gray-100 font-mono"
-                    />
-                  </div>
-                  <div className="flex items-center justify-between pt-1">
-                    <select
-                      value={layer.type || 'humanoid'}
-                      onChange={(e) => updateLayer(idx, { type: e.target.value })}
-                      className="bg-[#141418] border border-[#2b2b35] rounded px-2 py-0.5 text-[11px] text-gray-300"
-                    >
-                      {LAYER_TYPES.map((t) => (
-                        <option key={t} value={t}>
-                          {t}
-                        </option>
-                      ))}
-                    </select>
-
-                    <label className="flex items-center space-x-1.5 text-[11px] text-gray-300 cursor-pointer">
-                      <input
-                        type="checkbox"
-                        checked={Boolean(layer.dyeable)}
-                        onChange={(e) => updateLayer(idx, { dyeable: e.target.checked })}
-                        className="rounded border-[#2b2b35] bg-[#141418] text-blue-500"
-                      />
-                      <span>Dyeable</span>
-                    </label>
-                  </div>
+              {activeLayers.length === 0 ? (
+                <div className="p-3 bg-[#1c1c22]/50 border border-dashed border-[#2b2b35] rounded-lg text-center text-gray-500 text-[11px]">
+                  No layers defined for <span className="font-mono text-gray-400">{activeCategory}</span>. Click "+ Add Layer" to add one.
                 </div>
-              ))}
+              ) : (
+                activeLayers.map((layer, idx) => {
+                  const isDyeable = Boolean(layer.dyeable)
+                  const dyeableObj = typeof layer.dyeable === 'object' ? layer.dyeable : null
+                  return (
+                    <div key={idx} className="p-2.5 bg-[#1c1c22] border border-[#2b2b35] rounded-lg space-y-2">
+                      <div className="flex items-center justify-between">
+                        <span className="text-[11px] font-mono text-gray-400">
+                          {activeCategory}[{idx}]
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => removeActiveLayer(idx)}
+                          className="text-gray-500 hover:text-red-400"
+                        >
+                          <Trash2 className="w-3 h-3" />
+                        </button>
+                      </div>
+
+                      <div>
+                        <label className="block text-[10px] text-gray-400 mb-0.5">Texture Location</label>
+                        <input
+                          type="text"
+                          value={layer.texture}
+                          onChange={(e) => updateActiveLayer(idx, { texture: e.target.value })}
+                          placeholder={`${effectiveNs}:${modelId || 'texture'}`}
+                          className="w-full bg-[#141418] border border-[#2b2b35] rounded px-2 py-1 text-xs text-gray-100 font-mono"
+                        />
+                        <div className="text-[10px] text-gray-500 mt-0.5 font-mono truncate">
+                          resolves: textures/entity/equipment/{activeCategory}/{layer.texture.split(':').pop()}.png
+                        </div>
+                      </div>
+
+                      <div className="flex flex-wrap items-center gap-3 pt-1 border-t border-[#2b2b35]/60 text-[11px]">
+                        <label className="flex items-center space-x-1.5 text-gray-300 cursor-pointer">
+                          <input
+                            type="checkbox"
+                            checked={isDyeable}
+                            onChange={(e) => {
+                              if (e.target.checked) {
+                                updateActiveLayer(idx, { dyeable: { color_when_undyed: 10511680 } })
+                              } else {
+                                updateActiveLayer(idx, { dyeable: undefined })
+                              }
+                            }}
+                            className="rounded border-[#2b2b35] bg-[#141418] text-blue-500"
+                          />
+                          <span>Dyeable</span>
+                        </label>
+
+                        {isDyeable && (
+                          <div className="flex items-center space-x-1.5 text-[10px] text-gray-400">
+                            <span>Undyed Tint:</span>
+                            <input
+                              type="number"
+                              value={dyeableObj?.color_when_undyed ?? 10511680}
+                              onChange={(e) =>
+                                updateActiveLayer(idx, {
+                                  dyeable: { color_when_undyed: parseInt(e.target.value, 10) || 0 },
+                                })
+                              }
+                              className="w-20 bg-[#141418] border border-[#2b2b35] rounded px-1 py-0.5 text-right font-mono text-gray-200"
+                            />
+                          </div>
+                        )}
+
+                        {activeCategory === 'wings' && (
+                          <label className="flex items-center space-x-1.5 text-gray-300 cursor-pointer">
+                            <input
+                              type="checkbox"
+                              checked={Boolean(layer.use_player_texture)}
+                              onChange={(e) =>
+                                updateActiveLayer(idx, { use_player_texture: e.target.checked })
+                              }
+                              className="rounded border-[#2b2b35] bg-[#141418] text-blue-500"
+                            />
+                            <span>Use Player Elytra Texture</span>
+                          </label>
+                        )}
+                      </div>
+                    </div>
+                  )
+                })
+              )}
             </div>
 
             <button
               onClick={handleSave}
               disabled={loading}
-              className="w-full py-2 bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white rounded-lg text-xs font-semibold transition"
+              className="w-full py-2 bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white rounded-lg text-xs font-semibold transition mt-2"
             >
-              {selectedModel ? 'Update Model' : 'Save Model'}
+              {selectedModel ? 'Update Equipment Model' : 'Save Equipment Model'}
             </button>
           </div>
 
           {/* Mannequin Preview & Snippet */}
           <div className="space-y-3 text-xs flex flex-col justify-between">
             <div>
-              <span className="text-gray-400 font-semibold block mb-2">Mannequin Preview</span>
-              <div className="h-48 bg-black/60 border border-white/5 rounded-xl flex items-center justify-center p-3 relative">
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-gray-400 font-semibold">1.21.4+ Paper Doll Preview</span>
+                <span className="text-[10px] bg-blue-500/20 text-blue-300 px-1.5 py-0.5 rounded font-mono">
+                  {Object.keys(layersMap).length} targets configured
+                </span>
+              </div>
+              <div className="h-56 bg-black/60 border border-white/5 rounded-xl flex items-center justify-center p-3 relative">
                 <div className="flex flex-col items-center space-y-1">
-                  <div className="w-10 h-10 bg-blue-900/40 border border-blue-400 rounded flex items-center justify-center text-[10px] text-blue-200">
+                  <div className="w-10 h-10 bg-blue-900/40 border border-blue-400/80 rounded flex items-center justify-center text-[10px] text-blue-200 shadow">
                     Helmet
                   </div>
-                  <div className="w-20 h-16 bg-blue-800/40 border border-blue-400 rounded flex items-center justify-center text-[10px] text-blue-200">
+                  <div className="w-20 h-16 bg-blue-800/40 border border-blue-400/80 rounded flex items-center justify-center text-[10px] text-blue-200 shadow">
                     Chestplate
                   </div>
-                  <div className="w-16 h-12 bg-blue-900/40 border border-blue-400 rounded flex items-center justify-center text-[10px] text-blue-200">
+                  <div className="w-16 h-12 bg-blue-900/40 border border-blue-400/80 rounded flex items-center justify-center text-[10px] text-blue-200 shadow">
                     Leggings
                   </div>
-                  <div className="w-16 h-6 bg-blue-950/60 border border-blue-400 rounded flex items-center justify-center text-[10px] text-blue-200">
+                  <div className="w-16 h-6 bg-blue-950/60 border border-blue-400/80 rounded flex items-center justify-center text-[10px] text-blue-200 shadow">
                     Boots
                   </div>
                 </div>
@@ -333,7 +493,10 @@ export function EquipmentStudioTab() {
             </div>
 
             <div className="p-3 bg-[#1c1c22] border border-[#2b2b35] rounded-lg space-y-1.5">
-              <span className="text-gray-400 font-medium">Item Component Tag:</span>
+              <div className="flex items-center justify-between">
+                <span className="text-gray-400 font-medium">Item Component Tag (1.21.4+):</span>
+                <span className="text-[10px] text-emerald-400 font-mono">asset_id</span>
+              </div>
               <div className="flex items-center justify-between font-mono text-[11px] text-blue-300 bg-[#141418] p-2 rounded">
                 <span className="truncate">{equippableSnippet}</span>
                 <button

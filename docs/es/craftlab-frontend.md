@@ -39,7 +39,7 @@ sidebar:
 ### 1. Item Studio
 Crea y modifica ítems personalizados con compatibilidad completa para versiones modernas de Minecraft:
 - **Data Components de Minecraft 1.21**: Configura identificadores `item_model` nativos vinculados a tus modelos personalizados.
-- **Componentes de Equipamiento (1.21.2+)**: Vincula modelos de armaduras y equipamiento (`minecraft:equippable`) con autocompletado cargado directamente desde el Creative Assets Lab.
+- **Componentes de Equipamiento (1.21.2+)**: Configura componentes nativos `minecraft:equippable` con la propiedad canónica `asset_id` (y migración transparente de la clave legacy `model`), selección extendida de ranuras (`head`, `chest`, `legs`, `feet`, `body`, `mainhand`, `offhand`, `saddle`) y autocompletado cargado directamente desde el Creative Assets Lab.
 - **Soporte de CustomModelData**: Define IDs numéricos para retrocompatibilidad con resource packs clásicos.
 - **Editor Visual de Atributos**: Modifica nombres en pantalla, descripciones formateadas (MiniMessage y códigos de color clásicos), rarezas y encantamientos.
 - **Despliegue Inmediato**: Aplica cambios en los servidores Paper conectados con un solo clic.
@@ -58,7 +58,7 @@ Diseña mobiliario, bloques decorativos y props 3D sin registrar tile entities n
 Espacio creativo unificado para diseñar y gestionar assets de audio, fuentes, equipamiento y partículas:
 - **Arquitectura Dinámica Multi-Namespace**: Soporte nativo para múltiples namespaces en todas las pestañas con selectores explícitos, sugerencias por datalist del workspace, descomposición automática de dos puntos (`namespace:id`) y badges delimitados en la lista lateral.
 - **Glifos y Fuentes**: Asignador automático de códigos PUA (`\uE000`–`\uF8FF`), anulación hexadecimal manual con detección de colisiones en tiempo real, etiquetas MiniMessage y simuladores de Chat y Tablist en vivo.
-- **Equipamiento y Armaduras (1.21.2+)**: Constructor multicapa compatible con `humanoid`, `humanoid_leggings` y `wings`, máscaras teñibles (`dyeable`), previsualizador 2D/3D tipo paper doll en modelos Steve y Alex, y generador de componentes `minecraft:equippable`.
+- **Equipamiento y Armaduras (Estándar 1.21.4+)**: Editor multicapa organizado por categoría de cuerpo objetivo (`humanoid`, `humanoid_leggings`, `wings`, `wolf_body`, `horse_body`, `llama_body`), soporte para capas teñibles `dyeable` (entero RGB `color_when_undyed`) y banderas `use_player_texture`, previsualizador 2D/3D tipo paper doll, y generador de componentes `minecraft:equippable` con propiedad canónica `asset_id`.
 - **Eventos de Sonido (SFX)**: Editor visual de `sounds.json` con variaciones multipista, análisis de canales Vorbis (Mono vs. Estéreo) y downmix en un clic `(L+R)/2` a Mono `.ogg` para atenuación posicional 3D.
 - **Partículas y Efectos VFX**: Editor de `particles/<id>.json` con validador de texturas de sprites, simulador de emisor en canvas HTML5 a 60 FPS y generador de comandos `/particle`.
 - **Drawer de Esquema y JSON Raw**: Editor de código colapsable con sincronización bidireccional y validación contra esquemas oficiales de Minecraft 1.21.2+.

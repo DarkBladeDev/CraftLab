@@ -39,7 +39,7 @@ sidebar:
 ### 1. Item Studio
 Design custom items with full fidelity for modern Minecraft versions:
 - **Minecraft 1.21 Data Components**: Configure native `item_model` keys pointing to custom definitions.
-- **Equippable Components (1.21.2+)**: Bind custom armor and equipment models with slot selection and autocompletion populated directly from Creative Assets Lab.
+- **Equippable Components (1.21.2+)**: Configure native `minecraft:equippable` data components with canonical `asset_id` (and backward-compatible `model` key ingestion), expanded slot selection (`head`, `chest`, `legs`, `feet`, `body`, `mainhand`, `offhand`, `saddle`), and autocompletion populated directly from Creative Assets Lab.
 - **CustomModelData Support**: Provide fallback numeric IDs for legacy resource packs and plugins.
 - **Visual Attributes Editor**: Customize item names, colorized lore formatting (MiniMessage / legacy colors), rarity, enchantments, and item flags.
 - **Real-Time Deployment**: Push modified item definitions directly into active Paper servers with a single click.
@@ -58,7 +58,7 @@ Author custom furniture, 3D decorative blocks, and props without registering til
 Unified creative hub for authoring client-side audio, font, equipment, and particle effects:
 - **Dynamic Multi-Namespace Architecture**: Native multi-namespace support across all tabs with explicit namespace selectors, workspace datalist suggestions, automatic colon decomposition (`namespace:id`), and scoped sidebar badges.
 - **Glyphs & Fonts**: Automatic PUA unicode allocator (`\uE000`–`\uF8FF`), manual hexadecimal override with real-time collision detection, MiniMessage tags, and live Minecraft Chat and Tablist preview simulators.
-- **Equipment & Armor (1.21.2+)**: Multi-layer armor builder supporting `humanoid`, `humanoid_leggings`, and `wings` layers, dyeable overlay tint masks, 2D/3D paper doll mannequin preview, and 1-click `minecraft:equippable` JSON generator.
+- **Equipment & Armor (1.21.4+ Standard)**: Multi-layer equipment studio organized by target category (`humanoid`, `humanoid_leggings`, `wings`, `wolf_body`, `horse_body`, `llama_body`), supporting `dyeable` tint masks (`color_when_undyed` RGB integer) and `use_player_texture` flags, paper doll mannequin preview, and 1-click `minecraft:equippable` JSON generator targeting canonical `asset_id`.
 - **Sound Events (SFX)**: Visual `sounds.json` editor with multi-sample variations, Vorbis channel probe (Mono vs. Stereo), and 1-click downmix converting stereo audio into symmetric `(L+R)/2` Mono `.ogg` for 3D positional distance attenuation.
 - **Particles & VFX**: Custom `particles/<id>.json` editor with sprite texture validator, real-time 60 FPS HTML5 canvas emitter simulator, and in-game `/particle` command builder.
 - **Schema & Raw JSON Drawer**: Collapsible editor drawer supporting bidirectional synchronization between visual forms and Minecraft 1.21.2+ JSON schema validation.

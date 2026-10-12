@@ -474,9 +474,22 @@ class SemanticMerger:
 
     @staticmethod
     def merge_equipment_json(base: Dict[str, Any], overlay: Dict[str, Any]) -> Dict[str, Any]:
-        """Merges 1.21.2+ equipment model descriptors."""
-        merged = dict(base)
-        merged.update(overlay)
+        """Merges 1.21.4+ equipment model descriptors."""
+        from app.domain.equipment import normalize_legacy_equipment_data
+        base_norm = normalize_legacy_equipment_data(base)
+        overlay_norm = normalize_legacy_equipment_data(overlay)
+
+        merged = dict(base_norm)
+        base_layers = dict(base_norm.get("layers", {}))
+        overlay_layers = dict(overlay_norm.get("layers", {}))
+
+        for l_type, l_list in overlay_layers.items():
+            base_layers[l_type] = l_list
+        merged["layers"] = base_layers
+
+        for k, v in overlay_norm.items():
+            if k != "layers":
+                merged[k] = v
         return merged
 
     @staticmethod
@@ -902,14 +915,32 @@ class SemanticMerger:
         # 4. Auto-synthesize texture atlases (blocks.json and gui.json)
         cls.auto_synthesize_atlases(output_dir)
 
-        # Stage equipment models into overlay_v1_21_2 if present
+        # Stage canonical equipment models into overlay_v1_21_2 as legacy models/equipment/*.json mirror
         overlay_eq_dir = output_dir / "overlay_v1_21_2"
-        for eq_file in output_dir.glob("assets/*/models/equipment/*.json"):
-            rel_eq = eq_file.relative_to(output_dir)
-            target_overlay_file = overlay_eq_dir / rel_eq
-            target_overlay_file.parent.mkdir(parents=True, exist_ok=True)
-            if not target_overlay_file.exists():
-                shutil.copy2(eq_file, target_overlay_file)
+        for eq_file in output_dir.glob("assets/*/equipment/*.json"):
+            rel_parts = eq_file.relative_to(output_dir).parts
+            if len(rel_parts) >= 4 and rel_parts[0] == "assets" and rel_parts[2] == "equipment":
+                ns = rel_parts[1]
+                fname = rel_parts[3]
+                target_overlay_file = overlay_eq_dir / "assets" / ns / "models" / "equipment" / fname
+                target_overlay_file.parent.mkdir(parents=True, exist_ok=True)
+                if not target_overlay_file.exists():
+                    shutil.copy2(eq_file, target_overlay_file)
+
+        # Also support any legacy models/equipment/*.json files
+        for legacy_eq in output_dir.glob("assets/*/models/equipment/*.json"):
+            rel_parts = legacy_eq.relative_to(output_dir).parts
+            if len(rel_parts) >= 5 and rel_parts[0] == "assets" and rel_parts[2] == "models" and rel_parts[3] == "equipment":
+                ns = rel_parts[1]
+                fname = rel_parts[4]
+                canonical_dest = output_dir / "assets" / ns / "equipment" / fname
+                if not canonical_dest.exists():
+                    canonical_dest.parent.mkdir(parents=True, exist_ok=True)
+                    shutil.copy2(legacy_eq, canonical_dest)
+                target_overlay_file = overlay_eq_dir / "assets" / ns / "models" / "equipment" / fname
+                target_overlay_file.parent.mkdir(parents=True, exist_ok=True)
+                if not target_overlay_file.exists():
+                    shutil.copy2(legacy_eq, target_overlay_file)
 
         # 4. Ensure multi-version pack.mcmeta exists
         from app.domain.pack_compiler import DeterministicPackCompiler
@@ -930,7 +961,10 @@ class SemanticMerger:
         )
         total_sounds = len(list(output_dir.glob("assets/*/sounds/**/*.ogg")))
         total_fonts = len(list(output_dir.glob("assets/*/font/**/*.json")))
-        total_equipment = len(list(output_dir.glob("assets/*/models/equipment/*.json")))
+        total_equipment = len(set(
+            [f.stem for f in output_dir.glob("assets/*/equipment/*.json")] +
+            [f.stem for f in output_dir.glob("assets/*/models/equipment/*.json")]
+        ))
         total_particles = len(list(output_dir.glob("assets/*/particles/*.json")))
 
         return {
@@ -977,3 +1011,6 @@ class SemanticMerger:
             merged_gui = cls.merge_atlas_json(base_gui, {"sources": new_gui_sources})
             gui_atlas_path.parent.mkdir(parents=True, exist_ok=True)
             gui_atlas_path.write_text(json.dumps(merged_gui, indent=2), encoding="utf-8")
+
+
+PackMerger = SemanticMerger

@@ -64,7 +64,8 @@ CraftLab automates the assembly of multi-version Minecraft resource packs with z
 CraftLab provides dedicated backend domain services for custom client visual and audio assets with dynamic multi-namespace support and colon decomposition:
 - **Dynamic Multi-Namespace Architecture**: Automatically parses colon-prefixed identifiers (`<namespace>:<id>`) across all domain services and routes assets to their dedicated namespace directory (`assets/<namespace>/...`), dynamically discovering all workspace namespaces via `/api/v1/assets/creative/namespaces`.
 - **PUA Font & Glyph Allocator (`GlyphService`)**: Manages Private Use Area codepoints (`\uE000`–`\uF8FF`), scans workspace fonts for free slots, validates manual hex overrides against active collisions, and synthesizes `font/*.json` bitmap providers.
-- **Equipment Models 1.21.2+ (`EquipmentService`)**: Validates layer hierarchies (`humanoid`, `humanoid_leggings`, `wings`, `horse`, etc.), manages dyeable overlay tint masks, and synthesizes `models/equipment/<id>.json` across root and `overlay_v1_21_2`.
+- **Equipment Models Standard 1.21.4+ (`EquipmentService`)**: Validates official layer dictionaries mapped by canonical layer type (`humanoid`, `humanoid_leggings`, `wings`, `wolf_body`, `horse_body`, `llama_body`), manages `dyeable` color tinting (`color_when_undyed` RGB integer) and `use_player_texture`. Stores descriptors canonically at `assets/<namespace>/equipment/<id>.json` while transparently ingesting legacy `models/equipment/*.json` workspaces.
+- **Hybrid Overlay Synthesis**: Automatically stages canonical descriptors in pack root and `overlay_v1_21_4`, while synthesizing backward-compatible mirrors into `overlay_v1_21_2` under `assets/<namespace>/models/equipment/<id>.json` for 1.21.2–1.21.3 clients. Component generation produces official `minecraft:equippable` definitions with `asset_id` referencing `<namespace>:<id>`.
 - **Sound Events & Spatial Mono Downmixer (`SoundEventService`)**: Manages `sounds.json` audio event catalogs, probes Vorbis binary headers to verify channel topology (Mono vs. Stereo), and provides automated `(L+R)/2` downmixing to single-channel Mono `.ogg` for 3D positional distance attenuation in Minecraft.
 - **Particle VFX Engine (`ParticleService`)**: Validates sprite texture paths, synthesizes `particles/<id>.json` descriptors, and generates executable in-game `/particle` commands.
 
@@ -85,7 +86,7 @@ CraftLab provides dedicated backend domain services for custom client visual and
 | `/api/v1/props` | GET / POST | Lists and creates custom virtual block/prop definitions with multi-state machine support. |
 | `/api/v1/assets/creative/namespaces` | GET | Discovers and returns all available creative namespaces from the workspace. |
 | `/api/v1/assets/creative/glyphs` | GET / POST / DELETE | Manages PUA unicode glyph registrations and font allocations. |
-| `/api/v1/assets/creative/equipment` | GET / POST / DELETE | Manages 1.21.2+ equipment model descriptors and layer stacks. |
+| `/api/v1/assets/creative/equipment` | GET / POST / DELETE | Manages 1.21.4+ canonical equipment model descriptors, layer maps, and asset_id equippable snippets. |
 | `/api/v1/assets/creative/sounds` | GET / POST / DELETE | Manages sounds.json events and audio probe inspections. |
 | `/api/v1/assets/creative/sounds/convert-mono` | POST | Downmixes stereo audio samples into single-channel Mono `.ogg`. |
 | `/api/v1/assets/creative/particles` | GET / POST / DELETE | Manages custom particle definitions and command generation. |

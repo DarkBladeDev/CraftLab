@@ -1,4 +1,4 @@
-from typing import Optional, List, Dict, Any
+from typing import Optional, List, Dict, Any, Union
 from pathlib import Path
 from fastapi import APIRouter, HTTPException, Query, UploadFile, File, Form
 from pydantic import BaseModel, Field
@@ -51,7 +51,7 @@ class GlyphRegisterRequest(BaseModel):
 
 class EquipmentModelRequest(BaseModel):
     id: str
-    layers: List[Dict[str, Any]]
+    layers: Union[Dict[str, List[Dict[str, Any]]], List[Dict[str, Any]]]
     namespace: str = "craftlab"
 
 

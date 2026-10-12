@@ -71,7 +71,7 @@ async def test_creative_api_endpoints():
 
         get_eq = await client.get("/api/v1/assets/creative/equipment/paladin_chest")
         assert get_eq.status_code == 200
-        assert len(get_eq.json()["layers"]) == 2
+        assert len(get_eq.json()["layers"]["humanoid"]) == 2
 
         list_eq = await client.get("/api/v1/assets/creative/equipment")
         assert list_eq.status_code == 200
