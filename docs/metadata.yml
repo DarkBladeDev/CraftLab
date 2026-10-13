@@ -62,6 +62,15 @@ versions:
   # -------------------------------------------------------------
   # CURRENT VERSION (LATEST) -> Always the first entry [0]
   # -------------------------------------------------------------
+  - version: "0.11.4"
+    releaseDate: "2026-10-13"
+    reference: "v0.11.4"
+    downloadUrl: "https://github.com/DarkBladeDev/CraftLab/releases/tag/v0.11.4"
+    changelog: "Extensible PlaceholderAPI router (%craftlab_<domain>_<params>%), publication-bound PUA glyph synchronization, and root font bitmap projection"
+    minecraft:
+      - "1.21.1"
+      - "1.21.x"
+
   - version: "0.11.3"
     releaseDate: "2026-10-12"
     reference: "v0.11.3"
