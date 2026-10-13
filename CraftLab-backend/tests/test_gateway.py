@@ -234,3 +234,55 @@ async def test_gateway_resource_pack_source_sync():
     assert sent is True
     mock_ws.send_text.assert_called()
 
+
+@pytest.mark.asyncio
+async def test_gateway_hello_includes_compiled_pack_glyphs():
+    import uuid
+    from app.domain.pack_sources import PackRepository
+
+    await init_db()
+    manager = AgentSessionManager()
+    mock_ws = AsyncMock()
+
+    async with AsyncSessionLocal() as db:
+        await PackRepository.record_compiled_pack(
+            db=db,
+            pack_id=f"pack-hello-glyphs-{uuid.uuid4()}",
+            pack_name="resourcepack-paper-target-glyphs.zip",
+            storage_path="dist/resourcepack-paper-target-glyphs.zip",
+            file_size=1024,
+            sha1_hash="1234567890abcdef1234567890abcdef12345678",
+            pack_format=34,
+            target_id="paper-target-glyphs",
+            build_summary={
+                "glyphs": [
+                    {
+                        "id": "badge_vip",
+                        "hex": "E001",
+                        "character": "\uE001",
+                        "namespace": "craftlab",
+                        "font_file": "default.json"
+                    }
+                ]
+            }
+        )
+
+    hello_msg = json.dumps({
+        "protocolVersion": "1.0",
+        "messageType": "hello",
+        "messageId": "msg-hello-glyphs",
+        "targetId": "paper-target-glyphs",
+        "payload": {
+            "agentVersion": "1.1.0",
+            "minecraftVersion": "1.21.1",
+            "paperVersion": "1.21.1-R0.1-SNAPSHOT"
+        }
+    })
+
+    resp = await manager.handle_message(mock_ws, hello_msg, AsyncSessionLocal)
+    assert resp is not None
+    assert resp.payload["status"] == "accepted"
+    assert "glyphs" in resp.payload
+    assert resp.payload["glyphs"][0]["id"] == "badge_vip"
+    assert resp.payload["glyphs"][0]["hex"] == "E001"
+

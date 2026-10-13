@@ -21,6 +21,13 @@ def get_font_file_path(workspace_dir: Path, namespace: str = "craftlab", font_na
     return workspace_dir / "assets" / namespace / "font" / f"{font_name}.json"
 
 
+def format_glyph_placeholder(glyph_id: str, namespace: str = "craftlab") -> str:
+    clean_ns = (namespace or "craftlab").strip().lower()
+    if clean_ns == "craftlab":
+        return f"%craftlab_glyph_{glyph_id}%"
+    return f"%craftlab_glyph_{clean_ns}:{glyph_id}%"
+
+
 def scan_registered_glyphs(workspace_dir: Path, namespace: Optional[str] = None) -> List[Dict[str, Any]]:
     """
     Scans font provider definitions in the workspace to catalog all registered glyphs.
@@ -31,7 +38,15 @@ def scan_registered_glyphs(workspace_dir: Path, namespace: Optional[str] = None)
     if not assets_dir.exists():
         return glyphs
 
-    namespaces = [assets_dir / namespace] if namespace else [d for d in assets_dir.iterdir() if d.is_dir()]
+    if namespace:
+        namespaces = [assets_dir / namespace]
+    else:
+        all_dirs = [d for d in assets_dir.iterdir() if d.is_dir()]
+        # Scan custom namespaces before 'minecraft' so projected providers in minecraft/font/default.json
+        # do not duplicate the canonical custom-namespace glyph entries
+        namespaces = sorted(all_dirs, key=lambda d: (1 if d.name == "minecraft" else 0, d.name))
+
+    seen_custom_hexes: Set[str] = set()
 
     for ns_dir in namespaces:
         ns_name = ns_dir.name
@@ -39,12 +54,13 @@ def scan_registered_glyphs(workspace_dir: Path, namespace: Optional[str] = None)
         if not font_dir.exists():
             continue
 
-        for font_file in font_dir.glob("*.json"):
+        for font_file in sorted(font_dir.glob("*.json")):
             try:
                 data = json.loads(font_file.read_text(encoding="utf-8"))
             except Exception:
                 continue
 
+            font_stem = font_file.stem
             providers = data.get("providers", [])
             for p in providers:
                 if p.get("type") != "bitmap":
@@ -65,9 +81,15 @@ def scan_registered_glyphs(workspace_dir: Path, namespace: Optional[str] = None)
                             continue
                         code_point = ord(char_str)
                         hex_str = f"{code_point:04X}"
+                        if ns_name == "minecraft" and not namespace and hex_str in seen_custom_hexes:
+                            continue
+                        if ns_name != "minecraft":
+                            seen_custom_hexes.add(hex_str)
+
+                        effective_id = glyph_id if len(chars) == 1 and len(row) == 1 else f"{glyph_id}_{row_idx}_{col_idx}"
 
                         glyphs.append({
-                            "id": glyph_id if len(chars) == 1 and len(row) == 1 else f"{glyph_id}_{row_idx}_{col_idx}",
+                            "id": effective_id,
                             "character": char_str,
                             "hex": hex_str,
                             "file": file_ref,
@@ -75,7 +97,9 @@ def scan_registered_glyphs(workspace_dir: Path, namespace: Optional[str] = None)
                             "ascent": ascent,
                             "namespace": ns_name,
                             "font_file": font_file.name,
-                            "is_pua": is_valid_pua_code(code_point)
+                            "is_pua": is_valid_pua_code(code_point),
+                            "minimessage": f"<font:{ns_name}:{font_stem}>\\u{hex_str}</font>",
+                            "placeholder": format_glyph_placeholder(effective_id, ns_name)
                         })
 
     return glyphs
@@ -194,7 +218,7 @@ def register_glyph(
         "namespace": namespace,
         "font_file": font_path.name,
         "minimessage": f"<font:{namespace}:{font_name}>\\u{final_hex}</font>",
-        "placeholder": f"%{namespace}_glyph_{glyph_id}%"
+        "placeholder": format_glyph_placeholder(glyph_id, namespace)
     }
 
 

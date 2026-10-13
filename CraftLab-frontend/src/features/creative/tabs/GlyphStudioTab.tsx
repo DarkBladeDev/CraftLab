@@ -147,6 +147,10 @@ export function GlyphStudioTab() {
   const currentPreviewChar = customHex ? String.fromCharCode(parseInt(customHex, 16)) : selectedGlyph?.character || '★'
 
   const effectiveNs = namespace.trim() || 'craftlab'
+  const canonicalPapiToken =
+    effectiveNs === 'craftlab'
+      ? `%craftlab_glyph_${glyphId}%`
+      : `%craftlab_glyph_${effectiveNs}:${glyphId}%`
 
   return (
     <div className="grid grid-cols-1 lg:grid-cols-12 gap-5">
@@ -339,9 +343,9 @@ export function GlyphStudioTab() {
               <div className="p-2.5 bg-[#1c1c22] border border-[#2b2b35] rounded-lg space-y-1">
                 <span className="text-[11px] text-gray-400">PlaceholderAPI / LuckPerms:</span>
                 <div className="flex items-center justify-between font-mono text-[11px] text-pink-300">
-                  <span className="truncate">%{effectiveNs}_glyph_{glyphId}%</span>
+                  <span className="truncate">{canonicalPapiToken}</span>
                   <button
-                    onClick={() => copyToClipboard(`%${effectiveNs}_glyph_${glyphId}%`, 'papi')}
+                    onClick={() => copyToClipboard(canonicalPapiToken, 'papi')}
                     className="text-gray-400 hover:text-gray-200 ml-2"
                   >
                     {copiedKey === 'papi' ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}

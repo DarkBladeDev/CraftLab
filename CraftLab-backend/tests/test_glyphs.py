@@ -58,24 +58,29 @@ def test_register_scan_and_delete_glyphs(tmp_path: Path):
     )
     assert g1["hex"] == "E001"
     assert g1["character"] == "\uE001"
+    assert g1["placeholder"] == "%craftlab_glyph_badge_vip%"
 
-    # Register glyph 2 (custom hex override)
+    # Register glyph 2 (custom hex override in custom namespace)
     g2 = register_glyph(
         workspace_dir=workspace_dir,
         glyph_id="badge_mvp",
-        file_ref="craftlab:font/badge_mvp.png",
+        file_ref="ranks:font/badge_mvp.png",
         hex_code="E005",
         height=9,
         ascent=8,
-        namespace="craftlab"
+        namespace="ranks"
     )
     assert g2["hex"] == "E005"
+    assert g2["placeholder"] == "%craftlab_glyph_ranks:badge_mvp%"
 
     # Scan
     glyphs = scan_registered_glyphs(workspace_dir)
     assert len(glyphs) == 2
     hexes = {g["hex"] for g in glyphs}
     assert hexes == {"E001", "E005"}
+    by_hex = {g["hex"]: g for g in glyphs}
+    assert by_hex["E001"]["placeholder"] == "%craftlab_glyph_badge_vip%"
+    assert by_hex["E005"]["placeholder"] == "%craftlab_glyph_ranks:badge_mvp%"
 
     # Attempt duplicate hex registration should fail
     with pytest.raises(ValueError, match="Collision detected"):

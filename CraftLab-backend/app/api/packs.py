@@ -658,6 +658,10 @@ async def build_resource_pack(
             max_inclusive=request_data.max_format,
             description=request_data.description
         )
+        from app.domain.glyphs import scan_registered_glyphs
+        compiled_glyphs = scan_registered_glyphs(merged_dir)
+        summary["glyphs"] = compiled_glyphs
+        summary["total_glyphs"] = len(compiled_glyphs)
 
         # 5. Compile to deterministic ZIP
         DIST_DIR.mkdir(parents=True, exist_ok=True)
@@ -693,22 +697,24 @@ async def build_resource_pack(
         download_url = f"{base_public_url.rstrip('/')}/api/v1/packs/{target_slug}/download"
 
         # 8. Notify Agent if target is connected
-        if request_data.target_id:
+        target_ids_to_notify = [request_data.target_id] if request_data.target_id else gateway_manager.get_online_targets()
+        for notify_tid in target_ids_to_notify:
             try:
                 from app.protocol.envelope import MessageEnvelope
                 ready_envelope = MessageEnvelope(
                     protocolVersion="1.0",
                     messageType="event",
-                    targetId=request_data.target_id,
+                    targetId=notify_tid,
                     payload={
                         "type": "resource_pack:ready",
                         "url": download_url,
                         "sha1": sha1_hex,
                         "required": False,
-                        "prompt": request_data.description
+                        "prompt": request_data.description,
+                        "glyphs": compiled_glyphs
                     }
                 )
-                await gateway_manager.send_to_target(request_data.target_id, ready_envelope)
+                await gateway_manager.send_to_target(notify_tid, ready_envelope)
             except Exception as e:
                 logging.getLogger("mcp.packs").error(f"Failed to notify agent: {e}")
 

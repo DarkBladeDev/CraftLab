@@ -18,7 +18,8 @@ sidebar:
 - **Dependencies**:
   - `PacketEvents` (Spigot / Paper) version 2.14.0+ (Required for virtual display entity rendering).
   - `Oraxen` (Optional soft-dependency for catalog synchronization).
-- **Local Persistence**: Embedded SQLite storage (`plugins/McpAgent/data/props.db`) for placed block props, and `items.json` for deployed items.
+  - `PlaceholderAPI` (Optional soft-dependency for `%craftlab_<domain>_...%` placeholders).
+- **Local Persistence**: Embedded SQLite storage (`plugins/McpAgent/data/props.db`) for placed block props, `items.json` for deployed items, and `glyphs.json` for synchronized resource pack glyphs.
 
 ---
 
@@ -77,6 +78,15 @@ sidebar:
 ### 4. Oraxen Compatibility Hook
 - Inspects active Oraxen items reflectively without hard dependency errors.
 - Facilitates bidirectional synchronization: exports Oraxen items into CraftLab Studio and synchronizes pack folders smoothly.
+
+### 5. Extensible PlaceholderAPI Integration & Glyph Provider (`PlaceholderRegistry`)
+- **Domain-Routed Architecture**: Uses a decoupled router (`PlaceholderRegistry` + `PlaceholderProvider`) registered under the persistent `craftlab` expansion (`%craftlab_<domain>_<params>%`), isolated via `PlaceholderApiHook` so the plugin runs seamlessly even when PlaceholderAPI is not installed.
+- **Publication-Bound Glyph Synchronization**: Synchronizes compiled PUA glyphs (`\uE000`–`\uF8FF`) into `plugins/McpAgent/glyphs.json` when a resource pack is built/published (`resource_pack:ready`) or during initial session handshake (`hello`). Custom namespace bitmap providers (`assets/<ns>/font/default.json`) are projected into `assets/minecraft/font/default.json` during compilation so raw Unicode characters render in chat, TAB, scoreboards, and holograms without requiring explicit `<font:...>` tags.
+- **Supported Glyph Placeholders (`glyph` domain)**:
+  - `%craftlab_glyph_<id>%`: Resolves the raw PUA character `\uXXXX` by glyph ID (prioritizing the `craftlab` namespace).
+  - `%craftlab_glyph_<namespace>:<id>%`: Resolves the raw PUA character for a specific custom namespace and ID.
+  - `%craftlab_glyph_hex_<hex>%`: Resolves the PUA character by its 4-digit hexadecimal codepoint (e.g., `%craftlab_glyph_hex_E001%`).
+  - `%craftlab_glyph_mm_<selector>%`: Returns the MiniMessage-wrapped string `<font:<namespace>:<font>>\uXXXX</font>`.
 
 ---
 

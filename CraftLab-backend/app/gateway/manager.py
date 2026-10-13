@@ -236,17 +236,32 @@ class AgentSessionManager:
                     if items:
                         await upsert_discovered_items(db, target_id, source, items)
 
+                synced_glyphs = []
+                try:
+                    from app.domain.pack_sources import PackRepository
+                    latest_pack = await PackRepository.get_latest_compiled_pack(db, target_id=target_id)
+                    if not latest_pack:
+                        latest_pack = await PackRepository.get_latest_compiled_pack(db, target_id=None)
+                    if latest_pack and isinstance(latest_pack.build_summary, dict):
+                        synced_glyphs = latest_pack.build_summary.get("glyphs", []) or []
+                except Exception as e:
+                    logger.debug(f"Could not load compiled pack glyphs during hello for '{target_id}': {e}")
+
             await self.register_session(target_id, websocket)
+
+            accept_payload: Dict[str, Any] = {
+                "status": "accepted",
+                "sessionId": f"sess-{target_id}",
+                "negotiatedProtocol": "1.0"
+            }
+            if synced_glyphs:
+                accept_payload["glyphs"] = synced_glyphs
 
             accept_env = MessageEnvelope(
                 messageType="response",
                 correlationId=env.messageId,
                 targetId=target_id,
-                payload={
-                    "status": "accepted",
-                    "sessionId": f"sess-{target_id}",
-                    "negotiatedProtocol": "1.0"
-                }
+                payload=accept_payload
             )
             await websocket.send_text(accept_env.model_dump_json())
             return accept_env

@@ -17,8 +17,9 @@ sidebar:
 - **Protocolo de Red**: WebSocket seguro (`/ws/agent`) con reconexión automática y autenticación por token secreto.
 - **Dependencias**:
   - `PacketEvents` (Spigot / Paper) versión 2.14.0+ (Obligatoria para la renderización de entidades virtuales de display).
-  - `Oraxen` (Dependencia opcional suave para sincronización de catálogos existentes).
-- **Persistencia Local**: Base de datos SQLite embebida (`plugins/McpAgent/data/props.db`) para bloques/props colocados, y `items.json` para definiciones de ítems.
+  - `Oraxen` (Dependencia opcional para sincronización de catálogos existentes).
+  - `PlaceholderAPI` (Dependencia opcional para placeholders `%craftlab_<dominio>_...%`).
+- **Persistencia Local**: Base de datos SQLite embebida (`plugins/McpAgent/data/props.db`) para bloques/props colocados, `items.json` para definiciones de ítems y `glyphs.json` para glifos sincronizados del resource pack.
 
 ---
 
@@ -77,6 +78,15 @@ sidebar:
 ### 4. Hook de Compatibilidad con Oraxen
 - Detecta y lee ítems de Oraxen mediante reflexión sin generar excepciones por falta de dependencias.
 - Facilita la sincronización bidireccional: exporta ítems de Oraxen al estudio de CraftLab y sincroniza las carpetas de recursos.
+
+### 5. Integración Extensible con PlaceholderAPI y Proveedor de Glifos (`PlaceholderRegistry`)
+- **Arquitectura Enrutada por Dominios**: Implementa un enrutador desacoplado (`PlaceholderRegistry` + `PlaceholderProvider`) bajo la expansión persistente `craftlab` (`%craftlab_<dominio>_<params>%`), aislado mediante `PlaceholderApiHook` para que el plugin opere sin errores cuando PlaceholderAPI no está instalado.
+- **Sincronización Vinculada a Publicación de Pack**: Sincroniza los glifos PUA compilados (`\uE000`–`\uF8FF`) hacia `plugins/McpAgent/glyphs.json` al compilar/publicar el resource pack (`resource_pack:ready`) o durante el handshake inicial (`hello`). Los proveedores bitmap de namespaces personalizados (`assets/<ns>/font/default.json`) se proyectan en `assets/minecraft/font/default.json` durante la compilación para que el carácter Unicode se renderice directamente en chat, TAB, scoreboards y hologramas sin requerir etiquetas `<font:...>`.
+- **Placeholders de Glifos Soportados (dominio `glyph`)**:
+  - `%craftlab_glyph_<id>%`: Devuelve el carácter PUA `\uXXXX` por ID (priorizando el namespace `craftlab`).
+  - `%craftlab_glyph_<namespace>:<id>%`: Devuelve el carácter PUA para un namespace e identificador específicos.
+  - `%craftlab_glyph_hex_<hex>%`: Devuelve el carácter PUA según su código hexadecimal de 4 dígitos (ej. `%craftlab_glyph_hex_E001%`).
+  - `%craftlab_glyph_mm_<selector>%`: Devuelve la etiqueta formateada para MiniMessage `<font:<namespace>:<font>>\uXXXX</font>`.
 
 ---
 

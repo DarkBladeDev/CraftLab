@@ -4,12 +4,19 @@ import com.mcp.agent.adapters.ItemAdapter;
 import com.mcp.agent.adapters.Paper121ItemAdapter;
 import com.mcp.agent.commands.McpCommand;
 import com.mcp.agent.net.AgentWebSocketClient;
+import com.mcp.agent.placeholders.GlyphPlaceholderProvider;
+import com.mcp.agent.placeholders.PlaceholderApiHook;
+import com.mcp.agent.placeholders.PlaceholderRegistry;
+import com.mcp.agent.storage.GlyphStorage;
 import com.mcp.agent.storage.ItemStorage;
 import org.bukkit.command.PluginCommand;
 import org.bukkit.plugin.java.JavaPlugin;
 
 public class McpAgentPlugin extends JavaPlugin {
     private ItemStorage itemStorage;
+    private GlyphStorage glyphStorage;
+    private PlaceholderRegistry placeholderRegistry;
+    private PlaceholderApiHook placeholderApiHook;
     private ItemAdapter itemAdapter;
     private AgentWebSocketClient wsClient;
     private com.mcp.agent.props.PropManager propManager;
@@ -23,6 +30,7 @@ public class McpAgentPlugin extends JavaPlugin {
 
         // 1. Storage
         this.itemStorage = new ItemStorage(getDataFolder(), getLogger());
+        this.glyphStorage = new GlyphStorage(getDataFolder(), getLogger());
 
         // 2. Adapter
         this.itemAdapter = new Paper121ItemAdapter();
@@ -38,6 +46,12 @@ public class McpAgentPlugin extends JavaPlugin {
         getServer().getPluginManager().registerEvents(new com.mcp.agent.props.PropPlaceBreakListener(this, this.propManager, this.itemStorage, this.itemAdapter, getLogger()), this);
         getServer().getPluginManager().registerEvents(new com.mcp.agent.props.PropInteractionListener(this, this.propManager, getLogger()), this);
 
+        // 3c. PlaceholderAPI Router & Soft-Dependency Hook
+        this.placeholderRegistry = new PlaceholderRegistry();
+        this.placeholderRegistry.register(new GlyphPlaceholderProvider(this.glyphStorage));
+        this.placeholderApiHook = new PlaceholderApiHook(getLogger());
+        this.placeholderApiHook.registerExpansion(this, this.placeholderRegistry);
+
         // 4. Oraxen Integration & WebSocket Client
         String gatewayUrl = getConfig().getString("gateway.url", "ws://127.0.0.1:8000/ws/agent");
         String targetId = getConfig().getString("gateway.targetId", "local-paper-server");
@@ -52,7 +66,7 @@ public class McpAgentPlugin extends JavaPlugin {
         com.mcp.agent.adapters.oraxen.OraxenPackScanner oraxenPackScanner = new com.mcp.agent.adapters.oraxen.OraxenPackScanner(oraxenRoot, getLogger());
 
         this.wsClient = new AgentWebSocketClient(gatewayUrl, targetId, secret, reconnectIntervalSeconds, heartbeatIntervalSeconds,
-                itemStorage, oraxenHook, oraxenExporter, this.resourcePackManager, oraxenPackScanner, this.propManager, getLogger());
+                itemStorage, oraxenHook, oraxenExporter, this.resourcePackManager, oraxenPackScanner, this.propManager, this.glyphStorage, getLogger());
         this.wsClient.start();
 
         // 5. Command
@@ -80,6 +94,10 @@ public class McpAgentPlugin extends JavaPlugin {
             this.itemStorage.loadAll();
         }
 
+        if (this.glyphStorage != null) {
+            this.glyphStorage.loadAll();
+        }
+
         if (this.propManager != null) {
             this.propManager.loadAll();
         }
@@ -103,6 +121,18 @@ public class McpAgentPlugin extends JavaPlugin {
 
     public ItemStorage getItemStorage() {
         return itemStorage;
+    }
+
+    public GlyphStorage getGlyphStorage() {
+        return glyphStorage;
+    }
+
+    public PlaceholderRegistry getPlaceholderRegistry() {
+        return placeholderRegistry;
+    }
+
+    public PlaceholderApiHook getPlaceholderApiHook() {
+        return placeholderApiHook;
     }
 
     public ItemAdapter getItemAdapter() {

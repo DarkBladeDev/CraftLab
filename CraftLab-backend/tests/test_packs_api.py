@@ -319,3 +319,53 @@ async def test_packs_api_build_with_item_model_no_cmd():
         assert "sha1_hash" in build_data
         assert build_data["file_size"] > 0
 
+
+@pytest.mark.asyncio
+async def test_packs_api_build_includes_glyphs_in_summary_and_ws_ready():
+    from unittest.mock import AsyncMock
+    from app.domain.workspace import ensure_workspace_initialized
+    from app.domain.glyphs import register_glyph, delete_glyph
+    from app.gateway.manager import gateway_manager
+
+    await init_db()
+    workspace_dir = ensure_workspace_initialized()
+    delete_glyph(workspace_dir, "E009", namespace="craftlab")
+
+    register_glyph(
+        workspace_dir=workspace_dir,
+        glyph_id="badge_star",
+        file_ref="craftlab:font/badge_star.png",
+        hex_code="E009",
+        height=8,
+        ascent=7,
+        namespace="craftlab"
+    )
+
+    mock_ws = AsyncMock()
+    await gateway_manager.register_session("target-glyph-pack-test", mock_ws)
+
+    try:
+        transport = ASGITransport(app=app)
+        async with AsyncClient(transport=transport, base_url="http://test") as client:
+            build_payload = {
+                "target_id": "target-glyph-pack-test",
+                "pack_format": 34,
+                "description": "Glyph Sync Pack",
+                "force": True
+            }
+            resp_build = await client.post("/api/v1/packs/build", json=build_payload)
+            assert resp_build.status_code == 200
+            build_data = resp_build.json()
+
+            glyphs_in_summary = build_data["build_summary"].get("glyphs", [])
+            assert any(g["id"] == "badge_star" and g["hex"] == "E009" for g in glyphs_in_summary)
+
+            mock_ws.send_text.assert_called()
+            sent_raw = mock_ws.send_text.call_args[0][0]
+            sent_env = json.loads(sent_raw)
+            assert sent_env["payload"]["type"] == "resource_pack:ready"
+            assert any(g["id"] == "badge_star" and g["hex"] == "E009" for g in sent_env["payload"]["glyphs"])
+    finally:
+        await gateway_manager.unregister_session("target-glyph-pack-test", AsyncSessionLocal)
+        delete_glyph(workspace_dir, "E009", namespace="craftlab")
+

@@ -25,11 +25,15 @@ The system SHALL maintain a Private Use Area (PUA) unicode registry within the r
 - **THEN** system displays an active collision warning badge and prevents saving until an unused codepoint is provided
 
 ### Requirement: In-Game Chat and Tablist Simulator
-The system SHALL provide an interactive preview simulator rendering live Minecraft-styled Chat and Tablist displays that visually updates whenever glyph attributes (height, baseline ascent, or sprite texture) are modified, and SHALL provide one-click copy actions for MiniMessage tags (`<font:namespace>\uXXXX</font>`), LuckPerms prefix formatting, and PlaceholderAPI tokens.
+The system SHALL provide an interactive preview simulator rendering live Minecraft-styled Chat and Tablist displays that visually updates whenever glyph attributes (height, baseline ascent, or sprite texture) are modified, and SHALL provide one-click copy actions for MiniMessage tags (`<font:namespace:default>\uXXXX</font>`), LuckPerms prefix formatting, and canonical PlaceholderAPI tokens (`%craftlab_glyph_<id>%` for the default `craftlab` namespace and `%craftlab_glyph_<namespace>:<id>%` for custom namespaces) without broadcasting WebSocket events during draft glyph creation, editing, or deletion.
 
 #### Scenario: Real-time chat preview update
 - **WHEN** user modifies the baseline ascent or height of an active rank glyph
 - **THEN** system immediately adjusts the vertical alignment and rendered scale of the glyph in the live chat and tablist simulators
+
+#### Scenario: Copying canonical PlaceholderAPI glyph token
+- **WHEN** user views or registers a glyph in namespace `craftlab` with identifier `badge_vip` (or in custom namespace `ranks` with identifier `badge_vip`)
+- **THEN** system displays and copies `%craftlab_glyph_badge_vip%` (or `%craftlab_glyph_ranks:badge_vip%` for custom namespaces) as the PlaceholderAPI snippet without emitting WebSocket synchronization messages on draft save
 
 ### Requirement: 1.21.2+ Equipment Model and Armor Layer Authoring
 The system SHALL provide an equipment model editor that generates standard Minecraft 1.21.4+ `assets/<namespace>/equipment/<id>.json` descriptors, supporting a `layers` object mapping valid layer type keys (`humanoid`, `humanoid_leggings`, `wings`, `horse_body`, `llama_body`, `wolf_body`, `pig_saddle`, `strider_saddle`, `camel_saddle`, `horse_saddle`, `donkey_saddle`, `mule_saddle`, `skeleton_horse_saddle`, `zombie_horse_saddle`, `humanoid_baby`) to lists of layer definitions with resource location `texture` strings, optional `dyeable` objects with integer `color_when_undyed` tints, and optional `use_player_texture` flags for wings, SHALL transparently discover and read legacy descriptors located at `assets/<namespace>/models/equipment/<id>.json`, and SHALL provide an interactive 2D/3D paper doll mannequin preview showing armor layers on Steve and Alex player models.

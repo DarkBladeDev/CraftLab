@@ -38,6 +38,10 @@ dependencies:
     name: Oraxen
     type: optional
     url: "https://github.com/oraxen/oraxen"
+  - id: placeholderapi
+    name: PlaceholderAPI
+    type: optional
+    url: "https://github.com/PlaceholderAPI/PlaceholderAPI"
 
 # External links
 links:

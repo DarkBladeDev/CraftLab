@@ -26,6 +26,7 @@ public class AgentWebSocketClient implements WebSocket.Listener {
     private final com.mcp.agent.pack.ResourcePackManager resourcePackManager;
     private final com.mcp.agent.adapters.oraxen.OraxenPackScanner oraxenPackScanner;
     private final com.mcp.agent.props.PropManager propManager;
+    private final com.mcp.agent.storage.GlyphStorage glyphStorage;
     private final Logger logger;
     private final Gson gson = new Gson();
 
@@ -64,7 +65,7 @@ public class AgentWebSocketClient implements WebSocket.Listener {
                                 com.mcp.agent.adapters.oraxen.OraxenPackScanner oraxenPackScanner,
                                 com.mcp.agent.props.PropManager propManager,
                                 Logger logger) {
-        this(gatewayUrl, targetId, secret, 5, 15, storage, oraxenHook, oraxenExporter, resourcePackManager, oraxenPackScanner, propManager, logger);
+        this(gatewayUrl, targetId, secret, 5, 15, storage, oraxenHook, oraxenExporter, resourcePackManager, oraxenPackScanner, propManager, null, logger);
     }
 
     public AgentWebSocketClient(String gatewayUrl, String targetId, String secret,
@@ -75,6 +76,19 @@ public class AgentWebSocketClient implements WebSocket.Listener {
                                 com.mcp.agent.pack.ResourcePackManager resourcePackManager,
                                 com.mcp.agent.adapters.oraxen.OraxenPackScanner oraxenPackScanner,
                                 com.mcp.agent.props.PropManager propManager,
+                                Logger logger) {
+        this(gatewayUrl, targetId, secret, reconnectIntervalSeconds, heartbeatIntervalSeconds, storage, oraxenHook, oraxenExporter, resourcePackManager, oraxenPackScanner, propManager, null, logger);
+    }
+
+    public AgentWebSocketClient(String gatewayUrl, String targetId, String secret,
+                                int reconnectIntervalSeconds, int heartbeatIntervalSeconds,
+                                ItemStorage storage,
+                                com.mcp.agent.adapters.oraxen.OraxenCatalogHook oraxenHook,
+                                com.mcp.agent.adapters.oraxen.OraxenItemExporter oraxenExporter,
+                                com.mcp.agent.pack.ResourcePackManager resourcePackManager,
+                                com.mcp.agent.adapters.oraxen.OraxenPackScanner oraxenPackScanner,
+                                com.mcp.agent.props.PropManager propManager,
+                                com.mcp.agent.storage.GlyphStorage glyphStorage,
                                 Logger logger) {
         this.gatewayUri = URI.create(gatewayUrl != null ? gatewayUrl : "ws://127.0.0.1:8000/ws/agent");
         this.targetId = targetId != null ? targetId : "local-paper-server";
@@ -87,6 +101,7 @@ public class AgentWebSocketClient implements WebSocket.Listener {
         this.resourcePackManager = resourcePackManager;
         this.oraxenPackScanner = oraxenPackScanner;
         this.propManager = propManager;
+        this.glyphStorage = glyphStorage;
         this.logger = logger;
     }
 
@@ -248,11 +263,31 @@ public class AgentWebSocketClient implements WebSocket.Listener {
         return resourcePackManager;
     }
 
-    private void sendHello() {
+    public com.mcp.agent.storage.GlyphStorage getGlyphStorage() {
+        return glyphStorage;
+    }
+
+    protected boolean isPlaceholderApiEnabled() {
+        return Bukkit.getServer() != null
+                && Bukkit.getPluginManager() != null
+                && Bukkit.getPluginManager().isPluginEnabled("PlaceholderAPI");
+    }
+
+    protected String getPlaceholderApiVersion() {
+        if (!isPlaceholderApiEnabled()) {
+            return "not_installed";
+        }
+        var plugin = Bukkit.getPluginManager().getPlugin("PlaceholderAPI");
+        return plugin != null ? plugin.getDescription().getVersion() : "unknown";
+    }
+
+    public JsonObject buildHelloPayload() {
         JsonObject payload = new JsonObject();
         payload.addProperty("agentVersion", "1.1.0");
-        payload.addProperty("minecraftVersion", Bukkit.getMinecraftVersion());
-        payload.addProperty("paperVersion", Bukkit.getVersion());
+        String mcVersion = Bukkit.getServer() != null ? Bukkit.getMinecraftVersion() : "1.21.1";
+        String paperVersion = Bukkit.getServer() != null ? Bukkit.getVersion() : "Paper-Test";
+        payload.addProperty("minecraftVersion", mcVersion);
+        payload.addProperty("paperVersion", paperVersion);
         payload.addProperty("secret", secret);
 
         com.google.gson.JsonArray detectedPlugins = new com.google.gson.JsonArray();
@@ -275,7 +310,19 @@ public class AgentWebSocketClient implements WebSocket.Listener {
                 payload.add("catalogManifest", manifest);
             }
         }
+        if (isPlaceholderApiEnabled()) {
+            JsonObject papiObj = new JsonObject();
+            papiObj.addProperty("name", "PlaceholderAPI");
+            papiObj.addProperty("version", getPlaceholderApiVersion());
+            papiObj.addProperty("enabled", true);
+            detectedPlugins.add(papiObj);
+        }
         payload.add("detectedPlugins", detectedPlugins);
+        return payload;
+    }
+
+    private void sendHello() {
+        JsonObject payload = buildHelloPayload();
 
         JsonObject envelope = new JsonObject();
         envelope.addProperty("protocolVersion", "1.0");
@@ -322,20 +369,31 @@ public class AgentWebSocketClient implements WebSocket.Listener {
         return null;
     }
 
-    private void handleIncomingMessage(String text) {
+    public void handleIncomingMessage(String text) {
         try {
             JsonObject env = gson.fromJson(text, JsonObject.class);
             String messageType = env.get("messageType").getAsString();
+
+            if ("response".equals(messageType) && env.has("payload") && env.get("payload").isJsonObject()) {
+                JsonObject payload = env.getAsJsonObject("payload");
+                if (glyphStorage != null && payload.has("glyphs") && payload.get("glyphs").isJsonArray()) {
+                    glyphStorage.syncGlyphs(payload.getAsJsonArray("glyphs"));
+                }
+                return;
+            }
 
             if ("event".equals(messageType)) {
                 JsonObject payload = env.getAsJsonObject("payload");
                 String type = payload.has("type") ? payload.get("type").getAsString() : "";
                 if ("resource_pack:ready".equals(type) || "resource_pack.ready".equals(type)) {
-                    String url = payload.get("url").getAsString();
-                    String sha1 = payload.get("sha1").getAsString();
-                    boolean req = payload.has("required") && payload.get("required").getAsBoolean();
-                    String prompt = payload.has("prompt") ? payload.get("prompt").getAsString() : "Server Resource Pack";
-                    if (resourcePackManager != null) {
+                    if (glyphStorage != null && payload.has("glyphs") && payload.get("glyphs").isJsonArray()) {
+                        glyphStorage.syncGlyphs(payload.getAsJsonArray("glyphs"));
+                    }
+                    if (resourcePackManager != null && payload.has("url") && payload.has("sha1")) {
+                        String url = payload.get("url").getAsString();
+                        String sha1 = payload.get("sha1").getAsString();
+                        boolean req = payload.has("required") && payload.get("required").getAsBoolean();
+                        String prompt = payload.has("prompt") ? payload.get("prompt").getAsString() : "Server Resource Pack";
                         resourcePackManager.updateActivePack(url, sha1, req, prompt);
                     }
                     return;

@@ -32,6 +32,7 @@ async def test_creative_api_endpoints():
         data = res.json()
         assert data["hex"] == "E001"
         assert data["character"] == "\uE001"
+        assert data["placeholder"] == "%craftlab_glyph_badge_vip%"
 
         # Validate hex endpoint
         val_res = await client.get("/api/v1/assets/creative/glyphs/validate-hex?hex=E001")

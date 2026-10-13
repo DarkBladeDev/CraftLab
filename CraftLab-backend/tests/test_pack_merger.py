@@ -528,6 +528,51 @@ def test_equipment_models_staged_to_overlay(tmp_path: Path):
     assert summary["total_equipment"] >= 1
 
 
+def test_project_custom_namespace_fonts_to_minecraft_default(tmp_path: Path):
+    from app.domain.glyphs import scan_registered_glyphs
+
+    layer1 = tmp_path / "layer1"
+    # Custom namespace 'craftlab' with explicit namespace file reference
+    craftlab_font = layer1 / "assets" / "craftlab" / "font" / "default.json"
+    craftlab_font.parent.mkdir(parents=True)
+    craftlab_font.write_text(json.dumps({
+        "providers": [
+            {"type": "bitmap", "file": "craftlab:font/badge_vip.png", "ascent": 7, "height": 8, "chars": ["\uE001"]}
+        ]
+    }), encoding="utf-8")
+
+    # Custom namespace 'ranks' with relative file reference (no 'ranks:' prefix)
+    ranks_font = layer1 / "assets" / "ranks" / "font" / "default.json"
+    ranks_font.parent.mkdir(parents=True)
+    ranks_font.write_text(json.dumps({
+        "providers": [
+            {"type": "bitmap", "file": "font/badge_admin.png", "ascent": 7, "height": 8, "chars": ["\uE002"]}
+        ]
+    }), encoding="utf-8")
+
+    out_dir = tmp_path / "out_pack"
+    SemanticMerger.merge_layers_to_directory(
+        ordered_source_dirs=[layer1],
+        output_dir=out_dir,
+        pack_format=34,
+        max_inclusive=65
+    )
+
+    mc_default_font = out_dir / "assets" / "minecraft" / "font" / "default.json"
+    assert mc_default_font.exists()
+    mc_data = json.loads(mc_default_font.read_text(encoding="utf-8"))
+    files_by_char = {p["chars"][0]: p["file"] for p in mc_data["providers"] if p.get("type") == "bitmap"}
+    assert files_by_char["\uE001"] == "craftlab:font/badge_vip.png"
+    assert files_by_char["\uE002"] == "ranks:font/badge_admin.png"
+
+    # Scanning merged pack should not duplicate projected glyphs under 'minecraft'
+    scanned = scan_registered_glyphs(out_dir)
+    assert len(scanned) == 2
+    by_hex = {g["hex"]: g for g in scanned}
+    assert by_hex["E001"]["namespace"] == "craftlab"
+    assert by_hex["E002"]["namespace"] == "ranks"
+
+
 
 
 

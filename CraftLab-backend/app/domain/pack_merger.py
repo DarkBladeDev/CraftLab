@@ -915,6 +915,9 @@ class SemanticMerger:
         # 4. Auto-synthesize texture atlases (blocks.json and gui.json)
         cls.auto_synthesize_atlases(output_dir)
 
+        # 4b. Project custom namespace font/default.json bitmap providers into assets/minecraft/font/default.json
+        cls.project_custom_namespace_fonts(output_dir)
+
         # Stage canonical equipment models into overlay_v1_21_2 as legacy models/equipment/*.json mirror
         overlay_eq_dir = output_dir / "overlay_v1_21_2"
         for eq_file in output_dir.glob("assets/*/equipment/*.json"):
@@ -942,7 +945,7 @@ class SemanticMerger:
                 if not target_overlay_file.exists():
                     shutil.copy2(legacy_eq, target_overlay_file)
 
-        # 4. Ensure multi-version pack.mcmeta exists
+        # 5. Ensure multi-version pack.mcmeta exists
         from app.domain.pack_compiler import DeterministicPackCompiler
         DeterministicPackCompiler.write_multiversion_mcmeta(
             target_dir=output_dir,
@@ -951,7 +954,7 @@ class SemanticMerger:
             description=description
         )
 
-        # 5. Generate summary
+        # 6. Generate summary
         total_textures = len(list(output_dir.glob("assets/*/textures/**/*.png")))
         total_models = len(list(output_dir.glob("assets/*/models/**/*.json")))
         total_items_definitions = (
@@ -978,6 +981,51 @@ class SemanticMerger:
             "pack_format": pack_format,
             "is_hybrid_multiversion": True
         }
+
+    @classmethod
+    def project_custom_namespace_fonts(cls, output_dir: Path):
+        """
+        Projects bitmap font providers from custom namespace assets/<ns>/font/default.json
+        into assets/minecraft/font/default.json with normalized '<ns>:' file references so
+        raw PUA characters (e.g. from PlaceholderAPI) render directly in Minecraft's default font.
+        """
+        projected_providers: List[Dict[str, Any]] = []
+        for font_file in sorted(output_dir.glob("assets/*/font/default.json")):
+            rel_parts = font_file.relative_to(output_dir).parts
+            if len(rel_parts) < 4 or rel_parts[0] != "assets":
+                continue
+            ns = rel_parts[1]
+            if ns == "minecraft":
+                continue
+
+            try:
+                font_data = json.loads(font_file.read_text(encoding="utf-8"))
+            except Exception:
+                continue
+
+            for p in font_data.get("providers", []):
+                if not isinstance(p, dict) or p.get("type") != "bitmap":
+                    continue
+                proj_p = dict(p)
+                file_ref = str(proj_p.get("file", "")).strip()
+                if file_ref and ":" not in file_ref:
+                    proj_p["file"] = f"{ns}:{file_ref}"
+                projected_providers.append(proj_p)
+
+        if not projected_providers:
+            return
+
+        mc_font_path = output_dir / "assets" / "minecraft" / "font" / "default.json"
+        base_mc_font: Dict[str, Any] = {"providers": []}
+        if mc_font_path.exists():
+            try:
+                base_mc_font = json.loads(mc_font_path.read_text(encoding="utf-8"))
+            except Exception:
+                base_mc_font = {"providers": []}
+
+        merged_mc_font = cls.merge_font_json(base_mc_font, {"providers": projected_providers})
+        mc_font_path.parent.mkdir(parents=True, exist_ok=True)
+        mc_font_path.write_text(json.dumps(merged_mc_font, indent=2, ensure_ascii=False), encoding="utf-8")
 
     @classmethod
     def auto_synthesize_atlases(cls, output_dir: Path):
