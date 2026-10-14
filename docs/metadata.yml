@@ -62,6 +62,15 @@ versions:
   # -------------------------------------------------------------
   # CURRENT VERSION (LATEST) -> Always the first entry [0]
   # -------------------------------------------------------------
+  - version: "0.11.5"
+    releaseDate: "2026-10-14"
+    reference: "v0.11.5"
+    downloadUrl: "https://github.com/DarkBladeDev/CraftLab/releases/tag/v0.11.5"
+    changelog: "Implemented legacy core shader compatibility for equipment models (< 1.21.2) with vertical atlas stitching and hybrid item fallback."
+    minecraft:
+      - "1.21.1"
+      - "1.21.x"
+
   - version: "0.11.4"
     releaseDate: "2026-10-13"
     reference: "v0.11.4"
