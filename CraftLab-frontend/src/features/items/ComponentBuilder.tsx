@@ -361,14 +361,17 @@ export function ComponentBuilder({ components, onChangeComponents }: ComponentBu
             {components['minecraft:equippable'] ? (
               <div className="space-y-3 text-xs">
                 <div className="flex items-center justify-between p-2 bg-[#1a1a24] border border-[#2b2b3a] rounded font-mono">
-                  <div>
+                  <div className="flex items-center space-x-2 flex-wrap gap-y-1">
                     <span className="text-gray-400">Slot: </span>
                     <span className="text-blue-400 font-semibold">
                       {components['minecraft:equippable'].slot}
                     </span>
-                    <span className="text-gray-400 ml-3">Asset ID: </span>
+                    <span className="text-gray-400 ml-2">Asset ID: </span>
                     <span className="text-purple-300 font-semibold">
                       {components['minecraft:equippable'].asset_id || components['minecraft:equippable'].model}
+                    </span>
+                    <span className="text-[9px] font-mono px-1.5 py-0.2 rounded bg-purple-500/20 text-purple-300 border border-purple-500/30">
+                      Dual-Compatible
                     </span>
                   </div>
                   <button

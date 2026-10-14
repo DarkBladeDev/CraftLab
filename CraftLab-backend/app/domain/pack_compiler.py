@@ -64,15 +64,20 @@ class DeterministicPackCompiler:
 
         return sha1_hex, file_size
 
+    VALID_COMPATIBILITY_PROFILES = {"modern_native", "hybrid_shaders", "hybrid_trims"}
+    DEFAULT_COMPATIBILITY_PROFILE = "hybrid_shaders"
+
     @classmethod
     def generate_multiversion_mcmeta(
         cls,
         pack_format: int = 34,
         min_inclusive: int = 34,
         max_inclusive: int = 65,
-        description: str = "Universal Multi-Version Resource Pack (1.21.1 - 1.21.11)"
+        description: str = "Universal Multi-Version Resource Pack (1.21.1 - 1.21.11)",
+        compatibility_profile: str = "hybrid_shaders"
     ) -> Dict[str, Any]:
         """Generates pack.mcmeta with cumulative overlays for multi-version client compatibility."""
+        profile = compatibility_profile if compatibility_profile in cls.VALID_COMPATIBILITY_PROFILES else cls.DEFAULT_COMPATIBILITY_PROFILE
         return {
             "pack": {
                 "pack_format": pack_format,
@@ -82,7 +87,8 @@ class DeterministicPackCompiler:
                     "max_inclusive": max_inclusive
                 },
                 "min_format": min_inclusive,
-                "max_format": max_inclusive
+                "max_format": max_inclusive,
+                "compatibility_profile": profile
             },
             "overlays": {
                 "entries": [
@@ -115,7 +121,8 @@ class DeterministicPackCompiler:
         pack_format: int = 34,
         min_inclusive: int = 34,
         max_inclusive: int = 65,
-        description: str = "Universal Multi-Version Resource Pack (1.21.1 - 1.21.11)"
+        description: str = "Universal Multi-Version Resource Pack (1.21.1 - 1.21.11)",
+        compatibility_profile: str = "hybrid_shaders"
     ) -> Path:
         """Writes multi-version pack.mcmeta into target_dir."""
         mcmeta_path = target_dir / "pack.mcmeta"
@@ -123,7 +130,8 @@ class DeterministicPackCompiler:
             pack_format=pack_format,
             min_inclusive=min_inclusive,
             max_inclusive=max_inclusive,
-            description=description
+            description=description,
+            compatibility_profile=compatibility_profile
         )
         mcmeta_path.write_text(json.dumps(content, indent=2), encoding="utf-8")
         return mcmeta_path

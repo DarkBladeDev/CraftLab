@@ -35,7 +35,7 @@ The agent MUST provide a dedicated, permission-gated verification command for se
 - **THEN** the plugin instantiates the deployed item with all configured components and places it into the operator's inventory
 
 ### Requirement: Paper 1.21 Component Item Assembly
-The Paper adapter SHALL assemble native Paper 1.21 ItemStacks using an extensible Data Component pipeline, applying `custom_model_data` for baseline 1.21.1 compatibility, `item_model` when running on Paper 1.21.2+, and delegating all entries in the `components` mapping to registered `ItemComponentApplier` instances (including full `minecraft:equippable` properties, `minecraft:attribute_modifiers`, and `minecraft:enchantments`), persist deployed items in local storage, and serve them via the `/mcp give` command.
+The Paper adapter SHALL assemble native Paper 1.21 ItemStacks using an extensible Data Component pipeline, applying `custom_model_data` for baseline 1.21.1 compatibility, `item_model` when running on Paper 1.21.2+, and delegating all entries in the `components` mapping to registered `ItemComponentApplier` instances (including full `minecraft:equippable` properties, `minecraft:attribute_modifiers`, and `minecraft:enchantments`), persist deployed items in local storage, and serve them via the `/mcp give` command. When equippable components are present on servers prior to Paper 1.21.2 or under hybrid compatibility mode, the adapter SHALL apply legacy core shader fallback attributes by setting leather `LeatherArmorMeta.setColor(...)` from the item's RGB `dyed_color` component or derived legacy color, enforcing `custom_model_data`, hiding dye tooltips via `ItemFlag.HIDE_DYE`, and injecting compensating attribute modifiers to preserve visual and combat parity.
 
 #### Scenario: Item compilation and local persistence
 - **WHEN** the Paper adapter handles `create_or_update_item`
@@ -58,8 +58,8 @@ The Paper adapter SHALL assemble native Paper 1.21 ItemStacks using an extensibl
 - **THEN** the adapter reflectively obtains `EquippableComponent` from `ItemMeta`, sets the target slot enum, configures the asset model namespaced key, applies all configured optional attributes, and updates the `ItemMeta` so that the component is active in-game
 
 #### Scenario: Safe equippable degradation on Paper 1.21.0 - 1.21.1
-- **WHEN** an item contains `minecraft:equippable` on a Paper 1.21.0 or 1.21.1 server where equippable components are unsupported
-- **THEN** the adapter safely skips equippable application without throwing `NoSuchMethodException` or `ClassNotFoundException`, allowing the item stack to compile with remaining baseline properties
+- **WHEN** an item contains `minecraft:equippable` on a Paper 1.21.0 or 1.21.1 server where native equippable components are unsupported
+- **THEN** the adapter safely skips native equippable application without throwing `NoSuchMethodException` or `ClassNotFoundException`, and if legacy fallback metadata is present, applies leather dye color (`setColor`), `custom_model_data`, and compensating armor attribute modifiers while hiding dye tooltips
 
 #### Scenario: Applying attribute modifiers and enchantments
 - **WHEN** an item contains `minecraft:attribute_modifiers` or `minecraft:enchantments`

@@ -75,13 +75,17 @@ export const ResourcePackManagerView: React.FC<ResourcePackManagerViewProps> = (
   const loadData = async () => {
     setLoading(true)
     try {
-      const [srcs, latest] = await Promise.all([
+      const [srcs, latest, wsCfg] = await Promise.all([
         fetchPackSources(selectedTargetId),
         fetchLatestPack(selectedTargetId),
+        fetchWorkspaceConfig().catch(() => null),
       ])
       setSources(srcs)
       if (latest) {
         setLatestPack(latest)
+      }
+      if (wsCfg) {
+        setWorkspaceConfig(wsCfg)
       }
     } catch (err: any) {
       console.error(err)
@@ -132,7 +136,11 @@ export const ResourcePackManagerView: React.FC<ResourcePackManagerViewProps> = (
     setBuilding(true)
     setStatusMessage(null)
     try {
-      const compiled = await buildResourcePack(selectedTargetId, force)
+      const compiled = await buildResourcePack(
+        selectedTargetId,
+        force,
+        workspaceConfig?.compatibility_profile
+      )
       setLatestPack(compiled)
       setStatusMessage({
         type: 'success',
@@ -459,10 +467,17 @@ export const ResourcePackManagerView: React.FC<ResourcePackManagerViewProps> = (
                   </span>
                 </td>
                 <td className="py-3 px-3 font-semibold text-gray-200">
-                  <div className="flex items-center space-x-1.5">
+                  <div className="flex items-center space-x-1.5 flex-wrap gap-y-1">
                     <span>Studio Items & Custom Overrides</span>
                     <span className="text-[9px] font-mono px-1.5 py-0.2 rounded bg-cyan-950/60 text-cyan-300 border border-cyan-800/40">
                       Dual AST
+                    </span>
+                    <span className="text-[9px] font-mono px-1.5 py-0.2 rounded bg-purple-950/60 text-purple-300 border border-purple-800/40">
+                      {workspaceConfig?.compatibility_profile === 'modern_native'
+                        ? 'Profile: Modern Native'
+                        : workspaceConfig?.compatibility_profile === 'hybrid_trims'
+                        ? 'Profile: Hybrid Trims'
+                        : 'Profile: Hybrid Shaders'}
                     </span>
                   </div>
                 </td>
@@ -627,6 +642,26 @@ export const ResourcePackManagerView: React.FC<ResourcePackManagerViewProps> = (
                   onChange={(e) => setWorkspaceConfig({ ...workspaceConfig, description: e.target.value })}
                   className="w-full px-3 py-2 bg-[#0e0e11] border border-[#23232b] rounded-lg text-xs text-gray-200 focus:border-purple-500 outline-none"
                 />
+              </div>
+
+              <div>
+                <label className="block text-xs font-medium text-gray-300 mb-1">
+                  Multi-Version Compatibility Profile
+                </label>
+                <select
+                  value={workspaceConfig.compatibility_profile || 'hybrid_shaders'}
+                  onChange={(e) =>
+                    setWorkspaceConfig({ ...workspaceConfig, compatibility_profile: e.target.value })
+                  }
+                  className="w-full px-3 py-2 bg-[#0e0e11] border border-[#23232b] rounded-lg text-xs font-medium text-purple-300 focus:border-purple-500 outline-none"
+                >
+                  <option value="hybrid_shaders">Hybrid Shaders (1.20 - 1.21.1 Shaders + 1.21.2+ Native)</option>
+                  <option value="modern_native">Modern Native (1.21.2+ Only - Clean Equipment)</option>
+                  <option value="hybrid_trims">Hybrid Armor Trims (Fallback via Trims)</option>
+                </select>
+                <p className="mt-1 text-[11px] text-gray-500">
+                  Controls legacy armor rendering. Hybrid Shaders automatically compiles vertex armor atlases and injects core shaders for older clients while keeping 1.21.4+ clean.
+                </p>
               </div>
 
               <div className="grid grid-cols-3 gap-3">

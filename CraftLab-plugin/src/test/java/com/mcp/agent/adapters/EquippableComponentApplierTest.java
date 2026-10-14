@@ -194,4 +194,44 @@ public class EquippableComponentApplierTest {
         // Must safely complete without throwing any exception
         assertDoesNotThrow(() -> applier.apply(null, legacyMeta, json));
     }
+
+    @Test
+    public void testLegacyFallbackOnLeatherMeta() {
+        EquippableComponentApplier applier = new EquippableComponentApplier();
+
+        AtomicReference<org.bukkit.Color> capturedColor = new AtomicReference<>();
+        AtomicBoolean capturedHideDye = new AtomicBoolean(false);
+
+        org.bukkit.inventory.meta.LeatherArmorMeta leatherMeta = (org.bukkit.inventory.meta.LeatherArmorMeta) Proxy.newProxyInstance(
+                getClass().getClassLoader(),
+                new Class<?>[]{org.bukkit.inventory.meta.LeatherArmorMeta.class},
+                (proxy, method, args) -> {
+                    if ("setColor".equals(method.getName())) {
+                        capturedColor.set((org.bukkit.Color) args[0]);
+                        return null;
+                    }
+                    if ("addItemFlags".equals(method.getName())) {
+                        org.bukkit.inventory.ItemFlag[] flags = (org.bukkit.inventory.ItemFlag[]) args[0];
+                        for (org.bukkit.inventory.ItemFlag f : flags) {
+                            if (f == org.bukkit.inventory.ItemFlag.HIDE_DYE) {
+                                capturedHideDye.set(true);
+                            }
+                        }
+                        return null;
+                    }
+                    return null;
+                }
+        );
+
+        JsonObject json = new JsonObject();
+        json.addProperty("slot", "chest");
+        json.addProperty("asset_id", "craftlab:ruby_armor");
+        json.addProperty("color_rgb", 0x000001);
+
+        applier.apply(null, leatherMeta, json);
+
+        assertNotNull(capturedColor.get());
+        assertEquals(0x000001, capturedColor.get().asRGB());
+        assertTrue(capturedHideDye.get());
+    }
 }

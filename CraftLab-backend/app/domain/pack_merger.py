@@ -400,6 +400,218 @@ class ShaderRouter:
         return routed
 
 
+class ArmorAtlasStitcher:
+    """
+    Scans compiled equipment models and stitches humanoid and humanoid_leggings textures
+    into vertical composite atlas sheets (leather_layer_1.png and leather_layer_2.png)
+    for pre-1.21.2 client compatibility via LessFancyPants core shaders.
+    """
+
+    @classmethod
+    def discover_equipment_models(cls, output_dir: Path) -> List[Tuple[str, str, Dict[str, Any]]]:
+        """
+        Discovers all equipment models in output_dir, returning sorted (namespace, equipment_id, data).
+        """
+        from app.domain.equipment import normalize_legacy_equipment_data
+
+        models: Dict[Tuple[str, str], Dict[str, Any]] = {}
+
+        # 1. Canonical: assets/<ns>/equipment/<id>.json
+        for f in output_dir.glob("assets/*/equipment/*.json"):
+            parts = f.relative_to(output_dir).parts
+            if len(parts) >= 4 and parts[0] == "assets" and parts[2] == "equipment":
+                ns = parts[1]
+                eq_id = f.stem
+                try:
+                    data = json.loads(f.read_text(encoding="utf-8"))
+                    models[(ns, eq_id)] = normalize_legacy_equipment_data(data)
+                except Exception:
+                    pass
+
+        # 2. Legacy: assets/<ns>/models/equipment/<id>.json
+        for f in output_dir.glob("assets/*/models/equipment/*.json"):
+            parts = f.relative_to(output_dir).parts
+            if len(parts) >= 5 and parts[0] == "assets" and parts[2] == "models" and parts[3] == "equipment":
+                ns = parts[1]
+                eq_id = f.stem
+                if (ns, eq_id) not in models:
+                    try:
+                        data = json.loads(f.read_text(encoding="utf-8"))
+                        models[(ns, eq_id)] = normalize_legacy_equipment_data(data)
+                    except Exception:
+                        pass
+
+        # Sort deterministically
+        return sorted([(k[0], k[1], v) for k, v in models.items()], key=lambda x: (x[0], x[1]))
+
+    @classmethod
+    def resolve_texture_file(cls, output_dir: Path, texture_location: str) -> Optional[Path]:
+        """Resolves a resource location string (e.g. 'craftlab:entity/equipment/humanoid/ruby') to file path."""
+        if not texture_location:
+            return None
+        if ":" in texture_location:
+            ns, path_part = texture_location.split(":", 1)
+        else:
+            ns, path_part = "minecraft", texture_location
+        candidate = output_dir / "assets" / ns / "textures" / f"{path_part}.png"
+        if candidate.exists() and candidate.is_file():
+            return candidate
+        return None
+
+    @classmethod
+    def stitch_vertical_atlas(
+        cls,
+        slice_paths: List[Optional[Path]],
+        output_file: Path,
+        base_width: int = 64,
+        base_height: int = 32
+    ) -> bool:
+        """
+        Stitches a list of texture slices into a single vertical strip image.
+        Slice 0 is typically the base leather texture (or transparent fallback).
+        """
+        try:
+            from PIL import Image
+        except ImportError:
+            return False
+
+        total_slices = len(slice_paths)
+        if total_slices == 0:
+            return False
+
+        detected_w = base_width
+        detected_h = base_height
+        for sp in slice_paths:
+            if sp and sp.exists():
+                try:
+                    with Image.open(sp) as img:
+                        w, h = img.size
+                        if w > detected_w or h > detected_h:
+                            detected_w = max(detected_w, w)
+                            detected_h = max(detected_h, h)
+                except Exception:
+                    pass
+
+        atlas_img = Image.new("RGBA", (detected_w, detected_h * total_slices), (0, 0, 0, 0))
+
+        for idx, sp in enumerate(slice_paths):
+            y_offset = idx * detected_h
+            if sp and sp.exists():
+                try:
+                    with Image.open(sp) as img:
+                        rgba = img.convert("RGBA")
+                        if rgba.size != (detected_w, detected_h):
+                            rgba = rgba.resize((detected_w, detected_h), Image.Resampling.NEAREST)
+                        atlas_img.paste(rgba, (0, y_offset))
+                except Exception:
+                    pass
+
+        output_file.parent.mkdir(parents=True, exist_ok=True)
+        atlas_img.save(output_file, format="PNG")
+        return True
+
+    @classmethod
+    def inject_lessfancypants_shader(cls, output_dir: Path, total_layers: int) -> bool:
+        """Injects adapted LessFancyPants GLSL shaders into root assets with dynamically configured TOTAL_LAYERS."""
+        shader_src_dir = Path(__file__).parent / "shaders"
+        target_shader_dir = output_dir / "assets" / "minecraft" / "shaders" / "core"
+        target_shader_dir.mkdir(parents=True, exist_ok=True)
+
+        json_template = shader_src_dir / "rendertype_armor_cutout_no_cull.json"
+        vsh_template = shader_src_dir / "rendertype_armor_cutout_no_cull.vsh"
+        fsh_template = shader_src_dir / "rendertype_armor_cutout_no_cull.fsh"
+
+        if not json_template.exists() or not vsh_template.exists() or not fsh_template.exists():
+            return False
+
+        shutil.copy2(json_template, target_shader_dir / "rendertype_armor_cutout_no_cull.json")
+        shutil.copy2(fsh_template, target_shader_dir / "rendertype_armor_cutout_no_cull.fsh")
+
+        vsh_content = vsh_template.read_text(encoding="utf-8")
+        vsh_content = re.sub(
+            r"#define\s+TOTAL_LAYERS\s+\d+",
+            f"#define TOTAL_LAYERS {max(1, total_layers)}",
+            vsh_content
+        )
+        (target_shader_dir / "rendertype_armor_cutout_no_cull.vsh").write_text(vsh_content, encoding="utf-8")
+        return True
+
+    @classmethod
+    def synthesize_legacy_armor_assets(
+        cls,
+        output_dir: Path,
+        compatibility_profile: str = "hybrid_shaders"
+    ) -> Dict[str, Any]:
+        """
+        Coordinates discovery, vertical atlas stitching, and shader injection
+        when compatibility_profile is 'hybrid_shaders'.
+        """
+        if compatibility_profile != "hybrid_shaders":
+            return {"total_layers": 0, "mappings": {}}
+
+        models = cls.discover_equipment_models(output_dir)
+        if not models:
+            return {"total_layers": 0, "mappings": {}}
+
+        mappings: Dict[str, Dict[str, Any]] = {}
+        layer1_slices: List[Optional[Path]] = [None]  # Slice 0 = default leather
+        layer2_slices: List[Optional[Path]] = [None]  # Slice 0 = default leather
+
+        existing_l1 = output_dir / "assets" / "minecraft" / "textures" / "models" / "armor" / "leather_layer_1.png"
+        existing_l2 = output_dir / "assets" / "minecraft" / "textures" / "models" / "armor" / "leather_layer_2.png"
+        if existing_l1.exists():
+            layer1_slices[0] = existing_l1
+        if existing_l2.exists():
+            layer2_slices[0] = existing_l2
+
+        for idx, (ns, eq_id, data) in enumerate(models, start=1):
+            key = f"{ns}:{eq_id}"
+            mappings[key] = {
+                "id": idx,
+                "color_rgb": idx,
+                "hex": f"#{idx:06x}",
+                "slot_index": idx
+            }
+
+            layers_dict = data.get("layers", {})
+            # humanoid -> layer 1
+            humanoid_list = layers_dict.get("humanoid", [])
+            tex1 = humanoid_list[0].get("texture", "") if humanoid_list and isinstance(humanoid_list, list) else ""
+            p1 = cls.resolve_texture_file(output_dir, tex1)
+            layer1_slices.append(p1)
+
+            # humanoid_leggings -> layer 2
+            leggings_list = layers_dict.get("humanoid_leggings", [])
+            tex2 = leggings_list[0].get("texture", "") if leggings_list and isinstance(leggings_list, list) else ""
+            p2 = cls.resolve_texture_file(output_dir, tex2)
+            layer2_slices.append(p2)
+
+        total_layers = len(layer1_slices)
+        armor_dir = output_dir / "assets" / "minecraft" / "textures" / "models" / "armor"
+        armor_dir.mkdir(parents=True, exist_ok=True)
+
+        # 1. Stitch vertical atlases
+        cls.stitch_vertical_atlas(layer1_slices, armor_dir / "leather_layer_1.png")
+        cls.stitch_vertical_atlas(layer2_slices, armor_dir / "leather_layer_2.png")
+
+        # 2. Generate blank overlays
+        try:
+            from PIL import Image
+            blank_overlay = Image.new("RGBA", (64, 32), (0, 0, 0, 0))
+            blank_overlay.save(armor_dir / "leather_layer_1_overlay.png", format="PNG")
+            blank_overlay.save(armor_dir / "leather_layer_2_overlay.png", format="PNG")
+        except Exception:
+            pass
+
+        # 3. Inject core shaders into root assets
+        cls.inject_lessfancypants_shader(output_dir, total_layers)
+
+        return {
+            "total_layers": total_layers,
+            "mappings": mappings
+        }
+
+
 class SemanticMerger:
     """Handles semantic deep-merging of Minecraft resource pack configuration files and models."""
 
@@ -889,7 +1101,8 @@ class SemanticMerger:
         output_dir: Path,
         pack_format: int = 34,
         max_inclusive: int = 65,
-        description: str = "Universal Multi-Version Resource Pack (1.21.1 - 1.21.11)"
+        description: str = "Universal Multi-Version Resource Pack (1.21.1 - 1.21.11)",
+        compatibility_profile: str = "hybrid_shaders"
     ) -> Dict[str, Any]:
         """Merges multiple layer source directories in order (lowest to highest priority) into output_dir."""
         output_dir.mkdir(parents=True, exist_ok=True)
@@ -945,13 +1158,20 @@ class SemanticMerger:
                 if not target_overlay_file.exists():
                     shutil.copy2(legacy_eq, target_overlay_file)
 
+        # 4c. Synthesize legacy armor vertical atlases & core shaders if compatibility_profile is hybrid_shaders
+        atlas_stitcher_result = ArmorAtlasStitcher.synthesize_legacy_armor_assets(
+            output_dir,
+            compatibility_profile=compatibility_profile
+        )
+
         # 5. Ensure multi-version pack.mcmeta exists
         from app.domain.pack_compiler import DeterministicPackCompiler
         DeterministicPackCompiler.write_multiversion_mcmeta(
             target_dir=output_dir,
             pack_format=pack_format,
             max_inclusive=max_inclusive,
-            description=description
+            description=description,
+            compatibility_profile=compatibility_profile
         )
 
         # 6. Generate summary
@@ -979,7 +1199,10 @@ class SemanticMerger:
             "total_equipment": total_equipment,
             "total_particles": total_particles,
             "pack_format": pack_format,
-            "is_hybrid_multiversion": True
+            "is_hybrid_multiversion": True,
+            "compatibility_profile": compatibility_profile,
+            "stitched_armor_layers": atlas_stitcher_result.get("total_layers", 0),
+            "stitched_armor_mappings": atlas_stitcher_result.get("mappings", {})
         }
 
     @classmethod

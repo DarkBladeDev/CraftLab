@@ -373,6 +373,7 @@ export interface WorkspaceConfig {
   pack_format: number
   min_inclusive: number
   max_inclusive: number
+  compatibility_profile?: string
 }
 
 export async function fetchWorkspaceConfig(): Promise<WorkspaceConfig> {
@@ -403,11 +404,19 @@ export async function runPackPreflight(targetId?: string): Promise<PreflightRepo
   return res.json()
 }
 
-export async function buildResourcePack(targetId?: string, force = false): Promise<CompiledPackInfo> {
+export async function buildResourcePack(
+  targetId?: string,
+  force = false,
+  compatibilityProfile?: string
+): Promise<CompiledPackInfo> {
   const res = await fetch('/api/v1/packs/build', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ target_id: targetId, force }),
+    body: JSON.stringify({
+      target_id: targetId,
+      force,
+      compatibility_profile: compatibilityProfile,
+    }),
   })
   if (res.status === 409) {
     const report: PreflightReport = await res.json()
@@ -628,6 +637,14 @@ export interface EquipmentLayer {
   use_player_texture?: boolean
 }
 
+export interface LegacyShaderMetadata {
+  shader_id: number
+  color_rgb: number
+  hex: string
+  slot_index: number
+  total_layers: number
+}
+
 export interface EquipmentModelItem {
   id: string
   namespace: string
@@ -636,6 +653,7 @@ export interface EquipmentModelItem {
   is_valid?: boolean
   file_path?: string
   raw_json?: string
+  legacy_shader?: LegacyShaderMetadata
 }
 
 export interface SoundEventItem {
@@ -853,5 +871,19 @@ export async function deleteParticle(id: string, namespace?: string): Promise<vo
   const res = await fetch(url, { method: 'DELETE' })
   if (!res.ok) throw new Error('Failed to delete particle')
 }
+
+export async function fetchHybridFallbackItem(item: any): Promise<any> {
+  const res = await fetch(`/api/items/hybrid-fallback`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(item),
+  })
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}))
+    throw new Error(err.detail || 'Failed to derive hybrid fallback item')
+  }
+  return res.json()
+}
+
 
 

@@ -9,11 +9,13 @@ import org.bukkit.Material;
 import org.bukkit.inventory.ItemFlag;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.meta.ItemMeta;
+import org.bukkit.inventory.meta.LeatherArmorMeta;
 
 import java.util.ArrayList;
 import java.util.List;
 
 import com.mcp.agent.adapters.components.AttributeModifiersComponentApplier;
+import com.mcp.agent.adapters.components.DyedColorComponentApplier;
 import com.mcp.agent.adapters.components.EnchantmentsComponentApplier;
 import com.mcp.agent.adapters.components.EquippableComponentApplier;
 import com.mcp.agent.adapters.components.ItemComponentRegistry;
@@ -31,6 +33,7 @@ public class Paper121ItemAdapter implements ItemAdapter {
         registry.register(new EquippableComponentApplier());
         registry.register(new AttributeModifiersComponentApplier());
         registry.register(new EnchantmentsComponentApplier());
+        registry.register(new DyedColorComponentApplier());
         return registry;
     }
 
@@ -102,6 +105,15 @@ public class Paper121ItemAdapter implements ItemAdapter {
         // Modern Data Components Pipeline
         if (itemJson.has("components") && itemJson.get("components").isJsonObject()) {
             componentRegistry.applyAll(stack, meta, itemJson.getAsJsonObject("components"));
+        }
+
+        // Auto-apply HIDE_DYE if leather armor is dyed or if dyed_color component is present
+        if (meta instanceof LeatherArmorMeta) {
+            boolean hasDyedColor = itemJson.has("components")
+                    && itemJson.getAsJsonObject("components").has("minecraft:dyed_color");
+            if (hasDyedColor || ((LeatherArmorMeta) meta).getColor() != null) {
+                meta.addItemFlags(ItemFlag.HIDE_DYE);
+            }
         }
 
         stack.setItemMeta(meta);

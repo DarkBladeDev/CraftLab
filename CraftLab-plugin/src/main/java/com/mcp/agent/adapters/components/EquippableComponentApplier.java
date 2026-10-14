@@ -2,12 +2,15 @@ package com.mcp.agent.adapters.components;
 
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
+import org.bukkit.Color;
 import org.bukkit.NamespacedKey;
 import org.bukkit.Sound;
 import org.bukkit.entity.EntityType;
 import org.bukkit.inventory.EquipmentSlot;
+import org.bukkit.inventory.ItemFlag;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.meta.ItemMeta;
+import org.bukkit.inventory.meta.LeatherArmorMeta;
 
 import java.lang.reflect.Method;
 import java.util.ArrayList;
@@ -33,6 +36,13 @@ public class EquippableComponentApplier implements ItemComponentApplier {
 
     @Override
     public boolean isSupported() {
+        return true;
+    }
+
+    /**
+     * Checks if native 1.21.2+ EquippableComponent API is present on this server.
+     */
+    public boolean hasNativeSupport() {
         try {
             ItemMeta.class.getMethod("getEquippable");
             return true;
@@ -51,7 +61,8 @@ public class EquippableComponentApplier implements ItemComponentApplier {
 
         Method getEquippableMethod = findMethod(meta.getClass(), "getEquippable");
         if (getEquippableMethod == null) {
-            LOGGER.log(Level.FINE, "ItemMeta does not support getEquippable on this server runtime, skipping.");
+            LOGGER.log(Level.FINE, "ItemMeta does not support getEquippable on this server runtime, applying legacy fallback.");
+            applyLegacyFallback(stack, meta, obj);
             return;
         }
 
@@ -316,5 +327,43 @@ public class EquippableComponentApplier implements ItemComponentApplier {
             }
         }
         return null;
+    }
+
+    private void applyLegacyFallback(ItemStack stack, ItemMeta meta, JsonObject obj) {
+        if (meta instanceof LeatherArmorMeta) {
+            LeatherArmorMeta leatherMeta = (LeatherArmorMeta) meta;
+            Integer colorRgb = null;
+            if (obj.has("color_rgb") && !obj.get("color_rgb").isJsonNull()) {
+                colorRgb = obj.get("color_rgb").getAsInt();
+            } else if (obj.has("legacy_color_rgb") && !obj.get("legacy_color_rgb").isJsonNull()) {
+                colorRgb = obj.get("legacy_color_rgb").getAsInt();
+            } else if (obj.has("dyed_color") && !obj.get("dyed_color").isJsonNull()) {
+                if (obj.get("dyed_color").isJsonObject()) {
+                    JsonObject dObj = obj.getAsJsonObject("dyed_color");
+                    if (dObj.has("rgb") && !dObj.get("rgb").isJsonNull()) {
+                        colorRgb = dObj.get("rgb").getAsInt();
+                    }
+                } else if (obj.get("dyed_color").isJsonPrimitive()) {
+                    colorRgb = obj.get("dyed_color").getAsInt();
+                }
+            } else if (obj.has("legacy_shader") && obj.get("legacy_shader").isJsonObject()) {
+                JsonObject lObj = obj.getAsJsonObject("legacy_shader");
+                if (lObj.has("color_rgb") && !lObj.get("color_rgb").isJsonNull()) {
+                    colorRgb = lObj.get("color_rgb").getAsInt();
+                }
+            }
+
+            if (colorRgb != null) {
+                leatherMeta.setColor(Color.fromRGB(colorRgb & 0xFFFFFF));
+                leatherMeta.addItemFlags(ItemFlag.HIDE_DYE);
+            }
+        }
+
+        if (obj.has("custom_model_data") && !obj.get("custom_model_data").isJsonNull()) {
+            int cmd = obj.get("custom_model_data").getAsInt();
+            if (!meta.hasCustomModelData()) {
+                meta.setCustomModelData(cmd);
+            }
+        }
     }
 }

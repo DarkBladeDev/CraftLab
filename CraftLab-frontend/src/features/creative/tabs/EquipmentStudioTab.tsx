@@ -39,6 +39,7 @@ export function EquipmentStudioTab() {
     humanoid_leggings: [{ texture: 'craftlab:paladin_set' }],
   })
   const [copied, setCopied] = useState(false)
+  const [copiedLegacy, setCopiedLegacy] = useState(false)
 
   const loadData = async () => {
     setLoading(true)
@@ -251,7 +252,14 @@ export function EquipmentStudioTab() {
                         </span>
                         {m.id}
                       </div>
-                      <div className="text-gray-500 text-[11px] font-mono">{count} layers</div>
+                      <div className="flex items-center space-x-2 text-gray-500 text-[11px] font-mono">
+                        <span>{count} layers</span>
+                        {m.legacy_shader && (
+                          <span className="px-1.5 py-0.2 rounded bg-purple-500/10 text-purple-300 border border-purple-500/20 text-[10px]">
+                            Shader #{m.legacy_shader.shader_id}
+                          </span>
+                        )}
+                      </div>
                     </div>
                   </div>
                   <button
@@ -510,6 +518,85 @@ export function EquipmentStudioTab() {
                   {copied ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
                 </button>
               </div>
+            </div>
+
+            {/* Multi-Version Diagnostics Box (< 1.21.2 Shader Fallback) */}
+            <div className="p-3 bg-[#181822] border border-[#2b2b3d] rounded-lg space-y-2">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center space-x-1.5">
+                  <span className="w-2 h-2 rounded-full bg-purple-400 animate-pulse" />
+                  <span className="text-gray-300 font-semibold text-xs">
+                    Legacy Core Shader Fallback (&lt; 1.21.2)
+                  </span>
+                </div>
+                {selectedModel?.legacy_shader ? (
+                  <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-purple-500/20 text-purple-300 border border-purple-500/30">
+                    Atlas Slot #{selectedModel.legacy_shader.slot_index} / {selectedModel.legacy_shader.total_layers}
+                  </span>
+                ) : (
+                  <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-amber-500/10 text-amber-300 border border-amber-500/20">
+                    Auto-Indexed on Save
+                  </span>
+                )}
+              </div>
+
+              {selectedModel?.legacy_shader ? (
+                <div className="space-y-2 pt-1 text-[11px]">
+                  <div className="grid grid-cols-3 gap-2">
+                    <div className="p-2 rounded bg-[#101015] border border-[#23232f]">
+                      <div className="text-gray-500 text-[10px]">Shader ID</div>
+                      <div className="text-purple-300 font-mono font-bold mt-0.5">
+                        #{selectedModel.legacy_shader.shader_id}
+                      </div>
+                    </div>
+                    <div className="p-2 rounded bg-[#101015] border border-[#23232f]">
+                      <div className="text-gray-500 text-[10px]">Atlas Tint (RGB)</div>
+                      <div className="flex items-center space-x-1.5 mt-0.5">
+                        <span
+                          className="w-3.5 h-3.5 rounded border border-white/20 shrink-0"
+                          style={{ backgroundColor: selectedModel.legacy_shader.hex }}
+                        />
+                        <span className="text-gray-200 font-mono text-[11px]">
+                          {selectedModel.legacy_shader.hex}
+                        </span>
+                      </div>
+                    </div>
+                    <div className="p-2 rounded bg-[#101015] border border-[#23232f]">
+                      <div className="text-gray-500 text-[10px]">Color Int</div>
+                      <div className="text-cyan-300 font-mono mt-0.5">
+                        {selectedModel.legacy_shader.color_rgb}
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="p-2 bg-[#101015] border border-[#23232f] rounded flex items-center justify-between font-mono text-[10px] text-purple-200">
+                    <span className="truncate">
+                      {`"minecraft:dyed_color": { "rgb": ${selectedModel.legacy_shader.color_rgb} }`}
+                    </span>
+                    <button
+                      onClick={() => {
+                        navigator.clipboard.writeText(
+                          `"minecraft:dyed_color": { "rgb": ${selectedModel.legacy_shader?.color_rgb} }`
+                        )
+                        setCopiedLegacy(true)
+                        setTimeout(() => setCopiedLegacy(false), 2000)
+                      }}
+                      className="text-gray-400 hover:text-gray-200 ml-2"
+                      title="Copy Dyed Color Fallback"
+                    >
+                      {copiedLegacy ? (
+                        <Check className="w-3.5 h-3.5 text-emerald-400" />
+                      ) : (
+                        <Copy className="w-3.5 h-3.5" />
+                      )}
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <p className="text-[11px] text-gray-500">
+                  Save this model to automatically index it into the LessFancyPants vertical vertex atlas and generate its dyed_color fallback.
+                </p>
+              )}
             </div>
           </div>
         </div>

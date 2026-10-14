@@ -72,6 +72,22 @@ async def create_or_update_item(item_in: ItemDefinition, db: AsyncSession = Depe
     return item_in.model_dump()
 
 
+@router.post("/hybrid-fallback", response_model=dict)
+async def get_hybrid_fallback_item(item_in: ItemDefinition):
+    from app.domain.items import derive_hybrid_equipment_fallback
+    from app.domain.equipment import calculate_legacy_shader_metadata
+    from app.domain.workspace import get_default_workspace_dir
+
+    workspace = get_default_workspace_dir()
+    shader_meta = calculate_legacy_shader_metadata(workspace)
+    equippable = item_in.components.get("minecraft:equippable", {})
+    asset_id = equippable.get("asset_id") or equippable.get("model")
+    target_meta = shader_meta.get(asset_id) if asset_id else None
+
+    fallback_item = derive_hybrid_equipment_fallback(item_in, shader_meta=target_meta)
+    return fallback_item.model_dump()
+
+
 @router.delete("/{item_id}")
 async def delete_item(item_id: str, db: AsyncSession = Depends(get_db)):
     result = await db.execute(select(ItemModel).where(ItemModel.id == item_id))

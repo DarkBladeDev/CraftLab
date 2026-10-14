@@ -182,6 +182,45 @@ def validate_equipment_model_schema(data: Dict[str, Any]) -> Tuple[bool, Optiona
     return True, None
 
 
+def calculate_legacy_shader_metadata(workspace_dir: Path) -> Dict[str, Dict[str, Any]]:
+    """
+    Scans all equipment models across all namespaces in workspace_dir and computes
+    deterministic 1-based shader layer IDs and 24-bit RGB values for pre-1.21.2 core shaders.
+    """
+    seen_locations: Set[str] = set()
+    assets_dir = workspace_dir / "assets"
+    if not assets_dir.exists():
+        return {}
+
+    for ns_dir in assets_dir.iterdir():
+        if not ns_dir.is_dir():
+            continue
+        ns_name = ns_dir.name
+        # 1. Canonical
+        eq_dir = ns_dir / "equipment"
+        if eq_dir.exists():
+            for f in eq_dir.glob("*.json"):
+                seen_locations.add(f"{ns_name}:{f.stem}")
+        # 2. Legacy
+        legacy_dir = ns_dir / "models" / "equipment"
+        if legacy_dir.exists():
+            for f in legacy_dir.glob("*.json"):
+                seen_locations.add(f"{ns_name}:{f.stem}")
+
+    sorted_locations = sorted(seen_locations)
+    total = len(sorted_locations)
+    metadata: Dict[str, Dict[str, Any]] = {}
+    for idx, loc in enumerate(sorted_locations, start=1):
+        metadata[loc] = {
+            "shader_id": idx,
+            "color_rgb": idx,
+            "hex": f"#{idx:06x}",
+            "slot_index": idx,
+            "total_layers": total
+        }
+    return metadata
+
+
 def list_equipment_models(workspace_dir: Path, namespace: Optional[str] = None) -> List[Dict[str, Any]]:
     """
     Discovers all 1.21.4+ equipment model definitions in the workspace, with transparent
@@ -193,6 +232,7 @@ def list_equipment_models(workspace_dir: Path, namespace: Optional[str] = None) 
     if not assets_dir.exists():
         return results
 
+    shader_meta = calculate_legacy_shader_metadata(workspace_dir)
     namespaces = [assets_dir / namespace] if namespace else [d for d in assets_dir.iterdir() if d.is_dir()]
 
     for ns_dir in namespaces:
@@ -208,13 +248,15 @@ def list_equipment_models(workspace_dir: Path, namespace: Optional[str] = None) 
                     valid, _ = validate_equipment_model_schema(data)
                     model_id = eq_file.stem
                     seen_ids.add((ns_name, model_id))
+                    loc = f"{ns_name}:{model_id}"
                     results.append({
                         "id": model_id,
                         "namespace": ns_name,
-                        "resource_location": f"{ns_name}:{model_id}",
+                        "resource_location": loc,
                         "layers": data.get("layers", {}),
                         "is_valid": valid,
-                        "file_path": str(eq_file.relative_to(workspace_dir)).replace("\\", "/")
+                        "file_path": str(eq_file.relative_to(workspace_dir)).replace("\\", "/"),
+                        "legacy_shader": shader_meta.get(loc)
                     })
                 except Exception:
                     continue
@@ -231,13 +273,15 @@ def list_equipment_models(workspace_dir: Path, namespace: Optional[str] = None) 
                     data = normalize_legacy_equipment_data(raw_data)
                     valid, _ = validate_equipment_model_schema(data)
                     seen_ids.add((ns_name, model_id))
+                    loc = f"{ns_name}:{model_id}"
                     results.append({
                         "id": model_id,
                         "namespace": ns_name,
-                        "resource_location": f"{ns_name}:{model_id}",
+                        "resource_location": loc,
                         "layers": data.get("layers", {}),
                         "is_valid": valid,
-                        "file_path": str(eq_file.relative_to(workspace_dir)).replace("\\", "/")
+                        "file_path": str(eq_file.relative_to(workspace_dir)).replace("\\", "/"),
+                        "legacy_shader": shader_meta.get(loc)
                     })
                 except Exception:
                     continue
@@ -266,14 +310,17 @@ def get_equipment_model(workspace_dir: Path, equipment_id: str, namespace: str =
         raw_data = json.loads(target_path.read_text(encoding="utf-8"))
         data = normalize_legacy_equipment_data(raw_data)
         valid, err = validate_equipment_model_schema(data)
+        loc = f"{namespace}:{equipment_id}"
+        shader_meta = calculate_legacy_shader_metadata(workspace_dir)
         return {
             "id": equipment_id,
             "namespace": namespace,
-            "resource_location": f"{namespace}:{equipment_id}",
+            "resource_location": loc,
             "layers": data.get("layers", {}),
             "is_valid": valid,
             "schema_error": err,
             "is_legacy_path": is_legacy,
+            "legacy_shader": shader_meta.get(loc),
             "raw_json": json.dumps(data, indent=2)
         }
     except Exception:

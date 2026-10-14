@@ -58,6 +58,7 @@ class BuildPackRequest(BaseModel):
     pack_format: int = 34
     max_format: int = 65
     description: str = "Minecraft Content Platform Resource Pack"
+    compatibility_profile: str = "hybrid_shaders"
     force: bool = False
 
 
@@ -80,6 +81,7 @@ class WorkspaceConfigSchema(BaseModel):
     pack_format: int = 34
     min_inclusive: int = 34
     max_inclusive: int = 65
+    compatibility_profile: str = "hybrid_shaders"
 
 
 class UpdatePackSourceRequest(BaseModel):
@@ -441,11 +443,14 @@ async def get_workspace_config_endpoint():
         if isinstance(desc, dict):
             desc = desc.get("text", "")
 
+        profile = pack.get("compatibility_profile", "hybrid_shaders")
+
         return {
             "description": str(desc),
             "pack_format": int(pack.get("pack_format", 34)),
             "min_inclusive": int(min_inc),
             "max_inclusive": int(max_inc),
+            "compatibility_profile": str(profile),
         }
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to read pack.mcmeta: {str(e)}")
@@ -473,6 +478,7 @@ async def update_workspace_config_endpoint(req: WorkspaceConfigSchema):
         "min_inclusive": req.min_inclusive,
         "max_inclusive": req.max_inclusive,
     }
+    data["pack"]["compatibility_profile"] = req.compatibility_profile
 
     mcmeta_path.write_text(json.dumps(data, indent=2), encoding="utf-8")
     return {
@@ -480,6 +486,7 @@ async def update_workspace_config_endpoint(req: WorkspaceConfigSchema):
         "pack_format": req.pack_format,
         "min_inclusive": req.min_inclusive,
         "max_inclusive": req.max_inclusive,
+        "compatibility_profile": req.compatibility_profile,
     }
 
 
@@ -656,7 +663,8 @@ async def build_resource_pack(
             output_dir=merged_dir,
             pack_format=request_data.pack_format,
             max_inclusive=request_data.max_format,
-            description=request_data.description
+            description=request_data.description,
+            compatibility_profile=request_data.compatibility_profile
         )
         from app.domain.glyphs import scan_registered_glyphs
         compiled_glyphs = scan_registered_glyphs(merged_dir)

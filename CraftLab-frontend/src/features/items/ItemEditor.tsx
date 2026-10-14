@@ -22,6 +22,7 @@ import {
   fetchTargets,
   PluginSchema,
   fetchPluginSchema,
+  fetchHybridFallbackItem,
 } from '../../api/client'
 import { AssetBrowser } from './AssetBrowser'
 import { ConfigSchemaEngine } from './ConfigSchemaEngine'
@@ -41,6 +42,10 @@ const POPULAR_MATERIALS = [
   'NETHERITE_PICKAXE',
   'NETHERITE_CHESTPLATE',
   'DIAMOND_CHESTPLATE',
+  'LEATHER_CHESTPLATE',
+  'LEATHER_HELMET',
+  'LEATHER_LEGGINGS',
+  'LEATHER_BOOTS',
   'SHIELD',
   'WIND_CHARGE',
   'FEATHER',
@@ -56,6 +61,7 @@ const AVAILABLE_FLAGS = [
   'HIDE_DESTROYS',
   'HIDE_PLACED_ON',
   'HIDE_ADDITIONAL_TOOLTIP',
+  'HIDE_DYE',
 ]
 
 export function ItemEditor({ onRevisionCreated }: { onRevisionCreated?: () => void }) {
@@ -90,6 +96,8 @@ export function ItemEditor({ onRevisionCreated }: { onRevisionCreated?: () => vo
   const [pluginProperties, setPluginProperties] = useState<Record<string, any>>({})
   const [rawYaml, setRawYaml] = useState<string>('')
   const [formError, setFormError] = useState<string | null>(null)
+  const [derivingFallback, setDerivingFallback] = useState(false)
+  const [fallbackNotice, setFallbackNotice] = useState<string | null>(null)
 
   // Input tracking for Toolbar
   const displayNameRef = useRef<HTMLInputElement>(null)
@@ -242,6 +250,49 @@ export function ItemEditor({ onRevisionCreated }: { onRevisionCreated?: () => vo
       await loadData()
     } catch (err: any) {
       setFormError(err.message || 'Error saving item')
+    }
+  }
+
+  const handleApplyHybridFallback = async () => {
+    setDerivingFallback(true)
+    setFallbackNotice(null)
+    try {
+      const currentItem: Item = {
+        id: id.trim(),
+        material: material.trim().toUpperCase(),
+        display_name: displayName.trim(),
+        lore: loreText
+          .split('\n')
+          .map((l) => l.trim())
+          .filter((l) => l.length > 0),
+        custom_model_data: customModelData ? parseInt(customModelData, 10) : null,
+        item_model: itemModel.trim() ? itemModel.trim() : null,
+        item_flags: selectedFlags,
+        amount: 1,
+        components,
+        export_format: exportFormat,
+        plugin_properties: pluginProperties,
+        raw_extensions: rawYaml,
+      }
+      const projected = await fetchHybridFallbackItem(currentItem)
+      setMaterial(projected.material)
+      if (projected.custom_model_data !== undefined && projected.custom_model_data !== null) {
+        setCustomModelData(String(projected.custom_model_data))
+      }
+      if (projected.item_flags) {
+        setSelectedFlags(projected.item_flags)
+      }
+      if (projected.components) {
+        setComponents(projected.components)
+      }
+      setFallbackNotice(
+        `Hybrid fallback derived! Set base material to ${projected.material}, color tint applied, and attributes balanced.`
+      )
+      setTimeout(() => setFallbackNotice(null), 5000)
+    } catch (e: any) {
+      setFallbackNotice(`Error deriving fallback: ${e.message}`)
+    } finally {
+      setDerivingFallback(false)
     }
   }
 
@@ -646,6 +697,71 @@ export function ItemEditor({ onRevisionCreated }: { onRevisionCreated?: () => vo
                 })}
               </div>
             </div>
+
+            {/* Dual Compatibility Diagnostics & Fallback derivation for Armor (Equippable) */}
+            {components['minecraft:equippable'] && (
+              <div className="p-3.5 rounded-xl bg-[#14141d] border border-[#2c2c40] space-y-3">
+                <div className="flex items-center justify-between pb-2 border-b border-[#222232] flex-wrap gap-2">
+                  <div className="flex items-center space-x-2">
+                    <span className="w-2.5 h-2.5 rounded-full bg-purple-400 animate-pulse" />
+                    <span className="text-xs font-semibold text-gray-200">
+                      Dual-Version Armor Compatibility
+                    </span>
+                  </div>
+                  <div className="flex items-center space-x-1.5 flex-wrap gap-1">
+                    <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+                      1.21.2+ Native Equippable
+                    </span>
+                    <span
+                      className={`text-[10px] font-mono px-2 py-0.5 rounded border ${
+                        material.startsWith('LEATHER_') && components['minecraft:dyed_color']
+                          ? 'bg-purple-500/20 text-purple-300 border-purple-500/30'
+                          : 'bg-amber-500/10 text-amber-300 border-amber-500/20'
+                      }`}
+                    >
+                      {material.startsWith('LEATHER_') && components['minecraft:dyed_color']
+                        ? '< 1.21.2 Fallback Configured'
+                        : '< 1.21.2 Fallback Missing'}
+                    </span>
+                  </div>
+                </div>
+
+                <div className="text-[11px] text-gray-400 flex flex-col md:flex-row items-start md:items-center justify-between gap-3">
+                  <div className="space-y-1">
+                    {material.startsWith('LEATHER_') && components['minecraft:dyed_color'] ? (
+                      <p>
+                        Dual projected: Base material is <code className="text-purple-300">{material}</code> with dyed color{' '}
+                        <code className="text-purple-300 font-bold">
+                          #{components['minecraft:dyed_color'].rgb.toString(16).padStart(6, '0')}
+                        </code>{' '}
+                        and compensating armor modifiers for &lt; 1.21.2 clients.
+                      </p>
+                    ) : (
+                      <p>
+                        This item has 1.21.2+ equippable metadata ({components['minecraft:equippable'].asset_id || components['minecraft:equippable'].model}).
+                        Clients on &lt; 1.21.2 require leather armor tinted with the LessFancyPants shader atlas index.
+                      </p>
+                    )}
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={handleApplyHybridFallback}
+                    disabled={derivingFallback}
+                    className="shrink-0 px-3 py-1.5 rounded-lg bg-purple-600 hover:bg-purple-500 disabled:opacity-50 text-white font-medium text-xs shadow-md transition flex items-center space-x-1.5"
+                  >
+                    <Sparkles className={`w-3.5 h-3.5 ${derivingFallback ? 'animate-spin' : ''}`} />
+                    <span>{derivingFallback ? 'Deriving Fallback...' : 'Apply Hybrid Fallback'}</span>
+                  </button>
+                </div>
+
+                {fallbackNotice && (
+                  <div className="p-2 rounded bg-purple-950/40 border border-purple-700/50 text-[11px] text-purple-300">
+                    {fallbackNotice}
+                  </div>
+                )}
+              </div>
+            )}
 
             {/* 1.21 Data Components Visual Builder */}
             <ComponentBuilder

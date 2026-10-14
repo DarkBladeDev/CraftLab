@@ -58,3 +58,133 @@ class ItemDefinition(BaseModel):
             "plugin_properties": self.plugin_properties,
             "raw_extensions": self.raw_extensions,
         }
+
+
+ARMOR_TIER_ATTRIBUTES = {
+    "NETHERITE": {
+        "HEAD": {"armor": 3.0, "armor_toughness": 3.0, "knockback_resistance": 0.1},
+        "CHEST": {"armor": 8.0, "armor_toughness": 3.0, "knockback_resistance": 0.1},
+        "LEGS": {"armor": 6.0, "armor_toughness": 3.0, "knockback_resistance": 0.1},
+        "FEET": {"armor": 3.0, "armor_toughness": 3.0, "knockback_resistance": 0.1},
+    },
+    "DIAMOND": {
+        "HEAD": {"armor": 3.0, "armor_toughness": 2.0},
+        "CHEST": {"armor": 8.0, "armor_toughness": 2.0},
+        "LEGS": {"armor": 6.0, "armor_toughness": 2.0},
+        "FEET": {"armor": 3.0, "armor_toughness": 2.0},
+    },
+    "IRON": {
+        "HEAD": {"armor": 2.0},
+        "CHEST": {"armor": 6.0},
+        "LEGS": {"armor": 5.0},
+        "FEET": {"armor": 2.0},
+    },
+    "GOLDEN": {
+        "HEAD": {"armor": 2.0},
+        "CHEST": {"armor": 5.0},
+        "LEGS": {"armor": 3.0},
+        "FEET": {"armor": 1.0},
+    },
+    "CHAINMAIL": {
+        "HEAD": {"armor": 2.0},
+        "CHEST": {"armor": 5.0},
+        "LEGS": {"armor": 4.0},
+        "FEET": {"armor": 1.0},
+    },
+}
+
+SLOT_TO_LEATHER_MATERIAL = {
+    "HEAD": "LEATHER_HELMET",
+    "CHEST": "LEATHER_CHESTPLATE",
+    "LEGS": "LEATHER_LEGGINGS",
+    "FEET": "LEATHER_BOOTS",
+    "BODY": "LEATHER_HORSE_ARMOR",
+}
+
+
+def derive_hybrid_equipment_fallback(
+    item: ItemDefinition,
+    shader_meta: Optional[dict] = None
+) -> ItemDefinition:
+    """
+    Synthesizes legacy pre-1.21.2 fallback attributes for an item binding minecraft:equippable:
+    - Sets base material to LEATHER_* matching the target equipment slot.
+    - Sets dyed_color component to the assigned shader layer index (RGB).
+    - Preserves or injects compensating attribute modifiers matching the original armor tier.
+    - Appends HIDE_DYE to item_flags.
+    """
+    equippable = item.components.get("minecraft:equippable")
+    if not equippable or not isinstance(equippable, dict):
+        return item
+
+    slot = str(equippable.get("slot", "chest")).upper()
+    target_leather = SLOT_TO_LEATHER_MATERIAL.get(slot, item.material)
+
+    orig_mat = item.material.upper()
+    tier = None
+    if "NETHERITE" in orig_mat:
+        tier = "NETHERITE"
+    elif "DIAMOND" in orig_mat:
+        tier = "DIAMOND"
+    elif "IRON" in orig_mat:
+        tier = "IRON"
+    elif "GOLD" in orig_mat:
+        tier = "GOLDEN"
+    elif "CHAINMAIL" in orig_mat:
+        tier = "CHAINMAIL"
+
+    updated_components = dict(item.components)
+
+    if shader_meta and "color_rgb" in shader_meta:
+        updated_components["minecraft:dyed_color"] = {"rgb": int(shader_meta["color_rgb"])}
+
+    if tier and slot in ARMOR_TIER_ATTRIBUTES.get(tier, {}):
+        stats = ARMOR_TIER_ATTRIBUTES[tier][slot]
+        existing_attrs = updated_components.get("minecraft:attribute_modifiers")
+        if not existing_attrs:
+            attr_modifiers = []
+            slot_name = slot.lower()
+            if "armor" in stats:
+                attr_modifiers.append({
+                    "type": "minecraft:generic.armor",
+                    "name": "generic.armor",
+                    "amount": stats["armor"],
+                    "operation": "add_value",
+                    "slot": slot_name
+                })
+            if "armor_toughness" in stats:
+                attr_modifiers.append({
+                    "type": "minecraft:generic.armor_toughness",
+                    "name": "generic.armor_toughness",
+                    "amount": stats["armor_toughness"],
+                    "operation": "add_value",
+                    "slot": slot_name
+                })
+            if "knockback_resistance" in stats:
+                attr_modifiers.append({
+                    "type": "minecraft:generic.knockback_resistance",
+                    "name": "generic.knockback_resistance",
+                    "amount": stats["knockback_resistance"],
+                    "operation": "add_value",
+                    "slot": slot_name
+                })
+            updated_components["minecraft:attribute_modifiers"] = attr_modifiers
+
+    flags = list(item.item_flags)
+    if "HIDE_DYE" not in flags:
+        flags.append("HIDE_DYE")
+
+    return ItemDefinition(
+        id=item.id,
+        material=target_leather,
+        display_name=item.display_name,
+        lore=list(item.lore),
+        custom_model_data=item.custom_model_data,
+        item_model=item.item_model,
+        item_flags=flags,
+        amount=item.amount,
+        components=updated_components,
+        export_format=item.export_format,
+        plugin_properties=dict(item.plugin_properties),
+        raw_extensions=item.raw_extensions
+    )
